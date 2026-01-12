@@ -158,7 +158,7 @@ func (c *chunk) getDownloadFile(ctx context.Context) (io.ReadCloser, error) {
 
 	if c.start != -1 && c.end != -1 {
 		bytesRange := fmt.Sprintf("bytes=%d-%d", c.start, c.end)
-		req.Header.Add("Range", bytesRange)
+		req.Header.Set("Range", bytesRange)
 	}
 
 	res, err := http.DefaultClient.Do(req)

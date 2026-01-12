@@ -7,6 +7,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/rapid-downloader/rapid/api"
+	"go.uber.org/fx"
 )
 
 const DataDir = ".rapid"
@@ -16,13 +17,16 @@ type SettingService struct {
 	Setting api.Setting
 }
 
-func NewService() (*SettingService, api.Setting) {
+func NewService(lc fx.Lifecycle) (*SettingService, api.Setting) {
 	defaultSetting := defaultSetting()
 	path := filepath.Join(defaultSetting.DataLocation, "settings.toml")
 
-	return &SettingService{
+	svc := &SettingService{
 		Path: path,
-	}, defaultSetting
+	}
+
+	lc.Append(fx.StartHook(svc.Init))
+	return svc, defaultSetting
 }
 
 func defaultSetting() api.Setting {
@@ -45,6 +49,14 @@ func defaultSetting() api.Setting {
 
 func (s *SettingService) Init(ctx context.Context) error {
 	setting := defaultSetting()
+	if err := os.MkdirAll(setting.DataLocation, os.ModePerm); err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(setting.ChunkLocation, os.ModePerm); err != nil {
+		return err
+	}
+
 	if _, err := os.Stat(s.Path); os.IsNotExist(err) {
 		f, err := os.Create(s.Path)
 		if err != nil {
@@ -56,14 +68,6 @@ func (s *SettingService) Init(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-	}
-
-	if err := os.MkdirAll(setting.DataLocation, os.ModePerm); err != nil {
-		return err
-	}
-
-	if err := os.MkdirAll(setting.ChunkLocation, os.ModePerm); err != nil {
-		return err
 	}
 
 	return nil

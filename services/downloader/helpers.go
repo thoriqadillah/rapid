@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -146,15 +147,22 @@ func calculatePartition(size int64, setting api.Setting) int {
 	return int(size / partsize)
 }
 
-func createRequest(ctx context.Context, url string, headers http.Header, cookies []*http.Cookie) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+func createRequest(ctx context.Context, urlFile string, headers http.Header, cookies []*http.Cookie) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlFile, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	url, err := url.Parse(urlFile)
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Set("Accept", "*/*")
+	req.Header.Set("Referer", fmt.Sprintf("%s://%s", url.Scheme, url.Host))
+	req.Header.Set("Connection", "keep-alive")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
-	req.Header.Set("User-Agent", "Rapid downloader")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 	for k, h := range headers {
 		for _, v := range h {
 			req.Header.Add(k, v)

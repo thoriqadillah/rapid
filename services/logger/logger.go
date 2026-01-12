@@ -4,13 +4,13 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/rapid-downloader/rapid/api"
+	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
 
@@ -23,11 +23,18 @@ type LoggerService struct {
 	mutex   sync.Mutex
 }
 
-func NewService(setting api.Setting) *LoggerService {
-	return &LoggerService{
+func NewService(lc fx.Lifecycle, setting api.Setting) *LoggerService {
+	svc := &LoggerService{
 		setting: setting,
 		mutex:   sync.Mutex{},
 	}
+
+	lc.Append(fx.Hook{
+		OnStart: svc.Init,
+		OnStop:  svc.Close,
+	})
+
+	return svc
 }
 
 // Init initializes the write only today's logger file
@@ -41,7 +48,6 @@ func (s *LoggerService) Init(ctx context.Context) error {
 		}
 
 		s.fs, err = os.OpenFile(filename, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-		fmt.Println("ERR", err)
 		if err != nil {
 			s.Error(err)
 		}

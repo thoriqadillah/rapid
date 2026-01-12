@@ -117,6 +117,10 @@ func (s *DownloaderService) Fetch(ctx context.Context, url string, opts ...Optio
 		return api.DownloadItem{}, fmt.Errorf("error fetching url: %s", res.Status)
 	}
 
+	if res.ContentLength <= 0 {
+		return api.DownloadItem{}, ErrExpired
+	}
+
 	resumable := resumable(res)
 	filename := filepath.Base(handleDuplicate(filepath.Join(setting.DownloadLocation, filename(res))))
 	location := filepath.Join(setting.DownloadLocation, filename)
@@ -137,20 +141,15 @@ func (s *DownloaderService) Fetch(ctx context.Context, url string, opts ...Optio
 		Size:      size,
 		ChunkLen:  chunklen,
 		Resumable: resumable,
-		Expired:   res.StatusCode != http.StatusOK && res.ContentLength <= 0,
 	}
 
 	return item, nil
 }
 
-func (s *DownloaderService) checkExpired(ctx context.Context, item api.DownloadItem) (api.DownloadItem, error) {
+func (s *DownloaderService) refreshUrl(ctx context.Context, item api.DownloadItem) (api.DownloadItem, error) {
 	item, err := s.Fetch(ctx, item.Url, FromItem(item))
 	if err != nil {
 		return item, err
-	}
-
-	if item.Expired {
-		return item, ErrExpired
 	}
 
 	return item, nil
@@ -199,7 +198,7 @@ func (s *DownloaderService) Pause(id string) error {
 }
 
 func (s *DownloaderService) Resume(ctx context.Context, item api.DownloadItem, listener func(p Progress)) error {
-	newItem, err := s.checkExpired(ctx, item)
+	newItem, err := s.refreshUrl(ctx, item)
 	if err != nil {
 		return ErrExpired
 	}
@@ -212,7 +211,7 @@ func (s *DownloaderService) Restart(ctx context.Context, item api.DownloadItem, 
 		return err
 	}
 
-	newItem, err := s.checkExpired(ctx, item)
+	newItem, err := s.refreshUrl(ctx, item)
 	if err != nil {
 		return ErrExpired
 	}

@@ -14,5 +14,4 @@ type DownloadItem struct {
 	Url       string `json:"url"`
 	Size      int64  `json:"size"`
 	ChunkLen  int    `json:"chunklen"`
-	Expired   bool   `json:"expired"`
 }

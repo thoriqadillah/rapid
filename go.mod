@@ -8,7 +8,7 @@ require (
 	github.com/labstack/echo/v4 v4.13.3
 	github.com/schollz/progressbar/v3 v3.19.0
 	github.com/spf13/cobra v1.9.1
-	github.com/thoriqadillah/gema v0.0.0-20260104121819-455108979402
+	github.com/thoriqadillah/gema v0.0.0-20260112112359-4bac155a10c2
 	go.uber.org/fx v1.23.0
 	go.uber.org/zap v1.26.0
 	golang.org/x/sync v0.13.0

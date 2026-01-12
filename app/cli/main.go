@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/signal"
 	"sync"
-	"syscall"
 
 	"github.com/joho/godotenv"
 	"github.com/rapid-downloader/rapid/api"
@@ -69,12 +67,13 @@ func (b *progressBar) update(p downloader.Progress) {
 	b.bar.Set64(currentBytes)
 }
 
-func download(ctx context.Context, downloader *downloader.DownloaderService) *cobra.Command {
+func download(downloader *downloader.DownloaderService) *cobra.Command {
 	return &cobra.Command{
 		Use:   "download <url>",
 		Short: "Download a file from a url",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			ctx := cmd.Context()
 			var item api.DownloadItem
 			errCh := make(chan error)
 
@@ -100,16 +99,6 @@ func download(ctx context.Context, downloader *downloader.DownloaderService) *co
 	}
 }
 
-func notifyContext(lc fx.Lifecycle, sh fx.Shutdowner) context.Context {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGABRT, syscall.SIGTERM)
-	lc.Append(fx.StopHook(func() error {
-		stop()
-		return sh.Shutdown()
-	}))
-
-	return ctx
-}
-
 func main() {
 	godotenv.Load()
 
@@ -118,7 +107,6 @@ func main() {
 		fx.NopLogger,
 		fx.Provide(settings.NewService),
 		fx.Provide(downloader.NewService),
-		fx.Provide(notifyContext),
 		gema.CommandModule("Rapid file downloader", download),
 	)
 
