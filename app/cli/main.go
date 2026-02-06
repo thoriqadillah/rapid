@@ -67,36 +67,45 @@ func (b *progressBar) update(p downloader.Progress) {
 	b.bar.Set64(currentBytes)
 }
 
-func download(downloader *downloader.DownloaderService) *cobra.Command {
-	return &cobra.Command{
+func download(rapid *downloader.DownloaderService, settings api.Setting) *cobra.Command {
+	cmd := &cobra.Command{
 		Use:   "download <url>",
 		Short: "Download a file from a url",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			if len(args) == 0 {
+				return cmd.Help()
+			}
+
+			settings.DownloadLocation = cmd.Flag("download-path").Value.String()
+
 			ctx := cmd.Context()
 			var item api.DownloadItem
 			errCh := make(chan error)
 
 			go func() {
 				url := args[0]
-				item, err = downloader.Fetch(ctx, url)
+				item, err = rapid.Fetch(ctx, url, downloader.WithSetting(settings))
 				if err != nil {
 					errCh <- err
 					return
 				}
 
 				bar := newProgressBar(item)
-				errCh <- downloader.Download(ctx, item, bar.update)
+				errCh <- rapid.Download(ctx, item, bar.update)
 			}()
 
 			select {
 			case <-ctx.Done():
-				return downloader.Stop(item.Id)
+				return rapid.Stop(item.Id)
 			case err := <-errCh:
 				return err
 			}
 		},
 	}
+
+	cmd.PersistentFlags().String("download-path", settings.DownloadLocation, "The download location")
+	return cmd
 }
 
 func main() {

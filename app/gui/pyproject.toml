@@ -1,0 +1,36 @@
+[project]
+name = "rapid"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "thoriqadillah",email = "thoriqadillah59@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.9,<3.13"
+dependencies = [
+    "pyinstaller-hooks-contrib (>=2026.0,<2027.0)",
+    "pyside6-essentials (>=6.10.1,<7.0.0)",
+]
+
+[dependency-groups]
+build = [
+    "pyinstaller (>=6.18.0,<7.0.0)"
+]
+
+[tool.poetry.requires-plugins]
+poethepoet = ">=0.35"
+
+[tool.poe.tasks.dev]
+script = "main:main"
+help = "Run the application"
+
+[tool.poe.tasks.build]
+cmd = "pyinstaller --name=rapid --onefile --clean --strip --upx-dir=/usr/bin/upx --add-data=qml:./qml main.py"
+help = "Build the application"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+package-mode = false

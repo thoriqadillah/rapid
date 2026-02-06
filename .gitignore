@@ -1,5 +1,6 @@
-gui/build/bin
-gui/frontend/node_modules
-gui/frontend/dist
-
-cli/build
+build
+dist
+.venv
+node_modules
+*.spec
+__pycache__

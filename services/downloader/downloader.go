@@ -22,6 +22,7 @@ type options struct {
 	id      string
 	headers http.Header
 	cookies []*http.Cookie
+	setting api.Setting
 }
 
 type Option func(o *options)
@@ -49,6 +50,12 @@ func FromItem(item api.DownloadItem) Option {
 		o.cookies = item.Cookies
 		o.headers = item.Header
 		o.id = item.Id
+	}
+}
+
+func WithSetting(setting api.Setting) Option {
+	return func(o *options) {
+		o.setting = setting
 	}
 }
 
@@ -97,12 +104,14 @@ func (s *DownloaderService) Fetch(ctx context.Context, url string, opts ...Optio
 		id:      randomId(5),
 		headers: make(http.Header),
 		cookies: make([]*http.Cookie, 0),
+		setting: setting,
 	}
 
 	for _, opt := range opts {
 		opt(options)
 	}
 
+	setting = options.setting
 	req, err := createRequest(ctx, url, options.headers, options.cookies)
 	if err != nil {
 		return api.DownloadItem{}, err
