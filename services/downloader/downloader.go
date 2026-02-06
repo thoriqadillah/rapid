@@ -9,13 +9,15 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/cenkalti/backoff/v5"
 	"github.com/rapid-downloader/rapid/api"
 	"github.com/rapid-downloader/rapid/services/settings"
 	"golang.org/x/sync/errgroup"
 )
 
 var (
-	ErrExpired = errors.New("url expired")
+	ErrExpired      = errors.New("url expired")
+	concurrentLimit = 25
 )
 
 type options struct {
@@ -171,12 +173,19 @@ func (s *DownloaderService) Download(ctx context.Context, item api.DownloadItem,
 	}
 
 	group, groupCtx := errgroup.WithContext(s.context(ctx, item.Id))
-	group.SetLimit(item.ChunkLen)
+	group.SetLimit(concurrentLimit)
 
 	for i := range item.ChunkLen {
 		group.Go(func() error {
 			chunk := newChunk(item, i, setting.ChunkLocation, listener)
-			return chunk.download(groupCtx)
+			_, err := backoff.Retry(
+				groupCtx,
+				func() (any, error) {
+					return nil, chunk.download(groupCtx)
+				},
+				backoff.WithMaxTries(uint(setting.MaxRetry)),
+			)
+			return err
 		})
 	}
 
