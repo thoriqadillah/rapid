@@ -25,6 +25,7 @@ func httpServer() *echo.Echo {
 
 func main() {
 	godotenv.Load()
+	env.Load()
 
 	app := fx.New(
 		gema.FxLogger,
@@ -37,7 +38,7 @@ func main() {
 			settings.NewController,
 			downloader.NewController,
 		),
-		gema.Start(env.PORT),
+		gema.StartHTTP(env.PORT),
 	)
 
 	app.Run()
