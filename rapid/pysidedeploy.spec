@@ -40,7 +40,7 @@ qml_files = qml/Main.qml
 excluded_qml_plugins = QtCharts,QtQuick3D,QtSensors,QtTest,QtWebEngine
 
 # qt modules used. comma separated
-modules = Core,DBus,Gui,Network,OpenGL,Qml,QmlMeta,QmlModels,QmlWorkerScript,Quick,QuickControls2,QuickTemplates2
+modules = Core,DBus,Gui,Network,OpenGL,Qml,QmlMeta,QmlModels,QmlWorkerScript,Quick,QuickControls2,QuickTemplates2,QuickEffects
 
 # qt plugins used by the application. only relevant for desktop deployment
 # for qt plugins used in android application see [android][plugins]
