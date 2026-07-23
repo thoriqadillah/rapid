@@ -1,0 +1,32 @@
+[project]
+name = "rapid"
+version = "0.1.0"
+description = ""
+authors = [{ name = "thoriqadillah" }]
+requires-python = ">=3.13,<3.14"
+dependencies = ["pyside6 (>=6.8,<7.0)"]
+
+[project.scripts]
+dev = "rapid.main:main"
+
+[tool.poetry]
+packages = [{ include = "rapid" }]
+
+[tool.poetry.group.dev.dependencies]
+mypy = "^1.14"
+PySide6-stubs = "^6.7"
+nuitka = ">=2.8,<5"
+patchelf = "0.19.1.0rc1"
+poethepoet = "^0.32"
+
+[tool.poe.tasks]
+build = { shell = "mkdir -p dist && pyside6-deploy rapid/main.py -c rapid/pysidedeploy.spec -f" }
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["rapid"]
+
+[build-system]
+requires = ["poetry-core>=2.0"]
+build-backend = "poetry.core.masonry.api"
