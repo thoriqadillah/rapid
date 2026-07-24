@@ -5,8 +5,8 @@ import "components"
 ApplicationWindow {
     id: window
 
-    width: 640
-    height: 480
+    width: 1280
+    height: 720
     visible: true
     title: "Rapid downloader"
     color: Theme.colorBackground
@@ -27,7 +27,9 @@ ApplicationWindow {
         }
     }
 
-    RHeader {
+    Header {
+        id: header
+
         anchors {
             top: parent.top
             left: parent.left
@@ -35,5 +37,15 @@ ApplicationWindow {
         }
         compact: window.compact
         onAddClicked: console.log("add clicked")
+    }
+
+    Sidebar {
+        anchors {
+            top: header.bottom
+            bottom: parent.bottom
+            left: parent.left
+        }
+        onDestinationSelected: destination =>
+            console.log("sidebar destination:", destination)
     }
 }

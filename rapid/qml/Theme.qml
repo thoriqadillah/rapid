@@ -5,21 +5,25 @@ QtObject {
     readonly property SystemPalette palette: SystemPalette {}
 
     // Colors — driven by the OS palette so light/dark just works
-    readonly property color colorBackground: palette.window
-    readonly property color colorBase: palette.base
+    readonly property color colorBackground: palette.base
+    readonly property color colorBase: palette.window
     readonly property color colorBorder: palette.mid
-
     readonly property color colorPrimary: palette.highlight
     readonly property color colorPrimaryHover: Qt.darker(palette.highlight, 1.1)
+    readonly property color colorMuted: Qt.lighter(Theme.colorBackground, 1.25)
 
+    // button colors
     readonly property color colorButtonBase: palette.button
     readonly property color colorButtonBaseHover: Qt.lighter(palette.button, 1.5)
 
+    // text colors
     readonly property color colorText: palette.text
     readonly property color colorTextInverted: palette.highlightedText
     readonly property color colorTextMuted: Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.6)
 
-    // Category colors — semantic file-type accents, kept fixed regardless of theme
+    // input colors
+    readonly property color colorInputBackground: Theme.colorMuted
+
     readonly property color colorCategoryVideo: "#ee7b57"
     readonly property color colorCategoryDocs: "#5b9bd5"
     readonly property color colorCategoryMusic: "#4fb783"
@@ -40,12 +44,19 @@ QtObject {
     readonly property int spacingLg: 16
     readonly property int spacingXl: 24
 
+    // page spacing
+    readonly property int spacingPageLeft: Theme.spacingSm
+    readonly property int spacingPageRight: Theme.spacingSm
+    readonly property int spacingPageTop: Theme.spacingSm
+    readonly property int spacingPageBottom: Theme.spacingSm
+
     // Adaptive layout — values are device-independent pixels
     readonly property int breakpointMd: 600
     readonly property int breakpointLg: 840
     readonly property int touchTarget: 36
 
     // Icons
+    readonly property int iconXs: 10
     readonly property int iconSm: 16
     readonly property int iconMd: 20
     readonly property int iconLg: 32

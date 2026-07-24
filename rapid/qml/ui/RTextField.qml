@@ -24,7 +24,7 @@ Controls.TextField {
 
     background: Rectangle {
         radius: root.cornerRadius
-        color: Theme.colorBase
+        color: Theme.colorInputBackground
         border.width: 1
         border.color: root.activeFocus ? Theme.colorPrimary : Theme.colorBorder
     }

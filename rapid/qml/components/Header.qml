@@ -9,6 +9,7 @@ Rectangle {
     signal addClicked()
     property alias searchText: searchField.text
     property bool compact: width < Theme.breakpointMd
+    property int preferredSearchWidth: 350
 
     implicitHeight: headerLayout.implicitHeight + Theme.spacingSm * 2
     height: implicitHeight
@@ -22,27 +23,35 @@ Rectangle {
         color: Theme.colorBorder
     }
 
-    GridLayout {
+    RowLayout {
         id: headerLayout
 
         anchors {
             left: parent.left
             right: parent.right
             verticalCenter: parent.verticalCenter
-            leftMargin: Theme.spacingSm
-            rightMargin: Theme.spacingSm
+            leftMargin: Theme.spacingPageLeft
+            rightMargin: Theme.spacingPageRight
         }
-        rowSpacing: Theme.spacingSm
-        columnSpacing: Theme.spacingSm
+        spacing: Theme.spacingSm
+
+        Item {
+            visible: !root.compact
+            Layout.fillWidth: true
+        }
 
         RTextField {
             id: searchField
 
-            Layout.fillWidth: true
+            Layout.fillWidth: root.compact
+            Layout.preferredWidth: root.compact ? 0 : root.preferredSearchWidth
+            Layout.maximumWidth: root.compact
+                ? headerLayout.width
+                : root.preferredSearchWidth
             Layout.minimumWidth: 0
             Layout.minimumHeight: Theme.touchTarget
             prefixIcon: "../icons/MdiMagnify.svg"
-            placeholderText: "Search"
+            placeholderText: "Search..."
         }
 
         RButton {
