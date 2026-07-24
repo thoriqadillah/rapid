@@ -1,14 +1,20 @@
 import QtQuick
 import QtQuick.Controls
-import "ui"
 import "components"
 
 ApplicationWindow {
+    id: window
+
     width: 640
     height: 480
     visible: true
     title: "Rapid downloader"
-    color: Theme.bg
+    color: Theme.bgColor
+
+    readonly property bool compact: width < Theme.breakpointMedium
+    readonly property bool medium: width >= Theme.breakpointMedium
+        && width < Theme.breakpointExpanded
+    readonly property bool expanded: width >= Theme.breakpointExpanded
 
     Item {
         id: focusScope
@@ -22,7 +28,12 @@ ApplicationWindow {
     }
 
     RHeader {
-        width: parent.width
+        anchors {
+            top: parent.top
+            left: parent.left
+            right: parent.right
+        }
+        compact: window.compact
         onAddClicked: console.log("add clicked")
     }
 }

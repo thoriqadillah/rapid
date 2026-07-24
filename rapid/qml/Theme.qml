@@ -5,10 +5,10 @@ QtObject {
     readonly property SystemPalette palette: SystemPalette {}
 
     // Colors — driven by the OS palette so light/dark just works
-    readonly property color bg: palette.window
+    readonly property color bgColor: palette.window
     readonly property color surface: palette.base
     readonly property color surfaceAlt: palette.alternateBase
-    readonly property color border: palette.mid
+    readonly property color borderColor: palette.mid
 
     readonly property color primary: palette.highlight
     readonly property color primaryHover: Qt.darker(palette.highlight, 1.1)
@@ -16,7 +16,7 @@ QtObject {
     readonly property color textOnPrimary: palette.highlightedText
 
     readonly property color buttonSurface: palette.button
-    readonly property color buttonSurfaceHover: Qt.lighter(palette.button, 1.15)
+    readonly property color buttonSurfaceHover: Qt.lighter(palette.button, 1.5)
     readonly property color buttonText: palette.buttonText
 
     readonly property color textPrimary: palette.windowText
@@ -41,9 +41,14 @@ QtObject {
     // Spacing
     readonly property int spaceXs: 4
     readonly property int spaceSm: 8
-    readonly property int spaceMd: 12
+    readonly property int spacingMd: 12
     readonly property int spaceLg: 16
     readonly property int spaceXl: 24
+
+    // Adaptive layout — values are device-independent pixels
+    readonly property int breakpointMedium: 600
+    readonly property int breakpointExpanded: 840
+    readonly property int touchTarget: 36
 
     // Icons
     readonly property int iconSm: 16

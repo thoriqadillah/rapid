@@ -14,21 +14,25 @@ Controls.TextField {
     selectByMouse: true
     color: Theme.textBody
     placeholderTextColor: Theme.textFaint
-    padding: Theme.spaceMd
-    leftPadding: Theme.spaceMd + (prefixIconButton.visible ? root.iconSize + Theme.spaceXs : 0)
-    rightPadding: Theme.spaceMd + (suffixIconButton.visible ? root.iconSize + Theme.spaceXs : 0)
+    padding: Theme.spacingMd
+    leftPadding: Theme.spacingMd + (prefixIconButton.visible ? root.iconSize + Theme.spaceXs : 0)
+    rightPadding: Theme.spacingMd + (suffixIconButton.visible ? root.iconSize + Theme.spaceXs : 0)
+    implicitHeight: Math.max(
+        Theme.touchTarget,
+        root.contentHeight + root.topPadding + root.bottomPadding
+    )
 
     background: Rectangle {
         radius: root.cornerRadius
         color: Theme.surface
         border.width: 1
-        border.color: root.activeFocus ? Theme.primary : Theme.border
+        border.color: root.activeFocus ? Theme.primary : Theme.borderColor
     }
 
     Controls.Button {
         id: prefixIconButton
         anchors.left: root.left
-        anchors.leftMargin: Theme.spaceMd
+        anchors.leftMargin: Theme.spacingMd
         anchors.verticalCenter: root.verticalCenter
         width: root.iconSize
         height: root.iconSize
@@ -47,7 +51,7 @@ Controls.TextField {
     Controls.Button {
         id: suffixIconButton
         anchors.right: root.right
-        anchors.rightMargin: Theme.spaceMd
+        anchors.rightMargin: Theme.spacingMd
         anchors.verticalCenter: root.verticalCenter
         width: root.iconSize
         height: root.iconSize

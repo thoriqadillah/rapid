@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import ".."
 import "../ui"
 
@@ -7,36 +8,50 @@ Rectangle {
 
     signal addClicked()
     property alias searchText: searchField.text
+    property bool compact: width < Theme.breakpointMedium
 
-    height: Math.max(searchField.implicitHeight, addButton.implicitHeight)
-        + Theme.spaceSm * 2
-    color: Theme.bg
+    implicitHeight: headerLayout.implicitHeight + Theme.spaceSm * 2
+    height: implicitHeight
+    color: Theme.bgColor
 
     Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         height: 1
-        color: Theme.border
+        color: Theme.borderColor
     }
 
-    Row {
-        anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.rightMargin: Theme.spaceSm
-        spacing: Theme.spaceSm
+    GridLayout {
+        id: headerLayout
+
+        anchors {
+            left: parent.left
+            right: parent.right
+            verticalCenter: parent.verticalCenter
+            leftMargin: Theme.spaceSm
+            rightMargin: Theme.spaceSm
+        }
+        columns: root.compact ? 1 : 2
+        rowSpacing: Theme.spaceSm
+        columnSpacing: Theme.spaceSm
 
         RTextField {
             id: searchField
-            width: 400
+
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            Layout.minimumHeight: Theme.touchTarget
             prefixIcon: "../icons/MdiMagnify.svg"
             placeholderText: "Search"
         }
 
         RButton {
             id: addButton
-            height: parent.height
-            text: "Add"
+            visible: !root.compact
+            ghost: true
+            Layout.fillWidth: root.compact
+            Layout.minimumHeight: Theme.touchTarget
             iconSource: "../icons/MdiPlus.svg"
             onClicked: root.addClicked()
         }
