@@ -8,18 +8,18 @@ Rectangle {
 
     signal addClicked()
     property alias searchText: searchField.text
-    property bool compact: width < Theme.breakpointMedium
+    property bool compact: width < Theme.breakpointMd
 
-    implicitHeight: headerLayout.implicitHeight + Theme.spaceSm * 2
+    implicitHeight: headerLayout.implicitHeight + Theme.spacingSm * 2
     height: implicitHeight
-    color: Theme.bgColor
+    color: Theme.colorBackground
 
     Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         height: 1
-        color: Theme.borderColor
+        color: Theme.colorBorder
     }
 
     GridLayout {
@@ -29,12 +29,11 @@ Rectangle {
             left: parent.left
             right: parent.right
             verticalCenter: parent.verticalCenter
-            leftMargin: Theme.spaceSm
-            rightMargin: Theme.spaceSm
+            leftMargin: Theme.spacingSm
+            rightMargin: Theme.spacingSm
         }
-        columns: root.compact ? 1 : 2
-        rowSpacing: Theme.spaceSm
-        columnSpacing: Theme.spaceSm
+        rowSpacing: Theme.spacingSm
+        columnSpacing: Theme.spacingSm
 
         RTextField {
             id: searchField
@@ -48,9 +47,8 @@ Rectangle {
 
         RButton {
             id: addButton
-            visible: !root.compact
-            ghost: true
-            Layout.fillWidth: root.compact
+            text: !root.compact ? "Add" : ""
+            variant: RButton.PrimaryVariant
             Layout.minimumHeight: Theme.touchTarget
             iconSource: "../icons/MdiPlus.svg"
             onClicked: root.addClicked()

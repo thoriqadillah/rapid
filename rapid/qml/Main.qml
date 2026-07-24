@@ -9,12 +9,12 @@ ApplicationWindow {
     height: 480
     visible: true
     title: "Rapid downloader"
-    color: Theme.bgColor
+    color: Theme.colorBackground
 
-    readonly property bool compact: width < Theme.breakpointMedium
-    readonly property bool medium: width >= Theme.breakpointMedium
-        && width < Theme.breakpointExpanded
-    readonly property bool expanded: width >= Theme.breakpointExpanded
+    readonly property bool compact: width < Theme.breakpointMd
+    readonly property bool medium: width >= Theme.breakpointMd
+        && width < Theme.breakpointLg
+    readonly property bool expanded: width >= Theme.breakpointLg
 
     Item {
         id: focusScope

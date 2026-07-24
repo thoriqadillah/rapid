@@ -8,15 +8,15 @@ Controls.TextField {
     property url prefixIcon: ""
     property url suffixIcon: ""
     property int iconSize: Theme.iconSm
-    property color iconColor: Theme.textFaint
+    property color iconColor: Theme.colorTextMuted
     readonly property int cornerRadius: Qt.platform.os === "linux" ? Theme.radiusSm : Theme.radiusMd
 
     selectByMouse: true
-    color: Theme.textBody
-    placeholderTextColor: Theme.textFaint
+    color: Theme.colorText
+    placeholderTextColor: Theme.colorTextMuted
     padding: Theme.spacingMd
-    leftPadding: Theme.spacingMd + (prefixIconButton.visible ? root.iconSize + Theme.spaceXs : 0)
-    rightPadding: Theme.spacingMd + (suffixIconButton.visible ? root.iconSize + Theme.spaceXs : 0)
+    leftPadding: Theme.spacingMd + (prefixIconButton.visible ? root.iconSize + Theme.spacingXs : 0)
+    rightPadding: Theme.spacingMd + (suffixIconButton.visible ? root.iconSize + Theme.spacingXs : 0)
     implicitHeight: Math.max(
         Theme.touchTarget,
         root.contentHeight + root.topPadding + root.bottomPadding
@@ -24,9 +24,9 @@ Controls.TextField {
 
     background: Rectangle {
         radius: root.cornerRadius
-        color: Theme.surface
+        color: Theme.colorBase
         border.width: 1
-        border.color: root.activeFocus ? Theme.primary : Theme.borderColor
+        border.color: root.activeFocus ? Theme.colorPrimary : Theme.colorBorder
     }
 
     Controls.Button {
