@@ -152,10 +152,10 @@ Rectangle {
         }
 
         SidebarItem {
-            destination: "video"
-            label: qsTr("Video")
+            destination: "audio"
+            label: qsTr("Audio")
             iconSource: "../icons/MdiSquareRounded.svg"
-            iconColor: Theme.colorCategoryVideo
+            iconColor: Theme.colorCategoryAudio
             Layout.fillWidth: true
             categoryItem: true
         }
@@ -170,19 +170,19 @@ Rectangle {
         }
 
         SidebarItem {
-            destination: "music"
-            label: qsTr("Music")
+            destination: "images"
+            label: qsTr("Images")
             iconSource: "../icons/MdiSquareRounded.svg"
-            iconColor: Theme.colorCategoryMusic
+            iconColor: Theme.colorCategoryImages
             Layout.fillWidth: true
             categoryItem: true
         }
 
         SidebarItem {
-            destination: "images"
-            label: qsTr("Images")
+            destination: "video"
+            label: qsTr("Video")
             iconSource: "../icons/MdiSquareRounded.svg"
-            iconColor: Theme.colorCategoryImages
+            iconColor: Theme.colorCategoryVideo
             Layout.fillWidth: true
             categoryItem: true
         }

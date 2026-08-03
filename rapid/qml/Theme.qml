@@ -26,7 +26,7 @@ QtObject {
 
     readonly property color colorCategoryVideo: "#ee7b57"
     readonly property color colorCategoryDocs: "#5b9bd5"
-    readonly property color colorCategoryMusic: "#4fb783"
+    readonly property color colorCategoryAudio: "#4fb783"
     readonly property color colorCategoryImages: "#b98bd6"
 
     // Border radius
