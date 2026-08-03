@@ -8,7 +8,8 @@ Controls.Button {
     enum Variant {
         BaseVariant,
         PrimaryVariant,
-        SecondaryVariant
+        SecondaryVariant,
+        GhostVariant
     }
 
     property int variant: RButton.BaseVariant
@@ -26,6 +27,8 @@ Controls.Button {
             return Theme.colorButtonBase
         case RButton.BaseVariant:
             return Theme.colorButtonBase
+        case RButton.GhostVariant:
+            return 'transparent'
         default:
             return Theme.colorPrimary
         }
@@ -34,6 +37,7 @@ Controls.Button {
     readonly property color hoveredColor: {
         switch (root.variant) {
         case RButton.SecondaryVariant:
+        case RButton.GhostVariant:
         case RButton.BaseVariant:
             return Theme.colorButtonBaseHover
         default:

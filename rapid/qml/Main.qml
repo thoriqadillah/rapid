@@ -11,6 +11,7 @@ ApplicationWindow {
     title: "Rapid downloader"
     color: Theme.colorBackground
 
+
     readonly property bool compact: width < Theme.breakpointMd
     readonly property bool medium: width >= Theme.breakpointMd
         && width < Theme.breakpointLg
@@ -27,25 +28,28 @@ ApplicationWindow {
         }
     }
 
-    Header {
-        id: header
+    Sidebar {
+        id: sidebar
 
         anchors {
             top: parent.top
-            left: parent.left
-            right: parent.right
-        }
-        compact: window.compact
-        onAddClicked: console.log("add clicked")
-    }
-
-    Sidebar {
-        anchors {
-            top: header.bottom
             bottom: parent.bottom
             left: parent.left
         }
         onDestinationSelected: destination =>
             console.log("sidebar destination:", destination)
+    }
+
+    Header {
+        id: header
+
+        anchors {
+            top: parent.top
+            left: sidebar.right
+            right: parent.right
+        }
+        compact: window.compact
+        onAddClicked: console.log("add clicked")
+        onMenuClicked: sidebar.open = !sidebar.open
     }
 }

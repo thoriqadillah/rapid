@@ -9,11 +9,20 @@ Rectangle {
     signal destinationSelected(string destination)
 
     property string currentDestination: "all"
-    property real diskUsage: 0.68
-    property string diskFreeText: "21 GB free of 931 GB"
+    property bool open: true
 
+    color: Theme.colorBase
     implicitWidth: 200
-    color: Theme.colorBackground
+    width: open ? implicitWidth : 0
+    clip: true
+
+    Behavior on width {
+        NumberAnimation {
+            duration: 200
+            easing.type: Easing.InOutQuad
+        }
+    }
+
 
     component SectionLabel: Text {
         color: Theme.colorTextMuted
@@ -39,9 +48,7 @@ Rectangle {
         Rectangle {
             anchors.fill: parent
             radius: Theme.radiusSm
-            color: item.selected || itemMouseArea.containsMouse
-                ? Theme.colorMuted
-                : "transparent"
+            color: item.selected || itemMouseArea.containsMouse ? Qt.lighter(root.color, 1.3) : "transparent"
         }
 
         RowLayout {
@@ -92,8 +99,8 @@ Rectangle {
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onClicked: {
-                root.currentDestination = item.destination
-                root.destinationSelected(item.destination)
+                root.currentDestination = item.destination;
+                root.destinationSelected(item.destination);
             }
         }
     }
@@ -134,15 +141,6 @@ Rectangle {
             label: qsTr("Scheduled")
             count: "3"
             iconSource: "../icons/MdiLightClock.svg"
-            iconColor: Theme.colorText
-            Layout.fillWidth: true
-        }
-
-        SidebarItem {
-            destination: "completed"
-            label: qsTr("Completed")
-            count: "15"
-            iconSource: "../icons/MdiLightCheck.svg"
             iconColor: Theme.colorText
             Layout.fillWidth: true
         }

@@ -3,7 +3,7 @@ title = rapid
 project_dir = .
 input_file = main.py
 exec_directory = ./dist
-project_file =
+project_file = 
 icon = /home/thoriqadillah/workspace/rapid/.venv/lib/python3.13/site-packages/PySide6/scripts/deploy_lib/pyside_icon.jpg
 
 [python]
@@ -18,20 +18,21 @@ modules = Core,DBus,Gui,Network,OpenGL,Qml,QmlMeta,QmlModels,QmlWorkerScript,Qui
 plugins = accessiblebridge,egldeviceintegrations,generic,iconengines,imageformats,networkaccess,networkinformation,platforminputcontexts,platforms,platforms/darwin,platformthemes,qmllint,qmltooling,scenegraph,tls,vectorimageformats,wayland-decoration-client,wayland-graphics-integration-client,wayland-shell-integration,xcbglintegrations
 
 [android]
-wheel_pyside =
-wheel_shiboken =
-plugins =
+wheel_pyside = 
+wheel_shiboken = 
+plugins = 
 
 [nuitka]
-macos.permissions =
+macos.permissions = 
 mode = onefile
 extra_args = --verbose --noinclude-qt-translations --static-libpython=no
 
 [buildozer]
 mode = debug
-recipe_dir =
-jars_dir =
-ndk_path =
-sdk_path =
-local_libs =
-arch =
+recipe_dir = 
+jars_dir = 
+ndk_path = 
+sdk_path = 
+local_libs = 
+arch = 
+
