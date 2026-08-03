@@ -1,10 +1,11 @@
+pragma ComponentBehavior: Bound
 import QtQuick
-import ".."
 
 Item {
     id: root
 
     // --- Slots ---
+    signal destinationSelected(string destination)
     property Component headerContent: null
     property Component sidebarContent: null
 
@@ -14,10 +15,10 @@ Item {
 
     property Component defaultSidebarComponent: Component {
         Sidebar {
-            onDestinationSelected: destination =>
-                console.log("sidebar destination:", destination)
+            onDestinationSelected: destination => root.destinationSelected(destination)
         }
     }
+
 
     property bool sidebarOpen: true
     default property alias content: contentArea.data

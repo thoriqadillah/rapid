@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls as Controls
 import QtQuick.Layouts
@@ -26,7 +27,7 @@ Rectangle {
 
     component SectionLabel: Text {
         color: Theme.colorTextMuted
-        font.pixelSize: 8
+        font.pixelSize: 10
         font.letterSpacing: 1
         text: ""
     }
@@ -43,7 +44,7 @@ Rectangle {
 
         readonly property bool selected: root.currentDestination === destination
 
-        implicitHeight: 32
+        implicitHeight: 36
 
         Rectangle {
             anchors.fill: parent
@@ -67,7 +68,7 @@ Rectangle {
                 icon.source: item.iconSource
                 icon.width: item.categoryItem ? Theme.iconXs : Theme.iconSm
                 icon.height: item.categoryItem ? Theme.iconXs : Theme.iconSm
-                icon.color: item.iconColor
+                icon.color: item.selected && !item.categoryItem ? Theme.colorText : item.iconColor
                 background: null
                 Layout.preferredWidth: Theme.iconSm
                 Layout.preferredHeight: Theme.iconSm
@@ -77,7 +78,7 @@ Rectangle {
             Text {
                 text: item.label
                 color: item.selected ? Theme.colorText : Theme.colorTextMuted
-                font.pixelSize: 12
+                font.pixelSize: 14
                 elide: Text.ElideRight
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignVCenter
@@ -87,7 +88,7 @@ Rectangle {
                 visible: item.count !== ""
                 text: item.count
                 color: item.selected ? Theme.colorText : Theme.colorTextMuted
-                font.pixelSize: 10
+                font.pixelSize: 12
                 Layout.alignment: Qt.AlignVCenter
             }
         }
