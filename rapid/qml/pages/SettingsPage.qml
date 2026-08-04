@@ -1,13 +1,21 @@
 import QtQuick
+import "../components"
 import ".."
 
-Item {
-    property string routeName: "settings"
+Layout {
+    id: root
+    property string searchText: ''
 
-    Text {
-        anchors.centerIn: parent
-        text: qsTr("Settings")
-        color: Theme.colorText
-        font.pixelSize: 18
+    onSearchTextChanged: root.searchText = searchText
+
+    Item {
+        anchors.fill: parent
+
+        Text {
+            anchors.centerIn: parent
+            text: qsTr("Settings")
+            color: Theme.colorText
+            font.pixelSize: 18
+        }
     }
 }

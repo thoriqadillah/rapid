@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import ".."
 
 StackView {
     id: root
@@ -8,6 +9,8 @@ StackView {
     property var routes: ({})
     property string currentRoute: ""
     property bool animated: false
+
+    Component.onCompleted: Navigation.router = root
 
     clip: true
 
@@ -21,6 +24,6 @@ StackView {
         if (root.currentRoute === route) return
 
         root.currentRoute = route
-        root.replace(null, comp, { routeName: route })
+        root.replace(null, comp)
     }
 }

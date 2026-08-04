@@ -16,66 +16,25 @@ ApplicationWindow {
     readonly property bool medium: width >= Theme.breakpointMd && width < Theme.breakpointLg
     readonly property bool expanded: width >= Theme.breakpointLg
 
-    Layout {
+    Router {
+        id: router
         anchors.fill: parent
+        animated: window.compact
 
-        onDestinationSelected: destination => router.navigate(destination)
+        routes: ({
+            [Navigation.downloadPage]: downloadPage,
+            [Navigation.settingsPage]: settingsPage
+        })
 
-        Router {
-            id: router
-            anchors.fill: parent
-            animated: window.compact
-
-            routes: ({
-                "all": allDownloadsPage,
-                "scheduled": scheduledPage,
-                "audio": audioPage,
-                "documents": documentsPage,
-                "images": imagesPage,
-                "video": videoPage,
-                "settings": settingsPage
-            })
-
-            Component {
-                id: allDownloadsPage
-                DownloadPage {}
-            }
-            Component {
-                id: scheduledPage
-                DownloadPage {
-                    filters: "scheduled"
-                }
-            }
-            Component {
-                id: audioPage
-                DownloadPage {
-                    filters: "audio"
-                }
-            }
-            Component {
-                id: documentsPage
-                DownloadPage {
-                    filters: "document"
-                }
-            }
-            Component {
-                id: imagesPage
-                DownloadPage {
-                    filters: "image"
-                }
-            }
-            Component {
-                id: videoPage
-                DownloadPage {
-                    filters: "video"
-                }
-            }
-            Component {
-                id: settingsPage
-                SettingsPage {}
-            }
-
-            Component.onCompleted: navigate("all")
+        Component {
+            id: downloadPage
+            DownloadPage {}
         }
+        Component {
+            id: settingsPage
+            SettingsPage {}
+        }
+
+        Component.onCompleted: navigate(Navigation.downloadPage)
     }
 }
