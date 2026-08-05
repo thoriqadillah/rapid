@@ -24,6 +24,7 @@ Item {
     default property alias content: contentArea.data
     readonly property alias header: headerLoader.item
     readonly property alias sidebar: sidebarLoader.item
+    readonly property string searchText: header?.searchText ?? ''
 
     // ---- Sidebar slot ----
     Loader {

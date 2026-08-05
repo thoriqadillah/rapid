@@ -9,7 +9,7 @@ Rectangle {
 
     signal destinationSelected(string destination)
 
-    property string currentDestination: "all"
+    property string currentDestination: ""
     property bool open: true
 
     color: Theme.colorBase
@@ -24,10 +24,9 @@ Rectangle {
         }
     }
 
-
     component SectionLabel: Text {
         color: Theme.colorTextMuted
-        font.pixelSize: 10
+        font.pixelSize: Theme.textSizeSm
         font.letterSpacing: 1
         text: ""
     }
@@ -78,7 +77,7 @@ Rectangle {
             Text {
                 text: item.label
                 color: item.selected ? Theme.colorText : Theme.colorTextMuted
-                font.pixelSize: 14
+                font.pixelSize: Theme.textSize
                 elide: Text.ElideRight
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignVCenter
@@ -88,7 +87,7 @@ Rectangle {
                 visible: item.count !== ""
                 text: item.count
                 color: item.selected ? Theme.colorText : Theme.colorTextMuted
-                font.pixelSize: 12
+                font.pixelSize: Theme.textSizeSm
                 Layout.alignment: Qt.AlignVCenter
             }
         }
@@ -129,7 +128,7 @@ Rectangle {
         }
 
         SidebarItem {
-            destination: "all"
+            destination: ""
             label: qsTr("All Downloads")
             count: "24"
             iconSource: "../icons/MdiLightDownload.svg"
@@ -154,7 +153,7 @@ Rectangle {
 
         SidebarItem {
             destination: "audio"
-            label: qsTr("Audio")
+            label: qsTr("Audios")
             iconSource: "../icons/MdiSquareRounded.svg"
             iconColor: Theme.colorCategoryAudio
             Layout.fillWidth: true
@@ -162,7 +161,7 @@ Rectangle {
         }
 
         SidebarItem {
-            destination: "documents"
+            destination: "document"
             label: qsTr("Documents")
             iconSource: "../icons/MdiSquareRounded.svg"
             iconColor: Theme.colorCategoryDocs
@@ -171,7 +170,7 @@ Rectangle {
         }
 
         SidebarItem {
-            destination: "images"
+            destination: "image"
             label: qsTr("Images")
             iconSource: "../icons/MdiSquareRounded.svg"
             iconColor: Theme.colorCategoryImages
@@ -181,7 +180,7 @@ Rectangle {
 
         SidebarItem {
             destination: "video"
-            label: qsTr("Video")
+            label: qsTr("Videos")
             iconSource: "../icons/MdiSquareRounded.svg"
             iconColor: Theme.colorCategoryVideo
             Layout.fillWidth: true

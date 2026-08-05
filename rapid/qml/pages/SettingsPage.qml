@@ -4,9 +4,6 @@ import ".."
 
 Layout {
     id: root
-    property string searchText: ''
-
-    onSearchTextChanged: root.searchText = searchText
 
     Item {
         anchors.fill: parent
@@ -15,7 +12,7 @@ Layout {
             anchors.centerIn: parent
             text: qsTr("Settings")
             color: Theme.colorText
-            font.pixelSize: 18
+            font.pixelSize: Theme.textSize
         }
     }
 }

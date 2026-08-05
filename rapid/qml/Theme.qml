@@ -29,6 +29,10 @@ QtObject {
     readonly property color colorCategoryAudio: "#4fb783"
     readonly property color colorCategoryImages: "#b98bd6"
 
+    // Text size
+    readonly property int textSize: 14
+    readonly property int textSizeSm: 10
+
     // Border radius
     readonly property int radiusSm: 4
     readonly property int radiusMd: 8

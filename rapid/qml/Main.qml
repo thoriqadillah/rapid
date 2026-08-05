@@ -16,15 +16,21 @@ ApplicationWindow {
     readonly property bool medium: width >= Theme.breakpointMd && width < Theme.breakpointLg
     readonly property bool expanded: width >= Theme.breakpointLg
 
-    Router {
+    StackView {
         id: router
         anchors.fill: parent
-        animated: window.compact
+        clip: true
 
-        routes: ({
-            [Navigation.downloadPage]: downloadPage,
-            [Navigation.settingsPage]: settingsPage
-        })
+        // TODO: animate on mobile
+        replaceEnter: null
+        replaceExit: null
+        pushEnter: null
+        pushExit: null
+
+        property var routes: ({
+                [Navigation.downloadPage]: downloadPage,
+                [Navigation.settingsPage]: settingsPage
+            })
 
         Component {
             id: downloadPage
@@ -35,6 +41,9 @@ ApplicationWindow {
             SettingsPage {}
         }
 
-        Component.onCompleted: navigate(Navigation.downloadPage)
+        Component.onCompleted: {
+            Navigation.router = router;
+            Navigation.replace(Navigation.downloadPage);
+        }
     }
 }

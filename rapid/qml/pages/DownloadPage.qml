@@ -5,14 +5,11 @@ import ".."
 Layout {
     id: root
     property string type: ''
-    property string searchText: ''
 
     onDestinationSelected: destination => {
-        if (destination === Navigation.settingsPage) Navigation.navigate(destination)
+        if (destination === Navigation.settingsPage) Navigation.push(destination)
         else type = destination
     }
-
-    onSearchTextChanged: root.searchText = searchText
 
     Item {
         anchors.fill: parent
@@ -21,7 +18,7 @@ Layout {
             anchors.centerIn: parent
             text: qsTr("All Downloads: ") + root.type + " - search: " + root.searchText
             color: Theme.colorText
-            font.pixelSize: 18
+            font.pixelSize: Theme.textSize
         }
     }
 }
