@@ -27,11 +27,6 @@ ApplicationWindow {
         pushEnter: null
         pushExit: null
 
-        property var routes: ({
-                [Navigation.downloadPage]: downloadPage,
-                [Navigation.settingsPage]: settingsPage
-            })
-
         Component {
             id: downloadPage
             DownloadPage {}
@@ -42,8 +37,13 @@ ApplicationWindow {
         }
 
         Component.onCompleted: {
-            Navigation.router = router;
-            Navigation.replace(Navigation.downloadPage);
+            const routes = ({
+                [Navigation.downloadPage]: downloadPage,
+                [Navigation.settingsPage]: settingsPage
+            })
+
+            Navigation.create(router, routes)
+            Navigation.replace(Navigation.downloadPage)
         }
     }
 }
