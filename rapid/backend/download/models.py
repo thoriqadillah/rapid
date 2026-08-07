@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 
@@ -37,6 +38,26 @@ def _bool_str(value: bool | None) -> str | None:
     if value is None:
         return None
     return "true" if value else "false"
+
+
+_VIDEO = {"mp4", "mkv", "webm", "avi", "mov", "flv", "m4v", "ts", "3gp"}
+_AUDIO = {"mp3", "m4a", "aac", "flac", "wav", "ogg", "opus", "wma"}
+_IMAGE = {"jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "heic", "avif"}
+
+
+def _infer_kind(is_torrent: bool, files: tuple[DownloadFile, ...]) -> str:
+    if is_torrent:
+        return "torrent"
+    for file in files:
+        if file.path:
+            ext = Path(file.path).suffix.lower().lstrip(".")
+            if ext in _VIDEO:
+                return "video"
+            if ext in _AUDIO:
+                return "audio"
+            if ext in _IMAGE:
+                return "image"
+    return "other"
 
 
 @dataclass(frozen=True)
@@ -104,6 +125,7 @@ class Download:
     gid: str
     status: str | None = None
     dir: str | None = None
+    kind: str | None = None
     total_length: int | None = None
     completed_length: int | None = None
     upload_length: int | None = None
@@ -142,6 +164,7 @@ class Download:
             gid=str(gid) if gid is not None else "",
             status=_str(data.get("status")),
             dir=_str(data.get("dir")),
+            kind=_infer_kind(isinstance(bittorrent, dict), parsed_files),
             total_length=_to_int(data.get("totalLength")),
             completed_length=_to_int(data.get("completedLength")),
             upload_length=_to_int(data.get("uploadLength")),
@@ -166,6 +189,7 @@ class Download:
             "gid": self.gid,
             "status": self.status,
             "dir": self.dir,
+            "kind": self.kind,
             "totalLength": _num(self.total_length),
             "completedLength": _num(self.completed_length),
             "uploadLength": _num(self.upload_length),

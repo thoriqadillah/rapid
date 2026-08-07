@@ -5,7 +5,7 @@ from .store import DownloadStore
 __all__ = [
     "Aria2Client",
     "DownloadStore",
-    "DownloadRow",
+    "Download",
     "DownloadFile",
     "FileUri",
     "SpeedSample",

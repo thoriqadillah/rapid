@@ -99,6 +99,7 @@ class _Download(_Base):
     gid: Mapped[str] = mapped_column(String, primary_key=True)
     status: Mapped[str | None] = mapped_column(String)
     dir: Mapped[str | None] = mapped_column("dir", String)
+    kind: Mapped[str | None] = mapped_column(String)
     total_length: Mapped[int | None] = mapped_column(BigInteger)
     completed_length: Mapped[int | None] = mapped_column(BigInteger)
     upload_length: Mapped[int | None] = mapped_column(BigInteger)
@@ -127,6 +128,7 @@ def _to_download_model(row: _Download) -> Download:
         gid=row.gid,
         status=row.status,
         dir=row.dir,
+        kind=row.kind,
         total_length=row.total_length,
         completed_length=row.completed_length,
         upload_length=row.upload_length,
@@ -216,16 +218,19 @@ class DownloadStore:
             if row is None:
                 row = _Download(gid=gid)
                 session.add(row)
-            self._apply_status(session, row, status)
+
+            self._apply_download(session, row, status)
             row.updated_at = _now()
             session.commit()
 
     @staticmethod
-    def _apply_status(session: Session, row: _Download, status: Download) -> None:
+    def _apply_download(session: Session, row: _Download, status: Download) -> None:
         if status.status is not None:
             row.status = status.status
         if status.dir is not None:
             row.dir = status.dir
+        if status.kind is not None:
+            row.kind = status.kind
         if status.total_length is not None:
             row.total_length = status.total_length
         if status.completed_length is not None:

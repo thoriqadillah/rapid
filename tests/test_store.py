@@ -41,6 +41,29 @@ def test_upsert_zero_speed_is_kept(tmp_path: Path) -> None:
     assert result.download_speed == 0
 
 
+def test_persists_kind(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.upsert(_download("abc", kind="video"))
+    result = store.get("abc")
+    assert result is not None
+    assert result.kind == "video"
+    assert result.as_dict()["kind"] == "video"
+
+
+def test_infer_kind_from_payload_files() -> None:
+    payload = {
+        "gid": "g1",
+        "status": "active",
+        "files": [{"path": "/tmp/movie.mp4"}],
+    }
+    assert Download.from_payload(payload).kind == "video"
+
+
+def test_infer_kind_torrent() -> None:
+    payload = {"gid": "g1", "status": "active", "bittorrent": {"info": {"name": "x"}}}
+    assert Download.from_payload(payload).kind == "torrent"
+
+
 def test_persists_files_and_uris(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.upsert(

@@ -2,13 +2,26 @@ import signal
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtCore import QStandardPaths, QTimer, QUrl
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
-from .backend import Aria2Client, DownloadStore
+from .backend import Aria2Client, DownloadStore, PluginManager
 
 BASE_DIR = Path(__file__).resolve().parent
+
+
+def _plugin_dirs() -> list[Path]:
+    user = (
+        Path(
+            QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
+        )
+        / "plugins"
+    )
+    dev = BASE_DIR / "plugins"
+    bundled = Path(sys.executable).resolve().parent / "plugins"
+    deduped = {p.resolve(): p for p in (user, dev, bundled)}
+    return list(deduped.values())
 
 
 def main() -> int:
@@ -24,9 +37,11 @@ def main() -> int:
 
     store = DownloadStore()
     aria2 = Aria2Client(store=store)
+    plugins = PluginManager(_plugin_dirs())
 
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("Aria2", aria2)
+    engine.rootContext().setContextProperty("Plugins", plugins)
     engine.load(QUrl.fromLocalFile(str(BASE_DIR / "qml" / "Main.qml")))
     if not engine.rootObjects():
         return 1
