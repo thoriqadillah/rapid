@@ -1,5 +1,5 @@
 from __future__ import annotations
-from pprint import pprint
+from socket import socket
 
 import functools
 import shutil
@@ -7,6 +7,7 @@ import sys
 import time
 from pathlib import Path
 from threading import Thread
+from typing import Iterator, Callable
 
 import pytest
 from http.server import BaseHTTPRequestHandler, SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -23,6 +24,57 @@ def _app() -> QGuiApplication:
     return QGuiApplication(sys.argv)
 
 
+def _free_port() -> int:
+    with socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def _wait_daemon(app: QGuiApplication, port: int, timeout: float) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        app.processEvents()
+        with socket() as s:
+            s.settimeout(0.2)
+            try:
+                s.connect(("127.0.0.1", port))
+                return
+            except OSError:
+                time.sleep(0.05)
+
+
+def _wait_until(app: QGuiApplication, predicate: Callable[[], bool], timeout: float) -> bool:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        app.processEvents()
+        if predicate():
+            return True
+        time.sleep(0.02)
+
+    app.processEvents()
+    return predicate()
+
+
+@pytest.fixture(scope="module")
+def daemon(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Iterator[tuple[QGuiApplication, Aria2Client, DownloadStore, list[str]]]:
+    app = _app()
+    base = tmp_path_factory.mktemp("daemon")
+    (base / "dl").mkdir()
+    store = DownloadStore(path=base / "downloads.db")
+    port = _free_port()
+    client = Aria2Client(
+        store=store, host="127.0.0.1", port=port, download_dir=base / "dl"
+    )
+    errors: list[str] = []
+    client.errorOccurred.connect(errors.append)
+    client.start()
+    _wait_daemon(app, port, timeout=20)
+    yield app, client, store, errors
+    client.stop()
+
+
 def test_make_url() -> None:
     assert Aria2Client._make_url("http", "127.0.0.1", 6800) == "http://127.0.0.1:6800/jsonrpc"
     assert Aria2Client._make_url("ws", "127.0.0.1", 6800) == "ws://127.0.0.1:6800/jsonrpc"
@@ -36,8 +88,10 @@ def test_gid_like() -> None:
 
 
 @pytest.mark.skipif(shutil.which("aria2c") is None, reason="aria2c not installed")
-def test_daemon_download_persists_status(tmp_path: Path) -> None:
-    app = _app()
+def test_daemon_download_persists_status(
+    tmp_path: Path, daemon: tuple[QGuiApplication, Aria2Client, DownloadStore, list[str]]
+) -> None:
+    app, client, store, errors = daemon
 
     payload = b"x" * (1024 * 1024)
     file_path = tmp_path / "payload.bin"
@@ -45,52 +99,28 @@ def test_daemon_download_persists_status(tmp_path: Path) -> None:
 
     handler = functools.partial(SimpleHTTPRequestHandler, directory=str(tmp_path))
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    port = server.server_address[1]
+    http_port = server.server_address[1]
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
+
     try:
-        store = DownloadStore(path=tmp_path / "downloads.db")
-        client = Aria2Client(
-            store=store,
-            host="127.0.0.1",
-            port=6800,
-            download_dir=tmp_path / "dl",
-        )
-        errors: list[str] = []
-        client.errorOccurred.connect(errors.append)
-        client.start()
+        client.add_uri(f"http://127.0.0.1:{http_port}/payload.bin")
 
-        try:
-            client.add_uri(f"http://127.0.0.1:{port}/payload.bin")
+        def done() -> bool:
+            items = store.all()
+            return any(
+                item.status == "complete" and item.total_length == len(payload)
+                for item in items.values()
+            )
 
-            def done() -> bool:
-                items = store.all()
-                return any(
-                    item.status == "complete" and item.total_length == len(payload)
-                    for item in items.values()
-                )
+        assert _wait_until(app, done, timeout=15), f"timeout; errors={errors} store={store.all()}"
 
-            assert _wait_until(app, done, timeout=15000), f"timeout; errors={errors} store={store.all()}"
-
-            saved = list(store.all().values())[0]
-            assert saved.status == "complete"
-            assert saved.download_speed in (0, None)
-        finally:
-            client.stop()
+        saved = list(store.all().values())[0]
+        assert saved.status == "complete"
+        assert saved.download_speed in (0, None)
     finally:
         server.shutdown()
         server.server_close()
-
-
-def _wait_until(app: QGuiApplication, predicate, timeout: float) -> bool:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        app.processEvents()
-        if predicate():
-            return True
-        time.sleep(0.02)
-    app.processEvents()
-    return predicate()
 
 
 class _ThrottledServer(ThreadingHTTPServer):
@@ -118,6 +148,7 @@ class _ThrottledHandler(BaseHTTPRequestHandler):
         self.end_headers()
         chunk = 64 * 1024
         per_chunk = chunk / throttled.bytes_per_second
+
         try:
             for i in range(0, len(payload), chunk):
                 self.wfile.write(payload[i : i + chunk])
@@ -128,40 +159,32 @@ class _ThrottledHandler(BaseHTTPRequestHandler):
 
 
 @pytest.mark.skipif(shutil.which("aria2c") is None, reason="aria2c not installed")
-def test_large_download_records_speed_samples(tmp_path: Path) -> None:
-    app = _app()
+def test_large_download_records_speed_samples(
+    daemon: tuple[QGuiApplication, Aria2Client, DownloadStore, list[str]],
+) -> None:
+    app, client, store, errors = daemon
 
     payload = b"y" * (3 * 1024 * 1024)
     server = _ThrottledServer(payload, bytes_per_second=256 * 1024)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
+
     try:
-        store = DownloadStore(path=tmp_path / "downloads.db")
-        client = Aria2Client(
-            store=store, host="127.0.0.1", port=6800, download_dir=tmp_path / "dl"
-        )
-        errors: list[str] = []
         gid: list[str] = []
-        client.errorOccurred.connect(errors.append)
         client.downloadAdded.connect(lambda g: gid.append(g))
-        client.start()
+        client.add_uri(f"http://127.0.0.1:{server.port}/big.bin")
 
-        try:
-            client.add_uri(f"http://127.0.0.1:{server.port}/big.bin")
+        def enough_samples() -> bool:
+            return bool(gid) and len(store.speed_history(gid[0])) >= 4
 
-            def enough_samples() -> bool:
-                return bool(gid) and len(store.speed_history(gid[0])) >= 4
+        assert _wait_until(app, enough_samples, timeout=20), (
+            f"timeout; errors={errors} gid={gid}"
+        )
 
-            assert _wait_until(app, enough_samples, timeout=20000), (
-                f"timeout; errors={errors} gid={gid}"
-            )
-
-            history = store.speed_history(gid[0])
-            assert len(history) >= 4
-            assert all(s.speed > 0 for s in history)
-            assert all(0 < s.ts <= int(time.time() * 1000) for s in history)
-        finally:
-            client.stop()
+        history = store.speed_history(gid[0])
+        assert len(history) >= 4
+        assert all(s.speed > 0 for s in history)
+        assert all(0 < s.ts <= int(time.time() * 1000) for s in history)
     finally:
         server.shutdown()
         server.server_close()

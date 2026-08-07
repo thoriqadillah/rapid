@@ -39,7 +39,6 @@ def test_available_for_nonmatching_url_is_empty() -> None:
 def test_resolve_returns_items() -> None:
     manager = _manager()
     items = manager.resolve("https://www.youtube.com/watch?v=xyz789", "sampledemo")
-    pprint(items)
     assert isinstance(items, list) and len(items) >= 2
     assert items[0]["url"].endswith(".mp4")
     assert items[0]["kind"] == "video"
