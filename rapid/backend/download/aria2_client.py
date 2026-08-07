@@ -4,6 +4,7 @@ import json
 import logging
 import shutil
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Callable
 
@@ -11,7 +12,8 @@ from PySide6.QtCore import QObject, QProcess, QTimer, QUrl, Signal, Slot
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 from PySide6.QtWebSockets import QWebSocket, QWebSocketProtocol
 
-from .store import DownloadStore, _to_int
+from .models import Download
+from .store import DownloadStore
 
 LOG = logging.getLogger(__name__)
 JSONRPC_VERSION = "2.0"
@@ -292,10 +294,12 @@ class Aria2Client(QObject):
     def _tell_status(self, gid: str) -> None:
         def emit(result: Any) -> None:
             if isinstance(result, dict):
-                resolved = str(result.get("gid", gid))
-                self._store.upsert(resolved, result)
-                self._sample(resolved, result)
-                self.statusChanged.emit(resolved, result)
+                status = Download.from_payload(result)
+                if not status.gid:
+                    status = replace(status, gid=gid)
+                self._store.upsert(status)
+                self._sample(status)
+                self.statusChanged.emit(status.gid, status.as_dict())
 
         self._call("aria2.tellStatus", [gid, STATUS_KEYS], emit)
 
@@ -305,10 +309,10 @@ class Aria2Client(QObject):
             if isinstance(result, list):
                 for item in result:
                     if isinstance(item, dict) and isinstance(item.get("gid"), str):
-                        gid = item["gid"]
-                        self._store.upsert(gid, item)
-                        self._sample(gid, item)
-                        self.statusChanged.emit(gid, item)
+                        status = Download.from_payload(item)
+                        self._store.upsert(status)
+                        self._sample(status)
+                        self.statusChanged.emit(status.gid, status.as_dict())
 
         self._call("aria2.tellActive", [], cb)
         self._call("aria2.tellWaiting", [0, 1000, STATUS_KEYS], cb)
@@ -332,15 +336,16 @@ class Aria2Client(QObject):
 
     @Slot(str, result=list)
     def speed_history(self, gid: str) -> list[dict[str, int]]:
-        return self._store.speed_history(gid, limit=60)
+        return [sample.as_dict() for sample in self._store.speed_history(gid, limit=60)]
 
-    def _sample(self, gid: str, payload: dict[str, Any]) -> None:
-        completed = _to_int(payload.get("completedLength"))
+    def _sample(self, status: Download) -> None:
+        gid = status.gid
+        completed = status.completed_length
         now = int(time.time() * 1000)
         previous = self._progress.get(gid)
         self._progress[gid] = (now, completed)
 
-        speed = _to_int(payload.get("downloadSpeed"))
+        speed = status.download_speed
         if (
             completed is not None
             and previous is not None

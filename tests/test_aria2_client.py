@@ -66,16 +66,15 @@ def test_daemon_download_persists_status(tmp_path: Path) -> None:
             def done() -> bool:
                 items = store.all()
                 return any(
-                    item.get("status") == "complete"
-                    and int(item.get("totalLength", "0") or 0) == len(payload)
+                    item.status == "complete" and item.total_length == len(payload)
                     for item in items.values()
                 )
 
             assert _wait_until(app, done, timeout=15000), f"timeout; errors={errors} store={store.all()}"
 
             saved = list(store.all().values())[0]
-            assert saved["status"] == "complete"
-            assert saved["downloadSpeed"] in ("", "0")
+            assert saved.status == "complete"
+            assert saved.download_speed in (0, None)
         finally:
             client.stop()
     finally:
@@ -159,8 +158,8 @@ def test_large_download_records_speed_samples(tmp_path: Path) -> None:
 
             history = store.speed_history(gid[0])
             assert len(history) >= 4
-            assert all(s["speed"] > 0 for s in history)
-            assert all(0 < s["ts"] <= int(time.time() * 1000) for s in history)
+            assert all(s.speed > 0 for s in history)
+            assert all(0 < s.ts <= int(time.time() * 1000) for s in history)
         finally:
             client.stop()
     finally:
