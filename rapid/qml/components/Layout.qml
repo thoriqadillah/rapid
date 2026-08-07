@@ -6,6 +6,7 @@ Item {
 
     // --- Slots ---
     signal destinationSelected(string destination)
+    signal addClicked()
     property Component headerContent: null
     property Component sidebarContent: null
 
@@ -56,6 +57,9 @@ Item {
             ignoreUnknownSignals: true
             function onMenuClicked() {
                 root.sidebarOpen = !root.sidebarOpen
+            }
+            function onAddClicked() {
+                root.addClicked()
             }
         }
     }

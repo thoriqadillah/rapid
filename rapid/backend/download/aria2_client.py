@@ -6,7 +6,7 @@ import shutil
 import time
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from PySide6.QtCore import QObject, QProcess, QTimer, QUrl, Signal, Slot
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
@@ -257,17 +257,28 @@ class Aria2Client(QObject):
 
     @Slot(str)
     def add_uri(self, uri: str) -> None:
+        self.add_uris([uri], {})
+
+    @Slot(list, dict)
+    def add_uris(self, uris: list[str], options: Optional[dict[str, Any]] = None) -> None:
         self._call(
             "aria2.addUri",
-            [[uri]],
+            [uris, options or {}],
             lambda gid: self.downloadAdded.emit(self._gid_like(gid)),
         )
 
     @Slot(str)
     def add_torrent(self, file_path: str) -> None:
+        path = Path(file_path)
+        if not path.is_file():
+            self.errorOccurred.emit(f"torrent file not found: {file_path}")
+            return
+        import base64
+
+        encoded = base64.b64encode(path.read_bytes()).decode("ascii")
         self._call(
             "aria2.addTorrent",
-            [file_path],
+            [encoded],
             lambda gid: self.downloadAdded.emit(self._gid_like(gid)),
         )
 

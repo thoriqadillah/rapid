@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Controls
-import "components"
 import "pages"
 
 ApplicationWindow {
@@ -44,6 +43,14 @@ ApplicationWindow {
 
             Navigation.create(router, routes)
             Navigation.replace(Navigation.downloadPage)
+        }
+
+        Connections {
+            target: router.currentItem
+            ignoreUnknownSignals: true
+            function onAddClicked() {
+                NewDownloadDialog.openFor(window)
+            }
         }
     }
 }

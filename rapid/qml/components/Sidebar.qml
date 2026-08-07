@@ -48,7 +48,7 @@ Rectangle {
         Rectangle {
             anchors.fill: parent
             radius: Theme.radiusSm
-            color: item.selected || itemMouseArea.containsMouse ? Qt.lighter(root.color, 1.3) : "transparent"
+            color: item.selected || itemMouseArea.containsMouse ? Qt.lighter(root.color, 1.4) : "transparent"
         }
 
         RowLayout {
@@ -76,7 +76,7 @@ Rectangle {
 
             Text {
                 text: item.label
-                color: item.selected ? Theme.colorText : Theme.colorTextMuted
+                color: item.selected || itemMouseArea.containsMouse ? Theme.colorText : Theme.colorTextMuted
                 font.pixelSize: Theme.textSize
                 elide: Text.ElideRight
                 Layout.fillWidth: true
@@ -86,7 +86,7 @@ Rectangle {
             Text {
                 visible: item.count !== ""
                 text: item.count
-                color: item.selected ? Theme.colorText : Theme.colorTextMuted
+                color: item.selected || itemMouseArea.containsMouse ? Theme.colorText : Theme.colorTextMuted
                 font.pixelSize: Theme.textSizeSm
                 Layout.alignment: Qt.AlignVCenter
             }

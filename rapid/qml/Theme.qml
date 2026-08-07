@@ -10,10 +10,11 @@ QtObject {
     readonly property color colorBorder: palette.mid
     readonly property color colorPrimary: palette.highlight
     readonly property color colorPrimaryHover: Qt.darker(palette.highlight, 1.1)
-    readonly property color colorMuted: Qt.lighter(Theme.colorBackground, 1.25)
+
+    readonly property color colorSurface: palette.button
 
     // button colors
-    readonly property color colorButtonBase: palette.button
+    readonly property color colorButtonBase: Theme.colorSurface
     readonly property color colorButtonBaseHover: Qt.lighter(palette.button, 1.5)
 
     // text colors
@@ -22,7 +23,7 @@ QtObject {
     readonly property color colorTextMuted: Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.6)
 
     // input colors
-    readonly property color colorInputBackground: Theme.colorMuted
+    readonly property color colorInputBackground: Theme.colorSurface
 
     readonly property color colorCategoryVideo: "#ee7b57"
     readonly property color colorCategoryDocs: "#5b9bd5"

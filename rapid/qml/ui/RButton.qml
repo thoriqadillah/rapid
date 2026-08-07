@@ -56,7 +56,7 @@ Controls.Button {
     }
 
     hoverEnabled: true
-    horizontalPadding: Theme.spacingMd
+    horizontalPadding: root.text == "" ? Theme.spacingMd : Theme.spacingXl
     verticalPadding: Theme.spacingXs
     spacing: Theme.spacingXs
     implicitHeight: Math.max(
