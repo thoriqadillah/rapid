@@ -2,10 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any
 
-from PySide6.QtCore import QStandardPaths
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -15,39 +12,27 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
-    create_engine,
     delete,
-    event,
     select,
 )
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import (
-    DeclarativeBase,
     Mapped,
     Session,
     mapped_column,
     relationship,
     selectinload,
-    sessionmaker,
 )
 
+from ..database.database import Base, Database
 from .models import DownloadFile, Download, FileUri, SpeedSample
-
-
-def _default_path() -> Path:
-    base = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
-    return Path(base) / "downloads.db"
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-class _Base(DeclarativeBase):
-    pass
-
-
-class _UriRow(_Base):
+class _UriRow(Base):
     __tablename__ = "file_uris"
     __table_args__ = (Index("ix_file_uris_file_id", "file_id"),)
 
@@ -61,7 +46,7 @@ class _UriRow(_Base):
     file: Mapped["_FileRow"] = relationship(back_populates="uris")
 
 
-class _FileRow(_Base):
+class _FileRow(Base):
     __tablename__ = "download_files"
     __table_args__ = (UniqueConstraint("gid", "index", name="uq_download_file"),)
 
@@ -79,7 +64,7 @@ class _FileRow(_Base):
     )
 
 
-class _SpeedSample(_Base):
+class _SpeedSample(Base):
     __tablename__ = "speed_samples"
     __table_args__ = (
         Index("ix_speed_samples_ts", "ts"),
@@ -93,7 +78,7 @@ class _SpeedSample(_Base):
     speed: Mapped[int] = mapped_column(BigInteger)
 
 
-class _Download(_Base):
+class _Download(Base):
     __tablename__ = "downloads"
 
     gid: Mapped[str] = mapped_column(String, primary_key=True)
@@ -171,20 +156,8 @@ class DownloadStore:
     the typed :class:`DownloadRow` / :class:`SpeedSample` models.
     """
 
-    def __init__(self, path: Path | None = None) -> None:
-        self._path = path or _default_path()
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._engine = create_engine(f"sqlite:///{self._path}", future=True)
-        self._enable_foreign_keys()
-        _Base.metadata.create_all(self._engine)
-        self._session_factory = sessionmaker(bind=self._engine, expire_on_commit=False)
-
-    def _enable_foreign_keys(self) -> None:
-        @event.listens_for(self._engine, "connect")
-        def _on_connect(dbapi_connection: Any, _record: Any) -> None:
-            cursor = dbapi_connection.cursor()
-            cursor.execute("PRAGMA foreign_keys=ON")
-            cursor.close()
+    def __init__(self, db: Database) -> None:
+        self._session_factory = db.session_factory
 
     def all(self) -> dict[str, Download]:
         with self._session_factory() as session:

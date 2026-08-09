@@ -3,10 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from rapid.backend import DownloadFile, Download, DownloadStore, FileUri, SpeedSample
+from rapid.backend.database.database import Database
 
 
 def _store(tmp_path: Path) -> DownloadStore:
-    return DownloadStore(path=tmp_path / "downloads.db")
+    return DownloadStore(Database(path=tmp_path / "database.db"))
 
 
 def _download(gid: str, **fields) -> Download:
@@ -26,7 +27,7 @@ def test_upsert_and_get(tmp_path: Path) -> None:
 def test_upsert_merges_scalar_fields(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.upsert(_download("abc", status="active"))
-    store.upsert(_download("abc", download_speed=1024, connections=4))
+    store.upsert(_download("abc", downloadSpeed=1024, connections=4))
     assert store.get("abc") == Download(
         gid="abc", status="active", downloadSpeed=1024, connections=4
     )
@@ -34,8 +35,8 @@ def test_upsert_merges_scalar_fields(tmp_path: Path) -> None:
 
 def test_upsert_zero_speed_is_kept(tmp_path: Path) -> None:
     store = _store(tmp_path)
-    store.upsert(_download("abc", download_speed=1024))
-    store.upsert(_download("abc", download_speed=0))
+    store.upsert(_download("abc", downloadSpeed=1024))
+    store.upsert(_download("abc", downloadSpeed=0))
     result = store.get("abc")
     assert result is not None
     assert result.downloadSpeed == 0
@@ -70,7 +71,7 @@ def test_persists_files_and_uris(tmp_path: Path) -> None:
         _download(
             "abc",
             status="complete",
-            total_length=100,
+            totalLength=100,
             files=(
                 DownloadFile(
                     index=1,
@@ -114,8 +115,9 @@ def test_get_missing_returns_none(tmp_path: Path) -> None:
 
 def test_persists_across_instances(tmp_path: Path) -> None:
     path = tmp_path / "downloads.db"
-    DownloadStore(path=path).upsert(_download("abc", status="active"))
-    reloaded = DownloadStore(path=path)
+    db = Database(path=path)
+    DownloadStore(db).upsert(_download("abc", status="active"))
+    reloaded = DownloadStore(db)
     assert reloaded.all() == {"abc": Download(gid="abc", status="active")}
 
 
