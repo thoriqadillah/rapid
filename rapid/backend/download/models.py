@@ -45,9 +45,7 @@ _AUDIO = {"mp3", "m4a", "aac", "flac", "wav", "ogg", "opus", "wma"}
 _IMAGE = {"jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "heic", "avif"}
 
 
-def _infer_kind(is_torrent: bool, files: tuple[DownloadFile, ...]) -> str:
-    if is_torrent:
-        return "torrent"
+def _infer_kind(files: tuple[DownloadFile, ...]) -> str:
     for file in files:
         if file.path:
             ext = Path(file.path).suffix.lower().lstrip(".")
@@ -135,13 +133,8 @@ class Download:
     numPieces: int | None = None
     pieceLength: int | None = None
     verifiedLength: int | None = None
-    numSeeders: int | None = None
-    seeder: bool | None = None
-    infoHash: str | None = None
-    bitfield: str | None = None
     errorCode: int | None = None
     errorMessage: str | None = None
-    bittorrent: dict[str, Any] | None = None
     files: tuple[DownloadFile, ...] = ()
 
     @property
@@ -154,7 +147,6 @@ class Download:
     def fromPayload(cls, data: dict[str, Any]) -> Download:
         gid = data.get("gid")
         files = data.get("files")
-        bittorrent = data.get("bittorrent")
         parsedFiles = (
             tuple(DownloadFile.from_payload(f) for f in files if isinstance(f, dict))
             if isinstance(files, list)
@@ -164,7 +156,7 @@ class Download:
             gid=str(gid) if gid is not None else "",
             status=_str(data.get("status")),
             dir=_str(data.get("dir")),
-            kind=_infer_kind(isinstance(bittorrent, dict), parsedFiles),
+            kind=_infer_kind(parsedFiles),
             totalLength=_to_int(data.get("totalLength")),
             completedLength=_to_int(data.get("completedLength")),
             uploadLength=_to_int(data.get("uploadLength")),
@@ -174,13 +166,8 @@ class Download:
             numPieces=_to_int(data.get("numPieces")),
             pieceLength=_to_int(data.get("pieceLength")),
             verifiedLength=_to_int(data.get("verifiedLength")),
-            numSeeders=_to_int(data.get("numSeeders")),
-            seeder=_to_bool(data.get("seeder")),
-            infoHash=_str(data.get("infoHash")),
-            bitfield=_str(data.get("bitfield")),
             errorCode=_to_int(data.get("errorCode")),
             errorMessage=_str(data.get("errorMessage")),
-            bittorrent=bittorrent if isinstance(bittorrent, dict) else None,
             files=parsedFiles,
         )
 
@@ -199,16 +186,10 @@ class Download:
             "numPieces": _num(self.numPieces),
             "pieceLength": _num(self.pieceLength),
             "verifiedLength": _num(self.verifiedLength),
-            "numSeeders": _num(self.numSeeders),
-            "seeder": _bool_str(self.seeder),
-            "infoHash": self.infoHash,
-            "bitfield": self.bitfield,
             "errorCode": _num(self.errorCode),
             "errorMessage": self.errorMessage,
             "files": [f.as_dict() for f in self.files],
         }
-        if self.bittorrent is not None:
-            payload["bittorrent"] = self.bittorrent
         return payload
 
 

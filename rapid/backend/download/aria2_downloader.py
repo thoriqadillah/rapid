@@ -30,8 +30,6 @@ LOG = logging.getLogger(__name__)
 JSONRPC_VERSION = "2.0"
 
 STATUS_KEYS = [
-    "bittorrent",
-    "bitfield",
     "completedLength",
     "connections",
     "dir",
@@ -40,11 +38,8 @@ STATUS_KEYS = [
     "errorMessage",
     "files",
     "gid",
-    "infoHash",
     "numPieces",
-    "numSeeders",
     "pieceLength",
-    "seeder",
     "status",
     "totalLength",
     "uploadLength",

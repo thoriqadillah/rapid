@@ -60,11 +60,6 @@ def test_infer_kind_from_payload_files() -> None:
     assert Download.fromPayload(payload).kind == "video"
 
 
-def test_infer_kind_torrent() -> None:
-    payload = {"gid": "g1", "status": "active", "bittorrent": {"info": {"name": "x"}}}
-    assert Download.fromPayload(payload).kind == "torrent"
-
-
 def test_persists_files_and_uris(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.upsert(
@@ -139,10 +134,10 @@ def test_clear(tmp_path: Path) -> None:
 def test_speed_samples_roundtrip(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.upsert(_download("abc"))
-    store.add_speed_sample("abc", 1000, 500)
-    store.add_speed_sample("abc", 2000, 700)
-    store.add_speed_sample("abc", 3000, 900)
-    assert store.speed_history("abc") == [
+    store.addSpeedSample("abc", 1000, 500)
+    store.addSpeedSample("abc", 2000, 700)
+    store.addSpeedSample("abc", 3000, 900)
+    assert store.speedHistory("abc") == [
         SpeedSample(ts=1000, speed=500),
         SpeedSample(ts=2000, speed=700),
         SpeedSample(ts=3000, speed=900),
@@ -153,32 +148,22 @@ def test_speed_samples_limit_and_order(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.upsert(_download("abc"))
     for i in range(10):
-        store.add_speed_sample("abc", i, i)
-    history = store.speed_history("abc", limit=3)
+        store.addSpeedSample("abc", i, i)
+    history = store.speedHistory("abc", limit=3)
     assert [s.ts for s in history] == [7, 8, 9]
 
 
 def test_speed_samples_duplicate_ts_ignored(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.upsert(_download("abc"))
-    store.add_speed_sample("abc", 1000, 500)
-    store.add_speed_sample("abc", 1000, 999)
-    assert store.speed_history("abc") == [SpeedSample(ts=1000, speed=500)]
-
-
-def test_prune_speeds(tmp_path: Path) -> None:
-    store = _store(tmp_path)
-    store.upsert(_download("abc"))
-    store.add_speed_sample("abc", 1000, 1)
-    store.add_speed_sample("abc", 2000, 2)
-    store.add_speed_sample("abc", 3000, 3)
-    store.prune_speeds(2000)
-    assert [s.ts for s in store.speed_history("abc")] == [2000, 3000]
+    store.addSpeedSample("abc", 1000, 500)
+    store.addSpeedSample("abc", 1000, 999)
+    assert store.speedHistory("abc") == [SpeedSample(ts=1000, speed=500)]
 
 
 def test_remove_cascades_speed_samples(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.upsert(_download("abc"))
-    store.add_speed_sample("abc", 1000, 1)
+    store.addSpeedSample("abc", 1000, 1)
     store.remove("abc")
-    assert store.speed_history("abc") == []
+    assert store.speedHistory("abc") == []

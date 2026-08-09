@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
-
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -94,13 +92,8 @@ class _Download(Base):
     num_pieces: Mapped[int | None] = mapped_column(Integer)
     piece_length: Mapped[int | None] = mapped_column(BigInteger)
     verified_length: Mapped[int | None] = mapped_column(BigInteger)
-    num_seeders: Mapped[int | None] = mapped_column(Integer)
-    seeder: Mapped[bool | None] = mapped_column(Boolean)
-    info_hash: Mapped[str | None] = mapped_column(String)
-    bitfield: Mapped[str | None] = mapped_column(String)
     error_code: Mapped[int | None] = mapped_column(Integer)
     error_message: Mapped[str | None] = mapped_column(String)
-    bittorrent: Mapped[str | None] = mapped_column(String)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     files: Mapped[list[_FileRow]] = relationship(
@@ -108,7 +101,7 @@ class _Download(Base):
     )
 
 
-def _to_download_model(row: _Download) -> Download:
+def _toDownloadModel(row: _Download) -> Download:
     return Download(
         gid=row.gid,
         status=row.status,
@@ -123,13 +116,8 @@ def _to_download_model(row: _Download) -> Download:
         numPieces=row.num_pieces,
         pieceLength=row.piece_length,
         verifiedLength=row.verified_length,
-        numSeeders=row.num_seeders,
-        seeder=row.seeder,
-        infoHash=row.info_hash,
-        bitfield=row.bitfield,
         errorCode=row.error_code,
         errorMessage=row.error_message,
-        bittorrent=json.loads(row.bittorrent) if row.bittorrent is not None else None,
         files=tuple(
             DownloadFile(
                 index=f.index,
@@ -170,7 +158,7 @@ class DownloadStore:
                 .scalars()
                 .all()
             )
-            return {row.gid: _to_download_model(row) for row in rows}
+            return {row.gid: _toDownloadModel(row) for row in rows}
 
     def get(self, gid: str) -> Download | None:
         with self._session_factory() as session:
@@ -182,7 +170,7 @@ class DownloadStore:
                 )
                 .scalar_one_or_none()
             )
-            return _to_download_model(row) if row is not None else None
+            return _toDownloadModel(row) if row is not None else None
 
     def upsert(self, status: Download) -> None:
         gid = status.gid
@@ -192,12 +180,12 @@ class DownloadStore:
                 row = _Download(gid=gid)
                 session.add(row)
 
-            self._apply_download(session, row, status)
+            self._applyDownload(session, row, status)
             row.updated_at = _now()
             session.commit()
 
     @staticmethod
-    def _apply_download(session: Session, row: _Download, status: Download) -> None:
+    def _applyDownload(session: Session, row: _Download, status: Download) -> None:
         if status.status is not None:
             row.status = status.status
         if status.dir is not None:
@@ -222,20 +210,10 @@ class DownloadStore:
             row.piece_length = status.pieceLength
         if status.verifiedLength is not None:
             row.verified_length = status.verifiedLength
-        if status.numSeeders is not None:
-            row.num_seeders = status.numSeeders
-        if status.seeder is not None:
-            row.seeder = status.seeder
-        if status.infoHash is not None:
-            row.info_hash = status.infoHash
-        if status.bitfield is not None:
-            row.bitfield = status.bitfield
         if status.errorCode is not None:
             row.error_code = status.errorCode
         if status.errorMessage is not None:
             row.error_message = status.errorMessage
-        if status.bittorrent is not None:
-            row.bittorrent = json.dumps(status.bittorrent)
 
         existing = {f.index: f for f in row.files}
         seen: set[int] = set()
@@ -260,7 +238,7 @@ class DownloadStore:
             if index not in seen:
                 row.files.remove(file_row)
 
-    def add_speed_sample(self, gid: str, ts: int, speed: int) -> None:
+    def addSpeedSample(self, gid: str, ts: int, speed: int) -> None:
         with self._session_factory() as session:
             session.execute(
                 sqlite_insert(_SpeedSample)
@@ -269,7 +247,7 @@ class DownloadStore:
             )
             session.commit()
 
-    def speed_history(self, gid: str, limit: int = 60) -> list[SpeedSample]:
+    def speedHistory(self, gid: str, limit: int = 60) -> list[SpeedSample]:
         with self._session_factory() as session:
             rows = (
                 session.execute(
@@ -282,11 +260,6 @@ class DownloadStore:
                 .all()
             )
             return [SpeedSample(ts=row.ts, speed=row.speed) for row in reversed(rows)]
-
-    def prune_speeds(self, before_ts: int) -> None:
-        with self._session_factory() as session:
-            session.execute(delete(_SpeedSample).where(_SpeedSample.ts < before_ts))
-            session.commit()
 
     def remove(self, gid: str) -> None:
         with self._session_factory() as session:

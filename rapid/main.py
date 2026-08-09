@@ -4,7 +4,7 @@ import signal
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QStandardPaths, QTimer, QUrl, Slot
+from PySide6.QtCore import QObject, QStandardPaths, QTimer, QUrl, Slot, QCoreApplication
 from PySide6.QtWidgets import QApplication, QFileDialog
 from PySide6.QtQml import QQmlApplicationEngine
 
@@ -51,6 +51,7 @@ def _plugin_dirs() -> list[Path]:
 
 
 def main() -> int:
+    QCoreApplication.setApplicationName("rapid")
     app = QApplication(sys.argv)
 
     signal.signal(signal.SIGINT, lambda *_: app.quit())
