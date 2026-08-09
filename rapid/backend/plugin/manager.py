@@ -7,7 +7,7 @@ from typing import Any
 from PySide6.QtCore import QObject, Slot
 
 from . import protocol
-from .models import PluginSpec, ResolvedUrl
+from .models import PluginSpec
 from .process import PluginError, ResolverProcess
 
 MANIFEST_NAME = "plugin.json"
@@ -104,14 +104,14 @@ class PluginManager(QObject):
         if not isinstance(items, list):
             return []
 
-        resolved: list[ResolvedUrl] = []
+        resolved: list[dict[str, str]] = []
         for item in items:
             if isinstance(item, dict) and isinstance(item.get("title"), str) and isinstance(item.get("url"), str):
                 resolved.append(
-                    ResolvedUrl(title=item["title"], url=item["url"], kind=str(item.get("kind", "other")))
+                    {"title": item["title"], "url": item["url"], "kind": str(item.get("kind", "other"))}
                 )
 
-        return [r.as_dict() for r in resolved]
+        return resolved
 
     @staticmethod
     def _is_supported(proc: ResolverProcess, url: str) -> bool:

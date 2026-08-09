@@ -129,21 +129,21 @@ def _to_download_model(row: _Download) -> Download:
         status=row.status,
         dir=row.dir,
         kind=row.kind,
-        total_length=row.total_length,
-        completed_length=row.completed_length,
-        upload_length=row.upload_length,
-        download_speed=row.download_speed,
-        upload_speed=row.upload_speed,
+        totalLength=row.total_length,
+        completedLength=row.completed_length,
+        uploadLength=row.upload_length,
+        downloadSpeed=row.download_speed,
+        uploadSpeed=row.upload_speed,
         connections=row.connections,
-        num_pieces=row.num_pieces,
-        piece_length=row.piece_length,
-        verified_length=row.verified_length,
-        num_seeders=row.num_seeders,
+        numPieces=row.num_pieces,
+        pieceLength=row.piece_length,
+        verifiedLength=row.verified_length,
+        numSeeders=row.num_seeders,
         seeder=row.seeder,
-        info_hash=row.info_hash,
+        infoHash=row.info_hash,
         bitfield=row.bitfield,
-        error_code=row.error_code,
-        error_message=row.error_message,
+        errorCode=row.error_code,
+        errorMessage=row.error_message,
         bittorrent=json.loads(row.bittorrent) if row.bittorrent is not None else None,
         files=tuple(
             DownloadFile(
@@ -231,36 +231,36 @@ class DownloadStore:
             row.dir = status.dir
         if status.kind is not None:
             row.kind = status.kind
-        if status.total_length is not None:
-            row.total_length = status.total_length
-        if status.completed_length is not None:
-            row.completed_length = status.completed_length
-        if status.upload_length is not None:
-            row.upload_length = status.upload_length
-        if status.download_speed is not None:
-            row.download_speed = status.download_speed
-        if status.upload_speed is not None:
-            row.upload_speed = status.upload_speed
+        if status.totalLength is not None:
+            row.total_length = status.totalLength
+        if status.completedLength is not None:
+            row.completed_length = status.completedLength
+        if status.uploadLength is not None:
+            row.upload_length = status.uploadLength
+        if status.downloadSpeed is not None:
+            row.download_speed = status.downloadSpeed
+        if status.uploadSpeed is not None:
+            row.upload_speed = status.uploadSpeed
         if status.connections is not None:
             row.connections = status.connections
-        if status.num_pieces is not None:
-            row.num_pieces = status.num_pieces
-        if status.piece_length is not None:
-            row.piece_length = status.piece_length
-        if status.verified_length is not None:
-            row.verified_length = status.verified_length
-        if status.num_seeders is not None:
-            row.num_seeders = status.num_seeders
+        if status.numPieces is not None:
+            row.num_pieces = status.numPieces
+        if status.pieceLength is not None:
+            row.piece_length = status.pieceLength
+        if status.verifiedLength is not None:
+            row.verified_length = status.verifiedLength
+        if status.numSeeders is not None:
+            row.num_seeders = status.numSeeders
         if status.seeder is not None:
             row.seeder = status.seeder
-        if status.info_hash is not None:
-            row.info_hash = status.info_hash
+        if status.infoHash is not None:
+            row.info_hash = status.infoHash
         if status.bitfield is not None:
             row.bitfield = status.bitfield
-        if status.error_code is not None:
-            row.error_code = status.error_code
-        if status.error_message is not None:
-            row.error_message = status.error_message
+        if status.errorCode is not None:
+            row.error_code = status.errorCode
+        if status.errorMessage is not None:
+            row.error_message = status.errorMessage
         if status.bittorrent is not None:
             row.bittorrent = json.dumps(status.bittorrent)
 

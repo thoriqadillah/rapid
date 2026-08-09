@@ -7,6 +7,7 @@ requires-python = ">=3.13,<3.14"
 dependencies = [
     "pyside6 (>=6.8,<7.0)",
     "sqlalchemy (>=2.0,<3.0)",
+    "websocket-client (>=1.9.0,<2.0.0)",
 ]
 
 [project.scripts]
@@ -25,7 +26,7 @@ pytest = "^8.0"
 
 [tool.poe.tasks]
 build = { shell = "mkdir -p dist && pyside6-deploy rapid/main.py -c rapid/pysidedeploy.spec -f" }
-test = { shell = "pytest -s", env = { QT_QPA_PLATFORM = "offscreen" } }
+test = { shell = "pytest -s -v", env = { QT_QPA_PLATFORM = "offscreen" } }
 
 [tool.mypy]
 python_version = "3.13"

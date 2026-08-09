@@ -1,8 +1,18 @@
-from .download import Aria2Client, DownloadFile, Download, DownloadStore, FileUri, SpeedSample
-from .plugin import PluginManager, PluginSpec, ResolvedUrl
+from .download import (
+    Aria2Downloader,
+    DownloadService,
+    DownloadFile,
+    Download,
+    DownloadStore,
+    FileUri,
+    SpeedSample,
+    ResolvedUrl,
+)
+from .plugin import PluginManager, PluginSpec
 
 __all__ = [
-    "Aria2Client",
+    "Aria2Downloader",
+    "DownloadService",
     "DownloadStore",
     "Download",
     "DownloadFile",

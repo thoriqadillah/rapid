@@ -37,10 +37,6 @@ Window {
         if (dir) saveDir.text = dir
     }
 
-    function pickTorrent() {
-        const file = Dialogs.pick_torrent()
-    }
-
     function buildOptions() {
         const o = {}
         if (saveDir.text) o.dir = saveDir.text

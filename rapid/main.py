@@ -8,7 +8,7 @@ from PySide6.QtCore import QObject, QStandardPaths, QTimer, QUrl, Slot
 from PySide6.QtWidgets import QApplication, QFileDialog
 from PySide6.QtQml import QQmlApplicationEngine
 
-from .backend import Aria2Client, DownloadStore, PluginManager
+from .backend import DownloadService, PluginManager
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -61,13 +61,12 @@ def main() -> int:
     signal_pump.timeout.connect(lambda: None)
     signal_pump.start(200)
 
-    store = DownloadStore()
     downloadDir = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DownloadLocation)
-    aria2 = Aria2Client(store=store, download_dir=Path(downloadDir))
+    downloads = DownloadService(download_dir=Path(downloadDir))
     plugins = PluginManager(_plugin_dirs())
 
     engine = QQmlApplicationEngine()
-    engine.rootContext().setContextProperty("Aria2", aria2)
+    engine.rootContext().setContextProperty("Aria2", downloads)
     engine.rootContext().setContextProperty("Plugins", plugins)
     dialogs = FileDialogs(downloadDir)
     engine.rootContext().setContextProperty("Dialogs", dialogs)
@@ -83,10 +82,10 @@ def main() -> int:
     if not engine.rootObjects():
         return 1
 
-    aria2.start()
+    downloads.start()
 
     exit_code = app.exec()
-    aria2.stop()
+    downloads.stop()
     del engine  # tear down QML before app to avoid shutdown warnings
     return exit_code
 
