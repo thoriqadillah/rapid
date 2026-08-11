@@ -8,8 +8,14 @@ QtObject {
     readonly property color colorBackground: palette.base
     readonly property color colorBase: palette.window
     readonly property color colorBorder: palette.mid
+
     readonly property color colorPrimary: palette.highlight
     readonly property color colorPrimaryHover: Qt.darker(palette.highlight, 1.1)
+    readonly property color colorDanger: "#e03131"
+    readonly property color colorDangerHover: Qt.darker(Theme.colorDanger, 1.1)
+    // readonly property color colorSuccess: ""
+    // readonly property color colorWarning: ""
+    // readonly property color colorInfo: ""
 
     readonly property color colorSurface: palette.button
 

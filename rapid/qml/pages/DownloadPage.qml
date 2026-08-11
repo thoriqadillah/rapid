@@ -11,6 +11,13 @@ Layout {
         else type = destination
     }
 
+    Connections {
+        target: root
+        function onAddClicked() {
+            DownloadDialog.openFor(root.Window.window)
+        }
+    }
+
     Item {
         anchors.fill: parent
 

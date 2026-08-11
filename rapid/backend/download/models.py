@@ -9,7 +9,7 @@ def _str(value: Any) -> str | None:
     return value if isinstance(value, str) else None
 
 
-def _to_int(value: Any) -> int | None:
+def _toInt(value: Any) -> int | None:
     if value is None or isinstance(value, bool):
         return None
     if isinstance(value, int):
@@ -20,7 +20,7 @@ def _to_int(value: Any) -> int | None:
         return None
 
 
-def _to_bool(value: Any) -> bool | None:
+def _toBool(value: Any) -> bool | None:
     if value is None:
         return None
     if isinstance(value, bool):
@@ -34,7 +34,7 @@ def _num(value: int | None) -> str | None:
     return None if value is None else str(value)
 
 
-def _bool_str(value: bool | None) -> str | None:
+def _boolStr(value: bool | None) -> str | None:
     if value is None:
         return None
     return "true" if value else "false"
@@ -45,7 +45,7 @@ _AUDIO = {"mp3", "m4a", "aac", "flac", "wav", "ogg", "opus", "wma"}
 _IMAGE = {"jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "heic", "avif"}
 
 
-def _infer_kind(files: tuple[DownloadFile, ...]) -> str:
+def _inferKind(files: tuple[DownloadFile, ...]) -> str:
     for file in files:
         if file.path:
             ext = Path(file.path).suffix.lower().lstrip(".")
@@ -63,7 +63,7 @@ class SpeedSample:
     ts: int
     speed: int
 
-    def as_dict(self) -> dict[str, int]:
+    def asDict(self) -> dict[str, int]:
         return {"ts": self.ts, "speed": self.speed}
 
 
@@ -73,10 +73,10 @@ class FileUri:
     status: str | None = None
 
     @classmethod
-    def from_payload(cls, data: dict[str, Any]) -> FileUri:
+    def fromPayload(cls, data: dict[str, Any]) -> FileUri:
         return cls(uri=_str(data.get("uri")), status=_str(data.get("status")))
 
-    def as_dict(self) -> dict[str, Any]:
+    def asDict(self) -> dict[str, Any]:
         return {"uri": self.uri, "status": self.status}
 
 
@@ -90,31 +90,31 @@ class DownloadFile:
     uris: tuple[FileUri, ...] = ()
 
     @classmethod
-    def from_payload(cls, data: dict[str, Any]) -> DownloadFile:
-        index = _to_int(data.get("index")) or 0
+    def fromPayload(cls, data: dict[str, Any]) -> DownloadFile:
+        index = _toInt(data.get("index")) or 0
         uris = data.get("uris")
         parsed_uris = (
-            tuple(FileUri.from_payload(u) for u in uris if isinstance(u, dict))
+            tuple(FileUri.fromPayload(u) for u in uris if isinstance(u, dict))
             if isinstance(uris, list)
             else ()
         )
         return cls(
             index=index,
             path=_str(data.get("path")),
-            length=_to_int(data.get("length")),
-            completed_length=_to_int(data.get("completedLength")),
-            selected=_to_bool(data.get("selected")),
+            length=_toInt(data.get("length")),
+            completed_length=_toInt(data.get("completedLength")),
+            selected=_toBool(data.get("selected")),
             uris=parsed_uris,
         )
 
-    def as_dict(self) -> dict[str, Any]:
+    def asDict(self) -> dict[str, Any]:
         return {
             "index": str(self.index),
             "path": self.path,
             "length": _num(self.length),
             "completedLength": _num(self.completed_length),
-            "selected": _bool_str(self.selected),
-            "uris": [u.as_dict() for u in self.uris],
+            "selected": _boolStr(self.selected),
+            "uris": [u.asDict() for u in self.uris],
         }
 
 
@@ -148,7 +148,7 @@ class Download:
         gid = data.get("gid")
         files = data.get("files")
         parsedFiles = (
-            tuple(DownloadFile.from_payload(f) for f in files if isinstance(f, dict))
+            tuple(DownloadFile.fromPayload(f) for f in files if isinstance(f, dict))
             if isinstance(files, list)
             else ()
         )
@@ -156,23 +156,23 @@ class Download:
             gid=str(gid) if gid is not None else "",
             status=_str(data.get("status")),
             dir=_str(data.get("dir")),
-            kind=_infer_kind(parsedFiles),
-            totalLength=_to_int(data.get("totalLength")),
-            completedLength=_to_int(data.get("completedLength")),
-            uploadLength=_to_int(data.get("uploadLength")),
-            downloadSpeed=_to_int(data.get("downloadSpeed")),
-            uploadSpeed=_to_int(data.get("uploadSpeed")),
-            connections=_to_int(data.get("connections")),
-            numPieces=_to_int(data.get("numPieces")),
-            pieceLength=_to_int(data.get("pieceLength")),
-            verifiedLength=_to_int(data.get("verifiedLength")),
-            errorCode=_to_int(data.get("errorCode")),
+            kind=_inferKind(parsedFiles),
+            totalLength=_toInt(data.get("totalLength")),
+            completedLength=_toInt(data.get("completedLength")),
+            uploadLength=_toInt(data.get("uploadLength")),
+            downloadSpeed=_toInt(data.get("downloadSpeed")),
+            uploadSpeed=_toInt(data.get("uploadSpeed")),
+            connections=_toInt(data.get("connections")),
+            numPieces=_toInt(data.get("numPieces")),
+            pieceLength=_toInt(data.get("pieceLength")),
+            verifiedLength=_toInt(data.get("verifiedLength")),
+            errorCode=_toInt(data.get("errorCode")),
             errorMessage=_str(data.get("errorMessage")),
             files=parsedFiles,
         )
 
     def asDict(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {
+        return {
             "gid": self.gid,
             "status": self.status,
             "dir": self.dir,
@@ -188,9 +188,8 @@ class Download:
             "verifiedLength": _num(self.verifiedLength),
             "errorCode": _num(self.errorCode),
             "errorMessage": self.errorMessage,
-            "files": [f.as_dict() for f in self.files],
+            "files": [f.asDict() for f in self.files],
         }
-        return payload
 
 
 @dataclass(frozen=True)
@@ -225,10 +224,7 @@ class ResolvedUrl:
         return asdict(self)
 
     @classmethod
-    def fromDict(
-        cls,
-        data: dict[str, Any],
-    ) -> ResolvedUrl:
+    def fromDict(cls, data: dict[str, Any]) -> ResolvedUrl:
         return cls(
             url=str(data["url"]),
             title=data.get("title"),
@@ -236,11 +232,7 @@ class ResolvedUrl:
             mimeType=data.get("mime_type"),
             size=data.get("size"),
             kind=data.get("kind", "unknown"),
-            headers=dict(
-                data.get("headers") or {},
-            ),
-            cookies=dict(
-                data.get("cookies") or {},
-            ),
+            headers=dict(data.get("headers") or {}),
+            cookies=dict(data.get("cookies") or {}),
             referer=data.get("referer"),
         )

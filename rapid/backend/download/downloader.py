@@ -57,6 +57,11 @@ class Downloader(ABC):
         """Start listening for status changes for a download."""
         pass
 
+    @abstractmethod
+    def refresh(self, id: str | None = None) -> None:
+        """Push fresh status to listeners, optionally for one download only."""
+        pass
+
 
 class Resolver(ABC):
     @abstractmethod

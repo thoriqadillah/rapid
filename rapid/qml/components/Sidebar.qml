@@ -129,7 +129,7 @@ Rectangle {
 
         SidebarItem {
             destination: ""
-            label: qsTr("All Downloads")
+            label: qsTr("All downloads")
             count: "24"
             iconSource: "../icons/MdiLightDownload.svg"
             iconColor: Theme.colorText

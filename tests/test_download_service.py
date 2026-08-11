@@ -1,194 +1,205 @@
-# from __future__ import annotations
-# from socket import socket
+from __future__ import annotations
 
-# import functools
-# import shutil
-# import sys
-# import time
-# from pathlib import Path
-# from threading import Thread
-# from typing import Iterator, Callable
+from pathlib import Path
 
-# import pytest
-# from http.server import BaseHTTPRequestHandler, SimpleHTTPRequestHandler, ThreadingHTTPServer
-# from PySide6.QtGui import QGuiApplication
-# from typing import cast
+from PySide6.QtCore import QCoreApplication
+from PySide6.QtGui import QGuiApplication
 
-# from rapid.backend.download import Aria2Downloader, DownloadService, DownloadStore, Downloader
-
-
-# def _app() -> QGuiApplication:
-#     existing = QGuiApplication.instance()
-#     if existing is not None and isinstance(existing, QGuiApplication):
-#         return existing
-#     return QGuiApplication(sys.argv)
+from rapid.backend import DownloadService, DownloadStore
+from rapid.backend.database.database import Database
+from rapid.backend.download.downloader import (
+    Downloader,
+    ErrorCallback,
+    NotifyCallback,
+    Resolver,
+)
+from rapid.backend.download.models import Download, ResolvedUrl
 
 
-# def _free_port() -> int:
-#     with socket() as s:
-#         s.bind(("127.0.0.1", 0))
-#         return s.getsockname()[1]
+class FakeDownloader(Downloader, Resolver):
+    def __init__(self) -> None:
+        self.started = False
+        self.stopped = False
+        self.added: list[str] = []
+        self.removed: list[str] = []
+        self.purged: list[str] = []
+        self._statuses: dict[str, Download] = {}
+        self._listeners: dict[str, tuple[NotifyCallback, ErrorCallback]] = {}
+
+    def start(self) -> None:
+        self.started = True
+
+    def stop(self) -> None:
+        self.stopped = True
+
+    def shouldResolve(self, uri: str) -> bool:
+        return uri.startswith("http")
+
+    def validate(self, uri: str) -> dict[str, str]:
+        return {} if uri.startswith("http") else {"url": "Enter a URL"}
+
+    def resolve(self, uri: str) -> list[ResolvedUrl]:
+        return [ResolvedUrl(url=uri, title="x", kind="other")]
+
+    def download(self, uri: ResolvedUrl) -> Download:
+        gid = f"g{len(self.added) + 1}"
+        download = Download(gid=gid, status="active", totalLength=100)
+        self._statuses[gid] = download
+        self.added.append(uri.url)
+        return download
+
+    def pause(self, id: str) -> None:
+        pass
+
+    def resume(self, id: str) -> None:
+        pass
+
+    def remove(self, id: str) -> None:
+        self.removed.append(id)
+        self._listeners.pop(id, None)
+
+    def purge(self, id: str) -> None:
+        self.purged.append(id)
+        self._listeners.pop(id, None)
+
+    def getStatus(self, id: str) -> Download:
+        return self._statuses[id]
+
+    def listen(self, id: str, onNotify: NotifyCallback, onError: ErrorCallback) -> None:
+        self._listeners[id] = (onNotify, onError)
+
+    def refresh(self, id: str | None = None) -> None:
+        for gid, (onNotify, _) in self._listeners.items():
+            if id is not None and gid != id:
+                continue
+            onNotify(self._statuses[gid])
 
 
-# def _wait_daemon(app: QGuiApplication, port: int, timeout: float) -> None:
-#     deadline = time.time() + timeout
-#     while time.time() < deadline:
-#         app.processEvents()
-#         with socket() as s:
-#             s.settimeout(0.2)
-#             try:
-#                 s.connect(("127.0.0.1", port))
-#                 return
-#             except OSError:
-#                 time.sleep(0.05)
+def _service(tmp_path: Path) -> tuple[DownloadService, FakeDownloader, DownloadStore]:
+    app = QGuiApplication.instance()
+    if app is None:
+        QGuiApplication([])
+    fake = FakeDownloader()
+    store = DownloadStore(Database(path=tmp_path / "database.db"))
+    service = DownloadService(
+        download_dir=tmp_path,
+        store=store,
+        downloader=fake,
+    )
+    return service, fake, store
 
 
-# def _wait_until(app: QGuiApplication, predicate: Callable[[], bool], timeout: float) -> bool:
-#     deadline = time.time() + timeout
-#     while time.time() < deadline:
-#         app.processEvents()
-#         if predicate():
-#             return True
-#         time.sleep(0.02)
+def _await_resolve(service: DownloadService, url: str) -> tuple[list, dict]:
+    app = QCoreApplication.instance()
+    done: dict = {}
 
-#     app.processEvents()
-#     return predicate()
+    def on_resolved(uris: list, errors: dict) -> None:
+        done["uris"] = uris
+        done["errors"] = errors
 
-
-# @pytest.fixture(scope="module")
-# def daemon(
-#     tmp_path_factory: pytest.TempPathFactory,
-# ) -> Iterator[tuple[QGuiApplication, DownloadService, DownloadStore, list[str]]]:
-#     app = _app()
-#     base = tmp_path_factory.mktemp("daemon")
-#     (base / "dl").mkdir()
-#     store = DownloadStore(path=base / "downloads.db")
-#     port = _free_port()
-#     service = DownloadService(
-#         store=store, host="127.0.0.1", port=port, download_dir=base / "dl"
-#     )
-#     errors: list[str] = []
-#     service.errorOccurred.connect(errors.append)
-#     service.start()
-#     _wait_daemon(app, port, timeout=20)
-#     yield app, service, store, errors
-#     service.stop()
+    service.resolved.connect(on_resolved)
+    service.resolve(url)
+    while "uris" not in done and app:
+        app.processEvents()
+    return done["uris"], done["errors"]
 
 
-# def test_make_url() -> None:
-#     assert Aria2Downloader._make_url("http", "127.0.0.1", 6800) == "http://127.0.0.1:6800/jsonrpc"
-#     assert Aria2Downloader._make_url("ws", "127.0.0.1", 6800) == "ws://127.0.0.1:6800/jsonrpc"
+def test_start_stops_downloader(tmp_path: Path) -> None:
+    service, fake, _ = _service(tmp_path)
+    service.start()
+    assert fake.started
+    service.stop()
+    assert fake.stopped
 
 
-# def test_gid_like() -> None:
-#     assert Aria2Downloader._gid_like("abc") == "abc"
-#     assert Aria2Downloader._gid_like({"gid": "def"}) == "def"
-#     assert Aria2Downloader._gid_like({}) == ""
-#     assert Aria2Downloader._gid_like(None) == "None"
+def test_add_url_downloads_and_persists(tmp_path: Path) -> None:
+    service, fake, store = _service(tmp_path)
+
+    added: list[str] = []
+    service.downloadAdded.connect(added.append)
+
+    resolved = _await_resolve(service, "http://example.com/a.bin")[0]
+    service.download(resolved)
+
+    assert fake.added == ["http://example.com/a.bin"]
+    assert added == ["g1"]
+    assert store.get("g1") == Download(gid="g1", status="active", totalLength=100)
 
 
-# def test_downloader_implements_interface() -> None:
-#     assert issubclass(Aria2Downloader, Downloader)
+def test_model_exposes_downloads(tmp_path: Path) -> None:
+    service, fake, _ = _service(tmp_path)
+
+    service.download(_await_resolve(service, "http://example.com/a.bin")[0])
+    service.download(_await_resolve(service, "http://example.com/b.bin")[0])
+
+    def role(name: str) -> int:
+        return {bytes(v).decode("utf-8"): k for k, v in service.roleNames().items()}[name]
+
+    assert service.rowCount() == 2
+    assert service.data(service.index(0), role("gid")) == "g1"
+    assert service.data(service.index(0), role("status")) == "active"
+    assert service.data(service.index(0), role("totalLength")) == 100
+    assert service.data(service.index(1), role("gid")) == "g2"
+    assert service.data(service.index(2), role("gid")) is None
+
+    service.remove("g1")
+    assert service.rowCount() == 1
+    assert service.data(service.index(0), role("gid")) == "g2"
 
 
-# @pytest.mark.skipif(shutil.which("aria2c") is None, reason="aria2c not installed")
-# def test_daemon_download_persists_status(
-#     tmp_path: Path, daemon: tuple[QGuiApplication, DownloadService, DownloadStore, list[str]]
-# ) -> None:
-#     app, service, store, errors = daemon
+def test_poll_propagates_status_and_speed_samples(tmp_path: Path) -> None:
+    service, fake, store = _service(tmp_path)
+    service.start()
+    service.download(_await_resolve(service, "http://example.com/a.bin")[0])
 
-#     payload = b"x" * (1024 * 1024)
-#     file_path = tmp_path / "payload.bin"
-#     file_path.write_bytes(payload)
+    changed: list[str] = []
+    service.downloadChanged.connect(changed.append)
 
-#     handler = functools.partial(SimpleHTTPRequestHandler, directory=str(tmp_path))
-#     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
-#     http_port = server.server_address[1]
-#     thread = Thread(target=server.serve_forever, daemon=True)
-#     thread.start()
+    fake._statuses["g1"] = Download(gid="g1", status="active", totalLength=100, downloadSpeed=512)
+    service._poll()
+    while not changed and QCoreApplication.instance():
+        QCoreApplication.instance().processEvents()
 
-#     try:
-#         service.add_uri(f"http://127.0.0.1:{http_port}/payload.bin")
+    assert changed == ["g1"]
+    assert store.get("g1") == Download(
+        gid="g1", status="active", totalLength=100, downloadSpeed=512
+    )
+    assert store.speedHistory("g1")[0].speed == 512
+    roles = {bytes(v).decode("utf-8"): k for k, v in service.roleNames().items()}
+    assert service.data(service.index(0), roles["downloadSpeed"]) == 512
 
-#         def done() -> bool:
-#             items = store.all()
-#             return any(
-#                 item.status == "complete" and item.totalLength == len(payload)
-#                 for item in items.values()
-#             )
-
-#         assert _wait_until(app, done, timeout=15), f"timeout; errors={errors} store={store.all()}"
-
-#         saved = list(store.all().values())[0]
-#         assert saved.status == "complete"
-#         assert saved.downloadSpeed in (0, None)
-#     finally:
-#         server.shutdown()
-#         server.server_close()
+    service.stop()
 
 
-# class _ThrottledServer(ThreadingHTTPServer):
-#     daemon_threads = True
+def test_remove_deletes_from_store(tmp_path: Path) -> None:
+    service, fake, store = _service(tmp_path)
+    service.download(_await_resolve(service, "http://example.com/a.bin")[0])
 
-#     def __init__(self, payload: bytes, bytes_per_second: int) -> None:
-#         self.payload = payload
-#         self.bytes_per_second = bytes_per_second
-#         super().__init__(("127.0.0.1", 0), _ThrottledHandler)
+    removed: list[str] = []
+    service.downloadRemoved.connect(removed.append)
 
-#     @property
-#     def port(self) -> int:
-#         return self.server_address[1]
+    service.remove("g1")
 
-
-# class _ThrottledHandler(BaseHTTPRequestHandler):
-#     def log_message(self, format: str, *args: object) -> None:
-#         pass
-
-#     def do_GET(self) -> None:
-#         throttled = cast(_ThrottledServer, self.server)
-#         payload: bytes = throttled.payload
-#         self.send_response(200)
-#         self.send_header("Content-Length", str(len(payload)))
-#         self.end_headers()
-#         chunk = 64 * 1024
-#         per_chunk = chunk / throttled.bytes_per_second
-
-#         try:
-#             for i in range(0, len(payload), chunk):
-#                 self.wfile.write(payload[i : i + chunk])
-#                 self.wfile.flush()
-#                 time.sleep(per_chunk)
-#         except (BrokenPipeError, ConnectionResetError):
-#             pass
+    assert fake.removed == ["g1"]
+    assert store.all() == {}
+    assert removed == ["g1"]
 
 
-# @pytest.mark.skipif(shutil.which("aria2c") is None, reason="aria2c not installed")
-# def test_large_download_records_speed_samples(
-#     daemon: tuple[QGuiApplication, DownloadService, DownloadStore, list[str]],
-# ) -> None:
-#     app, service, store, errors = daemon
+def test_purge_deletes_from_store(tmp_path: Path) -> None:
+    service, fake, store = _service(tmp_path)
+    service.download(_await_resolve(service, "http://example.com/a.bin")[0])
+    service.purge("g1")
+    assert fake.purged == ["g1"]
+    assert store.all() == {}
 
-#     payload = b"y" * (3 * 1024 * 1024)
-#     server = _ThrottledServer(payload, bytes_per_second=256 * 1024)
-#     thread = Thread(target=server.serve_forever, daemon=True)
-#     thread.start()
 
-#     try:
-#         gid: list[str] = []
-#         service.downloadAdded.connect(lambda g: gid.append(g))
-#         service.add_uri(f"http://127.0.0.1:{server.port}/big.bin")
+def test_resolve_returns_uris_and_errors_tuple(tmp_path: Path) -> None:
+    service, _, _ = _service(tmp_path)
 
-#         def enough_samples() -> bool:
-#             return bool(gid) and len(store.speed_history(gid[0])) >= 4
+    uris, errors = _await_resolve(service, "http://example.com/a.bin")
+    assert errors == {}
+    assert [u["url"] for u in uris] == ["http://example.com/a.bin"]
 
-#         assert _wait_until(app, enough_samples, timeout=20), (
-#             f"timeout; errors={errors} gid={gid}"
-#         )
-
-#         history = store.speed_history(gid[0])
-#         assert len(history) >= 4
-#         assert all(s.speed > 0 for s in history)
-#         assert all(0 < s.ts <= int(time.time() * 1000) for s in history)
-#     finally:
-#         server.shutdown()
-#         server.server_close()
+    uris, errors = _await_resolve(service, "")
+    assert uris == []
+    assert errors == {"url": "URL is required"}

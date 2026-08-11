@@ -1,53 +1,15 @@
-import shutil
-import subprocess
+from rapid.backend.download.service import registerService
 import signal
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QStandardPaths, QTimer, QUrl, Slot, QCoreApplication
-from PySide6.QtWidgets import QApplication, QFileDialog
+from PySide6.QtCore import QStandardPaths, QTimer, QUrl, QCoreApplication
+from PySide6.QtWidgets import QApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
-from .backend import DownloadService, PluginManager
+from .backend import DownloadService
 
 BASE_DIR = Path(__file__).resolve().parent
-
-
-class FileDialogs(QObject):
-    def __init__(self, default_dir: str, parent: QObject | None = None) -> None:
-        super().__init__(parent)
-        self._default_dir = default_dir
-
-    @Slot(str, result=str)
-    def pickFolder(self, start_dir: str) -> str:
-        """Open the OS-native directory chooser and return the picked path."""
-        for tool, args in (
-            ("zenity", ["--file-selection", "--directory"]),
-            ("kdialog", ["--getexistingdirectory"]),
-        ):
-            program = shutil.which(tool)
-            if program is None:
-                continue
-
-            result = subprocess.run([program, *args], capture_output=True, timeout=60)
-            return result.stdout.decode().strip() if result.returncode == 0 else ""
-
-        return QFileDialog.getExistingDirectory(
-            None, "Select destination", start_dir or self._default_dir
-        )
-
-
-def _plugin_dirs() -> list[Path]:
-    user = (
-        Path(
-            QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
-        )
-        / "plugins"
-    )
-    dev = BASE_DIR / "plugins"
-    bundled = Path(sys.executable).resolve().parent / "plugins"
-    deduped = {p.resolve(): p for p in (user, dev, bundled)}
-    return list(deduped.values())
 
 
 def main() -> int:
@@ -63,30 +25,25 @@ def main() -> int:
     signal_pump.start(200)
 
     downloadDir = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DownloadLocation)
-    downloads = DownloadService(download_dir=Path(downloadDir))
-    plugins = PluginManager(_plugin_dirs())
 
     engine = QQmlApplicationEngine()
-    engine.rootContext().setContextProperty("Aria2", downloads)
-    engine.rootContext().setContextProperty("Plugins", plugins)
-    dialogs = FileDialogs(downloadDir)
-    engine.rootContext().setContextProperty("Dialogs", dialogs)
+    downloads = registerService(engine, Path(downloadDir))
 
     engine.load(QUrl.fromLocalFile(str(BASE_DIR / "qml" / "components" / "download" / "DownloadDialog.qml")))
     if not engine.rootObjects():
         return 1
     downloadDialog = engine.rootObjects()[0]
     downloadDialog.setProperty("defaultDir", downloadDir)
-    engine.rootContext().setContextProperty("NewDownloadDialog", downloadDialog)
+    engine.rootContext().setContextProperty("DownloadDialog", downloadDialog)
 
     engine.load(QUrl.fromLocalFile(str(BASE_DIR / "qml" / "Main.qml")))
     if not engine.rootObjects():
         return 1
 
     downloads.start()
-
     exit_code = app.exec()
     downloads.stop()
+
     del engine  # tear down QML before app to avoid shutdown warnings
     return exit_code
 

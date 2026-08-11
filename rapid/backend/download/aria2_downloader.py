@@ -52,6 +52,8 @@ WS_EVENTS = {
     "aria2.onDownloadError",
 }
 
+_VALID_SCHEMES = {"http", "https", "ftp", "ftps"}
+
 
 class Aria2Error(RuntimeError):
     pass
@@ -282,11 +284,23 @@ class Aria2Downloader(Downloader, Resolver):
             stderr=subprocess.DEVNULL,
         )
 
-        LOG.info(
-            "spawned aria2: %s %s",
-            program,
-            " ".join(args),
-        )
+        deadline = time.time() + 5.0
+        while time.time() < deadline:
+            try:
+                self._rpc.call("aria2.getVersion", [])
+                break
+            except Aria2Error:
+                if self._process.poll() is not None:
+                    LOG.error("aria2 exited during startup: %s", " ".join(args),)
+                    self._process = None
+                    return
+                time.sleep(0.1)
+        else:
+            LOG.error("aria2 did not become ready on port %s", self._port,)
+            self._process = None
+            return
+
+        LOG.info("spawned aria2: %s %s", program, " ".join(args),)
 
     def start(self) -> None:
         if self._running:
@@ -349,11 +363,15 @@ class Aria2Downloader(Downloader, Resolver):
             self._ws = ws
             try:
                 while self._running:
-                    message = ws.recv()
+                    try:
+                        message = ws.recv()
+                    except websocket.WebSocketTimeoutException:
+                        continue
                     if message:
                         self._onWsMessage(message)
             except Exception:
-                LOG.warning("websocket error", exc_info=True)
+                if self._running:
+                    LOG.warning("websocket error", exc_info=True)
             finally:
                 try:
                     ws.close()

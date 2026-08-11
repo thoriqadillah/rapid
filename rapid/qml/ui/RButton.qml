@@ -16,6 +16,7 @@ Controls.Button {
     property bool outlined: false
     property url iconSource: ""
     property int iconSize: Theme.iconMd
+    property bool iconOnly: false
     property color foregroundColor: root.variant === RButton.PrimaryVariant
         ? Theme.colorTextInverted
         : Theme.colorText
@@ -56,7 +57,7 @@ Controls.Button {
     }
 
     hoverEnabled: true
-    horizontalPadding: root.text == "" ? Theme.spacingMd : Theme.spacingXl
+    horizontalPadding: root.text == "" && root.iconOnly ? Theme.spacingMd : Theme.spacingXl
     verticalPadding: Theme.spacingXs
     spacing: Theme.spacingXs
     implicitHeight: Math.max(
@@ -71,7 +72,7 @@ Controls.Button {
         radius: root.cornerRadius
         border.width: root.outlined ? 1 : 0
         border.color: root.outlined ? Theme.colorBorder : "transparent"
-        color: root.hovered
+        color: root.hovered && root.enabled
             ? root.hoveredColor
             : root.backgroundColor
     }

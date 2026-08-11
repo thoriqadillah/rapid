@@ -10,6 +10,10 @@ Window {
 
     property Window owner: null
     property string defaultDir: ""
+    property var resolvedUris: []
+    property var options: ({})
+    property var errors: ({})
+    property bool isFetching: false
 
     minimumWidth: 480
     height: scroll.height + dialogButtons.height + Theme.spacingLg + Theme.spacingLg
@@ -30,28 +34,43 @@ Window {
     function openFor(newOwner) {
         root.owner = newOwner ?? null
         root.show()
+        root.resolve()
+    }
+
+    Timer {
+        id: resolveTimer
+        interval: 300
+        onTriggered: root.resolve()
     }
 
     function pickFolder() {
-        const dir = Dialogs.pickFolder(saveDir.text)
+        const dir = DownloadService.pickFolder(saveDir.text)
         if (dir) saveDir.text = dir
     }
 
-    function buildOptions() {
-        const o = {}
-        if (saveDir.text) o.dir = saveDir.text
-        return o
-    }
-
     function submit() {
-        const uris = links.text.split(/\s+/).filter(s => s.length > 0)
-        Aria2.add_uris(uris, buildOptions())
+        DownloadService.download(resolvedUris, options)
         root.close()
     }
 
     function reset() {
         links.text = ""
         saveDir.text = root.defaultDir
+    }
+
+    function resolve() {
+        root.isFetching = true
+        DownloadService.resolve(links.text)
+    }
+
+    Connections {
+        target: DownloadService
+        function onResolved(uris, errors) {
+            root.resolvedUris = uris
+            root.errors = errors
+            root.isFetching = false
+            links.error = errors.url ?? ""
+        }
     }
 
     Controls.ScrollView {
@@ -70,54 +89,51 @@ Window {
             width: scroll.availableWidth
             spacing: Theme.spacingLg
 
-            ColumnLayout {
+            RTextField {
+                id: links
+                label: qsTr("URL")
+                placeholderText: qsTr("https://example.com")
+                selectByMouse: true
+                wrapMode: TextEdit.Wrap
                 Layout.fillWidth: true
-                Layout.maximumWidth: parent.width
+
+                onTextChanged: {
+                    resolveTimer.restart()
+                    root.errors = ({})
+                    root.resolvedUris = []
+                    links.error = ""
+                }
+
+                RButton { iconSource: "../../icons/MdiLightContentPaste.svg"; iconOnly: true }
+            }
+
+            ColumnLayout {
+                visible: root.resolvedUris.length > 0
                 spacing: Theme.spacingSm
 
-                Controls.Label { text: qsTr("URL"); color: Theme.colorText; font.pixelSize: Theme.textSize }
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.maximumWidth: parent.width
-                    spacing: Theme.spacingMd
+                Repeater {
+                    model: root.resolvedUris
 
-                    RTextField {
-                        id: links
-                        placeholderText: qsTr("https://example.com")
-                        selectByMouse: true
-                        wrapMode: TextEdit.Wrap
-                        Layout.fillWidth: true
+                    ResolverUri {
+                        width: parent.width
                     }
-                    RButton { iconSource: "../../icons/MdiLightContentPaste.svg" }
                 }
             }
 
             ColumnLayout {
-                Layout.fillWidth: true
-                Layout.maximumWidth: parent.width
+                id: saveDirLayout
+                implicitWidth: scroll.availableWidth
                 spacing: Theme.spacingMd
-
-                Controls.Label { text: qsTr("Destination"); color: Theme.colorText; font.pixelSize: Theme.textSize }
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.maximumWidth: parent.width
-                    spacing: Theme.spacingMd
-
-                    RTextField {
-                        id: saveDir
-                        text: root.defaultDir
-                        Layout.fillWidth: true
-                    }
-                    RButton { iconSource: "../../icons/MdiLightFolder.svg"; onClicked: root.pickFolder() }
-                }
-
                 RTextField {
-                    id: fileName
+                    id: saveDir
+                    label: qsTr("Destination")
+                    text: root.defaultDir
                     Layout.fillWidth: true
-                    prefixIcon: "../icons/MdiLightFile.svg"
-                    placeholderText: qsTr("File name")
+
+                    RButton { iconSource: "../../icons/MdiLightFolder.svg"; onClicked: root.pickFolder(); iconOnly: true }
                 }
             }
+
         }
     }
 
@@ -135,10 +151,13 @@ Window {
         RButton {
             text: qsTr("Cancel")
             onClicked: root.close()
+            enabled: !root.isFetching
         }
         RButton {
+            id: downloadButton
             text: qsTr("Download")
             variant: RButton.PrimaryVariant
+            enabled: !Object.keys(root.errors).length && root.resolvedUris.length > 0 || !root.isFetching
             onClicked: root.submit()
         }
     }

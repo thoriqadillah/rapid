@@ -10,7 +10,6 @@ Rectangle {
     signal menuClicked()
 
     property alias searchText: searchField.text
-    property bool compact: width < Theme.breakpointMd
     property int preferredSearchWidth: 350
 
     implicitHeight: headerLayout.implicitHeight + Theme.spacingSm * 2
@@ -41,21 +40,20 @@ Rectangle {
             id: menuButton
             iconSource: "../icons/MdiLightMenu.svg"
             variant: RButton.GhostVariant
+            iconOnly: true
             Layout.minimumHeight: Theme.touchTarget
             onClicked: root.menuClicked()
         }
 
         Item {
-            visible: !root.compact
             Layout.fillWidth: true
         }
 
         RTextField {
             id: searchField
 
-            Layout.fillWidth: root.compact
-            Layout.preferredWidth: root.compact ? 0 : root.preferredSearchWidth
-            Layout.maximumWidth: root.compact ? headerLayout.width : root.preferredSearchWidth
+            Layout.preferredWidth: root.preferredSearchWidth
+            Layout.maximumWidth: root.preferredSearchWidth
             Layout.minimumWidth: 0
             Layout.minimumHeight: Theme.touchTarget
             prefixIcon: "../icons/MdiMagnify.svg"
@@ -64,7 +62,7 @@ Rectangle {
 
         RButton {
             id: addButton
-            text: !root.compact ? "New" : ""
+            text: "New"
             variant: RButton.PrimaryVariant
             Layout.minimumHeight: Theme.touchTarget
             iconSource: "../icons/MdiPlus.svg"
