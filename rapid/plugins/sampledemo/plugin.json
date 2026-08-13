@@ -1,7 +1,11 @@
 {
+  "id": "sampledemo",
   "name": "sampledemo",
+  "version": "0.1.0",
   "type": "resolver",
-  "command": "plugin.py",
-  "args": [],
-  "schemes": ["https://www.youtube.com/", "https://youtu.be/"]
+  "match": ["https://www.youtube.com/", "https://youtu.be/"],
+  "transport": {
+    "command": "plugin.py",
+    "args": []
+  }
 }

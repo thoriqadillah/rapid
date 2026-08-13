@@ -51,15 +51,6 @@ def test_persists_kind(tmp_path: Path) -> None:
     assert result.asDict()["kind"] == "video"
 
 
-def test_infer_kind_from_payload_files() -> None:
-    payload = {
-        "gid": "g1",
-        "status": "active",
-        "files": [{"path": "/tmp/movie.mp4"}],
-    }
-    assert Download.fromPayload(payload).kind == "video"
-
-
 def test_persists_files_and_uris(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.upsert(

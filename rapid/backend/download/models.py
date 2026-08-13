@@ -156,7 +156,7 @@ class Download:
             gid=str(gid) if gid is not None else "",
             status=_str(data.get("status")),
             dir=_str(data.get("dir")),
-            kind=_inferKind(parsedFiles),
+            kind=_str(data.get("kind")),
             totalLength=_toInt(data.get("totalLength")),
             completedLength=_toInt(data.get("completedLength")),
             uploadLength=_toInt(data.get("uploadLength")),

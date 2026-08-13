@@ -35,13 +35,13 @@ def decodeResponse(line: str, expected_id: int) -> Any:
     try:
         msg = json.loads(line)
     except ValueError as exc:
-        raise JsonRpcError(-32700, f"invalid json: {line!r}") from exc
+        raise JsonRpcError(-32700, f"Invalid json: {line!r}") from exc
 
     if not isinstance(msg, dict):
-        raise JsonRpcError(-32600, "response not an object")
+        raise JsonRpcError(-32600, "Response not an object")
 
     if msg.get("id") != expected_id:
-        raise JsonRpcError(-32600, "response id mismatch")
+        raise JsonRpcError(-32600, "Response id mismatch")
 
     err = msg.get("error")
     if isinstance(err, dict):

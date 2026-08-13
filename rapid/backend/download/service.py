@@ -65,23 +65,25 @@ class DownloadService(QAbstractListModel):
 
     def __init__(
         self,
-        download_dir: Path,
+        downloadDir: Path,
+        store: DownloadStore,
+        downloader: Downloader,
+        resolver: Resolver,
         plugin_dirs: list[Path] | None = None,
-        store: DownloadStore | None = None,
-        downloader: Downloader | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
-        self._download_dir = download_dir
-        self._store = store or DownloadStore(Database())
-        self._downloader = downloader or Aria2Downloader(downloadDir=download_dir)
+        self._downloadDir = downloadDir
+        self._store = store
+        self._downloader = downloader
+        self._resolver = resolver
         self._pool = ThreadPoolExecutor(max_workers=2)
         self._downloads: list[Download] = list(self._store.all().values())
         self._notified.connect(self._onNotify)
         self._timer = QTimer(self)
         self._timer.setInterval(POLL_INTERVAL_MS)
         self._timer.timeout.connect(self._poll)
-        self._plugin_manager = PluginManager(plugin_dirs or [], self)
+        self._pluginManager = PluginManager(plugin_dirs or [], self)
 
     def start(self) -> None:
         self._downloader.start()
@@ -121,17 +123,13 @@ class DownloadService(QAbstractListModel):
         self._pool.submit(self._doResolve, url)
 
     def _doResolve(self, url: str) -> None:
-        if not isinstance(self._downloader, Resolver):
-            self.resolved.emit([], {"url": "Downloader cannot resolve URLs"})
-            return
-
         if not url.strip():
             self.resolved.emit([], {"url": "URL is required"})
             return
 
         try:
-            uris = [r.asDict() for r in self._downloader.resolve(url)]
-            uris.extend([r.asDict() for r in self._plugin_manager.resolve(url)])
+            uris = [r.asDict() for r in self._resolver.resolve(url)]
+            uris.extend([r.asDict() for r in self._pluginManager.resolve(url)])
             self.resolved.emit(uris, {})
         except Exception as exc:
             self.resolved.emit([], {"url": str(exc)})
@@ -139,11 +137,6 @@ class DownloadService(QAbstractListModel):
 
     @Slot(list)
     def download(self, resolvedUri: list[dict[str, Any]]) -> None:
-        """Start downloading each resource."""
-        if not isinstance(self._downloader, Resolver):
-            self.errorOccurred.emit("downloader cannot resolve URLs")
-            return
-
         for resolved in resolvedUri:
             self._download(ResolvedUrl.fromDict(resolved))
 
@@ -166,7 +159,7 @@ class DownloadService(QAbstractListModel):
             return result.stdout.decode().strip() if result.returncode == 0 else ""
 
         return QFileDialog.getExistingDirectory(
-            None, "Select destination", start_dir or str(self._download_dir)
+            None, "Select destination", start_dir or str(self._downloadDir)
         )
 
     @Slot(str)
@@ -249,7 +242,15 @@ class DownloadService(QAbstractListModel):
 
 
 def registerService(engine: QQmlApplicationEngine, downloadDir: Path, plugin_dirs: list[Path]) -> DownloadService:
-    service = DownloadService(downloadDir, plugin_dirs)
-    engine.rootContext().setContextProperty("DownloadService", service)
+    store = DownloadStore(Database())
+    downloader = Aria2Downloader(downloadDir=downloadDir)
+    service = DownloadService(
+        downloadDir,
+        store,
+        downloader,
+        downloader,
+        plugin_dirs,
+    )
 
+    engine.rootContext().setContextProperty("DownloadService", service)
     return service

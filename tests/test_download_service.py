@@ -84,10 +84,11 @@ def _service(tmp_path: Path) -> tuple[DownloadService, FakeDownloader, DownloadS
     fake = FakeDownloader()
     store = DownloadStore(Database(path=tmp_path / "database.db"))
     service = DownloadService(
-        download_dir=tmp_path,
+        downloadDir=tmp_path,
         plugin_dirs=[SAMPLE],
         store=store,
         downloader=fake,
+        resolver=fake,
     )
     return service, fake, store
 

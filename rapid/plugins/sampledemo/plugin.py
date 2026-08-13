@@ -3,7 +3,6 @@
 
 Speaks the rapid resolver protocol:
     rapid.ping    -> {"name": ..., "version": ..., "type": "resolver", "schemes": [...]}
-    rapid.match   -> {"supported": bool}
     rapid.resolve -> {"items": [{"title", "url", "kind"}]}
 """
 import json
@@ -37,8 +36,6 @@ def handle(method: str, params: list[object]) -> object:
     url = str(params[0]) if params else ""
     if method == "rapid.ping":
         return {"name": NAME, "version": "0.1.0", "type": "resolver", "schemes": SCHEMES}
-    if method == "rapid.match":
-        return {"supported": supported(url)}
     if method == "rapid.resolve":
         return {"items": resolve(url)}
     return None
