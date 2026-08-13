@@ -488,6 +488,7 @@ class Aria2Downloader(Downloader, Resolver):
                 kind=self._getKind(mimeType),
                 headers=options.get("headers", {}),
                 cookies=options.get("cookies", {}),
+                resolverName="Rapid",
             )]
 
         finally:

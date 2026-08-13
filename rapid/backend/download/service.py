@@ -66,6 +66,7 @@ class DownloadService(QAbstractListModel):
     def __init__(
         self,
         download_dir: Path,
+        plugin_dirs: list[Path] | None = None,
         store: DownloadStore | None = None,
         downloader: Downloader | None = None,
         parent: QObject | None = None,
@@ -80,6 +81,7 @@ class DownloadService(QAbstractListModel):
         self._timer = QTimer(self)
         self._timer.setInterval(POLL_INTERVAL_MS)
         self._timer.timeout.connect(self._poll)
+        self._plugin_manager = PluginManager(plugin_dirs or [], self)
 
     def start(self) -> None:
         self._downloader.start()
@@ -129,6 +131,7 @@ class DownloadService(QAbstractListModel):
 
         try:
             uris = [r.asDict() for r in self._downloader.resolve(url)]
+            uris.extend([r.asDict() for r in self._plugin_manager.resolve(url)])
             self.resolved.emit(uris, {})
         except Exception as exc:
             self.resolved.emit([], {"url": str(exc)})
@@ -245,8 +248,8 @@ class DownloadService(QAbstractListModel):
         self._pool.submit(self._downloader.refresh)
 
 
-def registerService(engine: QQmlApplicationEngine, downloadDir: Path) -> DownloadService:
-    service = DownloadService(downloadDir)
+def registerService(engine: QQmlApplicationEngine, downloadDir: Path, plugin_dirs: list[Path]) -> DownloadService:
+    service = DownloadService(downloadDir, plugin_dirs)
     engine.rootContext().setContextProperty("DownloadService", service)
 
     return service

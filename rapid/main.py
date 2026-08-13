@@ -11,6 +11,12 @@ from .backend import DownloadService
 
 BASE_DIR = Path(__file__).resolve().parent
 
+def plugin_dirs() -> list[Path]:
+    return [
+        BASE_DIR / "plugins",
+        Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)) / "plugins",
+    ]
+
 
 def main() -> int:
     QCoreApplication.setApplicationName("rapid")
@@ -27,7 +33,7 @@ def main() -> int:
     downloadDir = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DownloadLocation)
 
     engine = QQmlApplicationEngine()
-    downloads = registerService(engine, Path(downloadDir))
+    downloads = registerService(engine, Path(downloadDir), plugin_dirs())
 
     engine.load(QUrl.fromLocalFile(str(BASE_DIR / "qml" / "components" / "download" / "DownloadDialog.qml")))
     if not engine.rootObjects():

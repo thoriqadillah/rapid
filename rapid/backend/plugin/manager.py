@@ -6,9 +6,11 @@ from typing import Any
 
 from PySide6.QtCore import QObject, Slot
 
+from rapid.backend.download.models import ResolvedUrl
+
 from . import protocol
 from .models import PluginSpec
-from .process import PluginError, ResolverProcess
+from .resolver import PluginError, ResolverPlugin
 
 MANIFEST_NAME = "plugin.json"
 
@@ -23,7 +25,7 @@ class PluginManager(QObject):
 
     def __init__(self, dirs: list[Path], parent: QObject | None = None) -> None:
         super().__init__(parent)
-        self._resolvers: list[PluginSpec] = []
+        self._plugins: list[PluginSpec] = []
         for base in dirs:
             self._scan(base)
 
@@ -31,12 +33,12 @@ class PluginManager(QObject):
         if not base.is_dir():
             return
         for manifest in base.glob(f"*/{MANIFEST_NAME}"):
-            spec = self._load_spec(manifest)
+            spec = self._loadSpec(manifest)
             if spec is not None:
-                self._resolvers.append(spec)
+                self._plugins.append(spec)
 
     @staticmethod
-    def _load_spec(manifest: Path) -> PluginSpec | None:
+    def _loadSpec(manifest: Path) -> PluginSpec | None:
         try:
             data = json.loads(manifest.read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -64,56 +66,14 @@ class PluginManager(QObject):
         )
 
     @property
-    def resolver_names(self) -> list[str]:
-        return [r.name for r in self._resolvers]
+    def resolverNames(self) -> list[str]:
+        return [r.name for r in self._plugins]
 
-    @Slot(str, result=list)
-    def available_for(self, url: str) -> list[str]:
-        """Names of resolvers that report they can handle ``url``."""
-        matching: list[str] = []
-        for spec in self._resolvers:
-            if spec.schemes and not spec.may_match(url):
-                continue
-            try:
-                result = ResolverProcess(command=spec.command, args=list(spec.args)).call(
-                    protocol.MATCH, [url]
-                )
-            except PluginError:
-                continue
+    def resolve(self, uri: str) -> list[ResolvedUrl]:
+        results: list[ResolvedUrl] = []
+        for plugin in self._plugins:
+            resolver = ResolverPlugin(spec=plugin)
+            if resolver.shouldResolve(uri):
+                results.extend(resolver.resolve(uri))
 
-            if isinstance(result, dict) and result.get("supported") is True:
-                matching.append(spec.name)
-
-        return matching
-
-    @Slot(str, str, result=list)
-    def resolve(self, url: str, plugin_name: str) -> list[dict[str, str]]:
-        spec = next((r for r in self._resolvers if r.name == plugin_name), None)
-        if spec is None:
-            return []
-
-        proc = ResolverProcess(command=spec.command, args=list(spec.args))
-        if not self._is_supported(proc, url):
-            raise PluginError(f"{plugin_name} does not support {url}")
-
-        result = proc.call(protocol.RESOLVE, [url])
-        if not isinstance(result, dict):
-            return []
-
-        items = result.get("items")
-        if not isinstance(items, list):
-            return []
-
-        resolved: list[dict[str, str]] = []
-        for item in items:
-            if isinstance(item, dict) and isinstance(item.get("title"), str) and isinstance(item.get("url"), str):
-                resolved.append(
-                    {"title": item["title"], "url": item["url"], "kind": str(item.get("kind", "other"))}
-                )
-
-        return resolved
-
-    @staticmethod
-    def _is_supported(proc: ResolverProcess, url: str) -> bool:
-        result = proc.call(protocol.MATCH, [url])
-        return isinstance(result, dict) and result.get("supported") is True
+        return results

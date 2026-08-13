@@ -219,6 +219,7 @@ class ResolvedUrl:
 
     # Optional protocol/request information.
     referer: str | None = None
+    resolverName: str | None = None
 
     def asDict(self) -> dict[str, Any]:
         return asdict(self)
@@ -235,4 +236,5 @@ class ResolvedUrl:
             headers=dict(data.get("headers") or {}),
             cookies=dict(data.get("cookies") or {}),
             referer=data.get("referer"),
+            resolverName=data.get("resolverName"),
         )

@@ -7,7 +7,6 @@ JSONRPC_VERSION = "2.0"
 
 # Plugin methods (line-delimited JSON-RPC over stdio).
 PING = "rapid.ping"
-MATCH = "rapid.match"
 RESOLVE = "rapid.resolve"
 
 
@@ -20,7 +19,7 @@ class JsonRpcError(Exception):
         self.message = message
 
 
-def encode_request(rid: int, method: str, params: list[Any]) -> str:
+def encodeRequest(rid: int, method: str, params: list[Any]) -> str:
     payload: dict[str, Any] = {
         "jsonrpc": JSONRPC_VERSION,
         "id": rid,
@@ -31,7 +30,7 @@ def encode_request(rid: int, method: str, params: list[Any]) -> str:
     return json.dumps(payload, separators=(",", ":")) + "\n"
 
 
-def decode_response(line: str, expected_id: int) -> Any:
+def decodeResponse(line: str, expected_id: int) -> Any:
     """Parse one response line; return the ``result`` or raise JsonRpcError."""
     try:
         msg = json.loads(line)

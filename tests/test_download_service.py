@@ -15,6 +15,8 @@ from rapid.backend.download.downloader import (
 )
 from rapid.backend.download.models import Download, ResolvedUrl
 
+SAMPLE = Path(__file__).resolve().parent.parent / "rapid" / "plugins"
+
 
 class FakeDownloader(Downloader, Resolver):
     def __init__(self) -> None:
@@ -83,6 +85,7 @@ def _service(tmp_path: Path) -> tuple[DownloadService, FakeDownloader, DownloadS
     store = DownloadStore(Database(path=tmp_path / "database.db"))
     service = DownloadService(
         download_dir=tmp_path,
+        plugin_dirs=[SAMPLE],
         store=store,
         downloader=fake,
     )
@@ -157,8 +160,9 @@ def test_poll_propagates_status_and_speed_samples(tmp_path: Path) -> None:
 
     fake._statuses["g1"] = Download(gid="g1", status="active", totalLength=100, downloadSpeed=512)
     service._poll()
-    while not changed and QCoreApplication.instance():
-        QCoreApplication.instance().processEvents()
+    app = QCoreApplication.instance()
+    while not changed and app:
+        app.processEvents()
 
     assert changed == ["g1"]
     assert store.get("g1") == Download(

@@ -1,12 +1,13 @@
 from __future__ import annotations
-from pprint import pprint
 
+import json
 import sys
 from pathlib import Path
 
 from PySide6.QtGui import QGuiApplication
 
-from rapid.backend.plugin import PluginManager, PluginError
+from rapid.backend.plugin import PluginManager
+from rapid.backend.plugin.models import PluginSpec
 
 SAMPLE = Path(__file__).resolve().parent.parent / "rapid" / "plugins"
 
@@ -18,36 +19,78 @@ def _app() -> QGuiApplication:
     return QGuiApplication(sys.argv)
 
 
-def _manager() -> PluginManager:
+def _manager(dirs: list[Path] | None = None) -> PluginManager:
     _app()
-    return PluginManager([SAMPLE])
+    return PluginManager(dirs if dirs is not None else [SAMPLE])
 
 
 def test_discovers_sample_resolver() -> None:
-    assert _manager().resolver_names == ["sampledemo"]
+    assert _manager().resolverNames == ["sampledemo"]
 
 
-def test_available_for_matching_url() -> None:
-    manager = _manager()
-    assert manager.available_for("https://www.youtube.com/watch?v=abc123") == ["sampledemo"]
+def test_ignores_missing_dir() -> None:
+    assert _manager([SAMPLE / "does-not-exist"]).resolverNames == []
 
 
-def test_available_for_nonmatching_url_is_empty() -> None:
-    assert _manager().available_for("https://www.tiktok.com/@user/video/1") == []
+def test_resolve_supported_url() -> None:
+    results = _manager().resolve("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    assert len(results) == 2
+    assert all(r.resolverName == "sampledemo" for r in results)
+    assert all(r.url.startswith("https://example.com/video/") for r in results)
 
 
-def test_resolve_returns_items() -> None:
-    manager = _manager()
-    items = manager.resolve("https://www.youtube.com/watch?v=xyz789", "sampledemo")
-    assert isinstance(items, list) and len(items) >= 2
-    assert items[0]["url"].endswith(".mp4")
-    assert items[0]["kind"] == "video"
+def test_resolve_unsupported_url_returns_empty() -> None:
+    assert _manager().resolve("https://example.com/") == []
 
 
-def test_wrong_resolver_is_refused() -> None:
-    manager = _manager()
-    try:
-        manager.resolve("https://www.tiktok.com/@user/video/1", "sampledemo")
-        raise AssertionError("expected PluginError for non-matching resolver")
-    except PluginError:
-        pass
+def test_should_resolve_matches_scheme() -> None:
+    from rapid.backend.plugin.resolver import ResolverPlugin
+
+    spec = _manager()._plugins[0]
+    resolver = ResolverPlugin(spec=spec)
+    assert resolver.shouldResolve("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    assert resolver.shouldResolve("https://youtu.be/dQw4w9WgXcQ")
+    assert not resolver.shouldResolve("https://example.com/")
+
+
+def test_load_spec_skips_invalid_manifest(tmp_path: Path) -> None:
+    bad_manifests = [
+        "not json{",
+        json.dumps({"name": "x", "type": "other", "command": "c"}),
+        json.dumps({"name": "x", "type": "resolver"}),
+        json.dumps({"name": "x", "type": "resolver", "command": 5}),
+    ]
+    for i, body in enumerate(bad_manifests):
+        manifest = tmp_path / f"p{i}" / "plugin.json"
+        manifest.parent.mkdir()
+        manifest.write_text(body, encoding="utf-8")
+        assert PluginManager._loadSpec(manifest) is None
+
+
+def test_load_spec_resolves_relative_command(tmp_path: Path) -> None:
+    manifest = tmp_path / "plugin.json"
+    manifest.write_text(
+        json.dumps({"name": "x", "type": "resolver", "command": "run.sh"}),
+        encoding="utf-8",
+    )
+    spec = PluginManager._loadSpec(manifest)
+    assert spec is not None
+    assert spec.command == (tmp_path / "run.sh").as_posix()
+
+
+def test_load_spec_filters_non_string_args_and_schemes(tmp_path: Path) -> None:
+    manifest = tmp_path / "plugin.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "name": "x",
+                "type": "resolver",
+                "command": "run.sh",
+                "args": ["-v", 5, None],
+                "schemes": ["https:", 5, None],
+            }
+        ),
+        encoding="utf-8",
+    )
+    spec = PluginManager._loadSpec(manifest)
+    assert spec == PluginSpec(name="x", command=str(tmp_path / "run.sh"), args=("-v",), schemes=("https:",))

@@ -1,10 +1,10 @@
 from .manager import PluginManager
 from .models import PluginSpec
-from .process import PluginError, ResolverProcess
+from .resolver import PluginError, ResolverPlugin
 
 __all__ = [
     "PluginManager",
     "PluginSpec",
     "PluginError",
-    "ResolverProcess",
+    "ResolverPlugin",
 ]
