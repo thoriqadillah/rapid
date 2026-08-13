@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
 from .backend import DownloadService
+from .qml.icons import icons_rc  # noqa: F401  registers qrc resources on import
 
 BASE_DIR = Path(__file__).resolve().parent
 

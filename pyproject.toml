@@ -28,6 +28,7 @@ pytest = "^8.0"
 build = { shell = "mkdir -p dist && pyside6-deploy rapid/main.py -c rapid/pysidedeploy.spec -f" }
 test = { shell = "pytest -s -v", env = { QT_QPA_PLATFORM = "offscreen" } }
 seed = { shell = "python -m rapid.backend.seeder", env = { QT_QPA_PLATFORM = "offscreen" } }
+regenerate-icons = "pyside6-rcc rapid/qml/icons/icons.qrc -o rapid/qml/icons/icons_rc.py"
 
 [tool.mypy]
 python_version = "3.13"

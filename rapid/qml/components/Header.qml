@@ -38,7 +38,7 @@ Rectangle {
 
         RButton {
             id: menuButton
-            iconSource: "../icons/MdiLightMenu.svg"
+            iconSource: "qrc:/icons/MdiLightMenu.svg"
             variant: RButton.GhostVariant
             iconOnly: true
             Layout.minimumHeight: Theme.touchTarget
@@ -56,7 +56,7 @@ Rectangle {
             Layout.maximumWidth: root.preferredSearchWidth
             Layout.minimumWidth: 0
             Layout.minimumHeight: Theme.touchTarget
-            prefixIcon: "../icons/MdiMagnify.svg"
+            prefixIcon: "qrc:/icons/MdiMagnify.svg"
             placeholderText: "Search..."
         }
 
@@ -65,7 +65,7 @@ Rectangle {
             text: "New"
             variant: RButton.PrimaryVariant
             Layout.minimumHeight: Theme.touchTarget
-            iconSource: "../icons/MdiPlus.svg"
+            iconSource: "qrc:/icons/MdiPlus.svg"
             onClicked: root.addClicked()
         }
     }

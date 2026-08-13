@@ -131,7 +131,7 @@ Rectangle {
             destination: ""
             label: qsTr("All downloads")
             count: "24"
-            iconSource: "../icons/MdiLightDownload.svg"
+            iconSource: "qrc:/icons/MdiLightDownload.svg"
             iconColor: Theme.colorText
             Layout.fillWidth: true
         }
@@ -140,7 +140,7 @@ Rectangle {
             destination: "scheduled"
             label: qsTr("Scheduled")
             count: "3"
-            iconSource: "../icons/MdiLightClock.svg"
+            iconSource: "qrc:/icons/MdiLightClock.svg"
             iconColor: Theme.colorText
             Layout.fillWidth: true
         }
@@ -154,7 +154,7 @@ Rectangle {
         SidebarItem {
             destination: "audio"
             label: qsTr("Audios")
-            iconSource: "../icons/MdiSquareRounded.svg"
+            iconSource: "qrc:/icons/MdiSquareRounded.svg"
             iconColor: Theme.colorCategoryAudio
             Layout.fillWidth: true
             categoryItem: true
@@ -163,7 +163,7 @@ Rectangle {
         SidebarItem {
             destination: "document"
             label: qsTr("Documents")
-            iconSource: "../icons/MdiSquareRounded.svg"
+            iconSource: "qrc:/icons/MdiSquareRounded.svg"
             iconColor: Theme.colorCategoryDocs
             Layout.fillWidth: true
             categoryItem: true
@@ -172,7 +172,7 @@ Rectangle {
         SidebarItem {
             destination: "image"
             label: qsTr("Images")
-            iconSource: "../icons/MdiSquareRounded.svg"
+            iconSource: "qrc:/icons/MdiSquareRounded.svg"
             iconColor: Theme.colorCategoryImages
             Layout.fillWidth: true
             categoryItem: true
@@ -181,7 +181,7 @@ Rectangle {
         SidebarItem {
             destination: "video"
             label: qsTr("Videos")
-            iconSource: "../icons/MdiSquareRounded.svg"
+            iconSource: "qrc:/icons/MdiSquareRounded.svg"
             iconColor: Theme.colorCategoryVideo
             Layout.fillWidth: true
             categoryItem: true
@@ -195,7 +195,7 @@ Rectangle {
         SidebarItem {
             destination: "settings"
             label: qsTr("Settings")
-            iconSource: "../icons/MdiLightSettings.svg"
+            iconSource: "qrc:/icons/MdiLightSettings.svg"
             iconColor: Theme.colorText
             Layout.fillWidth: true
         }

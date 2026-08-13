@@ -95,6 +95,7 @@ Window {
                 placeholderText: qsTr("https://example.com")
                 selectByMouse: true
                 wrapMode: TextEdit.Wrap
+                loading: root.isFetching
                 Layout.fillWidth: true
 
                 onTextChanged: {
@@ -104,7 +105,7 @@ Window {
                     links.error = ""
                 }
 
-                RButton { iconSource: "../../icons/MdiLightContentPaste.svg"; iconOnly: true }
+                RButton { iconSource: "qrc:/icons/MdiLightContentPaste.svg"; iconOnly: true }
             }
 
             ColumnLayout {
@@ -130,7 +131,7 @@ Window {
                     text: root.defaultDir
                     Layout.fillWidth: true
 
-                    RButton { iconSource: "../../icons/MdiLightFolder.svg"; onClicked: root.pickFolder(); iconOnly: true }
+                    RButton { iconSource: "qrc:/icons/MdiLightFolder.svg"; onClicked: root.pickFolder(); iconOnly: true }
                 }
             }
 

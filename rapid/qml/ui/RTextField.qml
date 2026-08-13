@@ -22,6 +22,7 @@ Item {
     property alias iconSize: field.iconSize
     property alias iconColor: field.iconColor
     property alias field: field
+    property alias loading: field.loading
 
     default property alias fieldRowData: fieldRow.data
 
@@ -48,8 +49,9 @@ Item {
 
             Controls.TextField {
                 id: field
+                property bool loading: false
                 property url prefixIcon: ""
-                property url suffixIcon: ""
+                property url suffixIcon: loading ? "qrc:/icons/MdiLightLoading.svg" : ""
                 property int iconSize: Theme.iconMd
                 property color iconColor: Theme.colorTextMuted
                 readonly property int cornerRadius: Qt.platform.os === "linux" ? Theme.radiusSm : Theme.radiusMd
@@ -111,6 +113,15 @@ Item {
                     icon.height: field.iconSize
                     icon.color: field.iconColor
                     background: null
+
+                    RotationAnimator {
+                        target: suffixIconButton
+                        running: field.loading
+                        from: 0
+                        to: 360
+                        duration: 1000
+                        loops: Animation.Infinite
+                    }
                 }
             }
         }

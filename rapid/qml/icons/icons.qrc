@@ -1,0 +1,15 @@
+<RCC>
+    <qresource prefix="/icons">
+        <file>MdiLightClock.svg</file>
+        <file>MdiLightContentPaste.svg</file>
+        <file>MdiLightDownload.svg</file>
+        <file>MdiLightFile.svg</file>
+        <file>MdiLightFolder.svg</file>
+        <file>MdiLightLoading.svg</file>
+        <file>MdiLightMenu.svg</file>
+        <file>MdiLightSettings.svg</file>
+        <file>MdiMagnify.svg</file>
+        <file>MdiPlus.svg</file>
+        <file>MdiSquareRounded.svg</file>
+    </qresource>
+</RCC>
