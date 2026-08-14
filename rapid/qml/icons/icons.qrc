@@ -1,15 +1,24 @@
 <RCC>
     <qresource prefix="/icons">
+        <file>MdiLightBook.svg</file>
         <file>MdiLightClock.svg</file>
+        <file>MdiLightConsole.svg</file>
         <file>MdiLightContentPaste.svg</file>
         <file>MdiLightDownload.svg</file>
         <file>MdiLightFile.svg</file>
+        <file>MdiLightFilmstrip.svg</file>
         <file>MdiLightFolder.svg</file>
+        <file>MdiLightHelpCircle.svg</file>
         <file>MdiLightLoading.svg</file>
         <file>MdiLightMenu.svg</file>
+        <file>MdiLightMusic.svg</file>
+        <file>MdiLightPicture.svg</file>
         <file>MdiLightSettings.svg</file>
+        <file>MdiLightViewModule.svg</file>
         <file>MdiMagnify.svg</file>
         <file>MdiPlus.svg</file>
         <file>MdiSquareRounded.svg</file>
+        <file>MdiLightPencil.svg</file>
+        <file>MaterialSymbolsLightCloseRounded.svg</file>
     </qresource>
 </RCC>

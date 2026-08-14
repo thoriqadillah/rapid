@@ -91,11 +91,12 @@ def test_resolve_returns_resolved_url_and_cleans_up(monkeypatch: pytest.MonkeyPa
     assert item.filename == "song.mp3"
     assert item.title == "song.mp3"
     assert item.size == 2048
-    assert item.kind == "audio"
+    assert item.category == "audio"
     assert item.mimeType == "audio/mpeg"
     assert _call_methods(dl) == [
         "aria2.addUri",
         "aria2.tellStatus",
+        "aria2.remove",
         "aria2.removeDownloadResult",
     ]
 
@@ -108,7 +109,22 @@ def test_resolve_falls_back_to_uri_when_no_file_info(monkeypatch: pytest.MonkeyP
     assert len(items) == 1
     assert items[0].url == "http://x/video.mp4"
     assert items[0].filename == "video.mp4"
-    assert items[0].kind == "video"
+    assert items[0].category == "video"
+
+
+def test_on_resolved_halts_active_download(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Rpc(FakeRpc):
+        def call(self, method: str, params: list[object]) -> object:
+            self.calls.append((method, params))
+            if method == "aria2.removeDownloadResult":
+                raise Aria2Error("HTTP 400")
+            return {}
+
+    rpc = Rpc()
+    _downloader(monkeypatch, rpc)._onResolved("gid-1")
+
+    assert rpc.calls == [("aria2.remove", ["gid-1"])] + [
+        ("aria2.removeDownloadResult", ["gid-1"])] * 5
 
 
 def test_resolve_dry_run_option_is_forced(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -333,7 +349,7 @@ def test_resolve_returns_metadata(
     assert len(items) == 1
     assert items[0].filename == "clip.mp4"
     assert items[0].size == 1024
-    assert items[0].kind == "video"
+    assert items[0].category == "video"
     assert items[0].mimeType == "video/mp4"
 
 

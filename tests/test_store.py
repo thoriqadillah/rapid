@@ -42,13 +42,13 @@ def test_upsert_zero_speed_is_kept(tmp_path: Path) -> None:
     assert result.downloadSpeed == 0
 
 
-def test_persists_kind(tmp_path: Path) -> None:
+def test_persists_category(tmp_path: Path) -> None:
     store = _store(tmp_path)
-    store.upsert(_download("abc", kind="video"))
+    store.upsert(_download("abc", category="video"))
     result = store.get("abc")
     assert result is not None
-    assert result.kind == "video"
-    assert result.asDict()["kind"] == "video"
+    assert result.category == "video"
+    assert result.asDict()["category"] == "video"
 
 
 def test_persists_files_and_uris(tmp_path: Path) -> None:

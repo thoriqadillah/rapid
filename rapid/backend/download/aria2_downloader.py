@@ -165,6 +165,7 @@ class Aria2Downloader(Downloader, Resolver):
 
         self._ws: websocket.WebSocket | None = None
         self._lock = Lock()
+        self._lastSpawn = 0.0
 
         self._rpc = Aria2Rpc(
             host=host,
@@ -174,19 +175,28 @@ class Aria2Downloader(Downloader, Resolver):
 
 
     def _onResolved(self, gid: str) -> None:
+        # Dry-run downloads may still be active when the resolve
+        # poll deadline expires; removeDownloadResult only accepts
+        # finished downloads (active ones fail with HTTP 400), so
+        # halt first.
         try:
-            self._rpc.call(
-                "aria2.removeDownloadResult",
-                [gid],
-            )
-        except Exception:
-            # Resolution succeeded, cleanup failure
-            # shouldn't hide the actual result.
-            LOG.warning(
-                "failed to remove resolve GID %s",
-                gid,
-                exc_info=True,
-            )
+            self._rpc.call("aria2.remove", [gid])
+        except Aria2Error:
+            pass
+
+        # Halting is async; retry briefly in case the result is
+        # not yet visible to the RPC thread.
+        for _ in range(5):
+            try:
+                self._rpc.call(
+                    "aria2.removeDownloadResult",
+                    [gid],
+                )
+                return
+            except Aria2Error:
+                time.sleep(0.1)
+
+        LOG.warning("failed to remove resolve GID %s", gid)
 
     @staticmethod
     def _parseInt(value: Any) -> int | None:
@@ -216,7 +226,7 @@ class Aria2Downloader(Downloader, Resolver):
         return str(uris[0].get("uri", fallback))
 
     @staticmethod
-    def _getKind(mimeType: str | None) -> str:
+    def _getCategory(mimeType: str | None) -> str:
         if not mimeType:
             return "unknown"
 
@@ -229,10 +239,7 @@ class Aria2Downloader(Downloader, Resolver):
         if mimeType.startswith("image/"):
             return "image"
 
-        if mimeType.startswith("text/"):
-            return "document"
-
-        if mimeType in {
+        if mimeType.startswith("text/") or mimeType in {
             "application/pdf",
             "application/json",
             "application/xml",
@@ -263,6 +270,9 @@ class Aria2Downloader(Downloader, Resolver):
         program = shutil.which("aria2c")
         if not program:
             LOG.error("aria2c binary not found")
+            return
+        if self._process is not None and self._process.poll() is None:
+            LOG.warning("aria2 already running")
             return
 
         args = [
@@ -345,6 +355,23 @@ class Aria2Downloader(Downloader, Resolver):
                 "failed to stop aria2",
             )
 
+    def _ensureDaemon(self) -> None:
+        """Re-spawn the daemon if it is missing or died.
+
+        aria2 (or the app) can crash at any point; without this the
+        downloader would retry a dead socket forever. Throttled so a
+        missing binary only retries every few seconds.
+        """
+        if not self._manageDaemon:
+            return
+        if self._process is not None and self._process.poll() is None:
+            return
+        now = time.monotonic()
+        if now - self._lastSpawn < 5.0:
+            return
+        self._lastSpawn = now
+        self._spawnDaemon()
+
     def _wsUrl(self) -> str:
         url = f"ws://{self._host}:{self._port}/jsonrpc"
         if self._token:
@@ -356,7 +383,8 @@ class Aria2Downloader(Downloader, Resolver):
             try:
                 ws = websocket.create_connection(self._wsUrl(), timeout=5)
             except Exception:
-                LOG.warning("websocket connect failed", exc_info=True)
+                self._ensureDaemon()
+                LOG.warning("websocket connect failed, retrying")
                 time.sleep(1)
                 continue
 
@@ -485,7 +513,7 @@ class Aria2Downloader(Downloader, Resolver):
                 filename=filename,
                 mimeType=mimeType,
                 size=size,
-                kind=self._getKind(mimeType),
+                category=self._getCategory(mimeType),
                 headers=options.get("headers", {}),
                 cookies=options.get("cookies", {}),
                 resolverName="Rapid",

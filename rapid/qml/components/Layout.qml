@@ -74,5 +74,12 @@ Item {
             right: parent.right
             bottom: parent.bottom
         }
+
+        // Click page background to drop focus from any text field.
+        MouseArea {
+            z: -1
+            anchors.fill: parent
+            onClicked: contentArea.forceActiveFocus()
+        }
     }
 }

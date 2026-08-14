@@ -5,6 +5,9 @@ import QtQuick.Layouts
 import "../.."
 import "../../ui"
 
+// DownloadService and Clipboard are Python-registered context properties,
+// invisible to qmllint's static analysis.
+// qmllint disable unqualified
 Window {
     id: root
 
@@ -13,6 +16,7 @@ Window {
     property var resolvedUris: []
     property var options: ({})
     property var errors: ({})
+    property var previousResolvedUri: []
     property bool isFetching: false
 
     minimumWidth: 480
@@ -20,6 +24,13 @@ Window {
     visible: false
     title: qsTr("New download")
     color: Theme.colorBackground
+
+// Click empty dialog space to drop focus from any text field.
+    MouseArea {
+        anchors.fill: parent
+        z: -1
+        onClicked: root.contentItem.forceActiveFocus()
+    }
 
     // When linked to an owner (e.g. the main window), exit when it exits.
     Connections {
@@ -56,20 +67,43 @@ Window {
     function reset() {
         links.text = ""
         saveDir.text = root.defaultDir
+        root.resolvedUris = []
+        root.errors = ({})
+        root.previousResolvedUri = []
+        root.isFetching = false
+        resolveTimer.stop()
+        exitTimer.stop()
+    }
+
+    onClosing: root.reset()
+
+    function removeUri(id) {
+        root.resolvedUris = root.resolvedUris.filter((_, idx) => idx !== id)
     }
 
     function resolve() {
+        if (links.text === "") return
         root.isFetching = true
         DownloadService.resolve(links.text)
+    }
+
+    function startTransition(newUris) {
+        if (root.resolvedUris.length > 0) {
+            root.previousResolvedUri = newUris
+            uriBlock.leave()
+            return
+        }
+
+        root.resolvedUris = newUris
     }
 
     Connections {
         target: DownloadService
         function onResolved(uris, errors) {
-            root.resolvedUris = uris
             root.errors = errors
             root.isFetching = false
             links.error = errors.url ?? ""
+            root.startTransition(uris)
         }
     }
 
@@ -94,29 +128,61 @@ Window {
                 label: qsTr("URL")
                 placeholderText: qsTr("https://example.com")
                 selectByMouse: true
-                wrapMode: TextEdit.Wrap
-                loading: root.isFetching
+                wrapMode: TextEdit.NoWrap
                 Layout.fillWidth: true
 
                 onTextChanged: {
                     resolveTimer.restart()
                     root.errors = ({})
-                    root.resolvedUris = []
                     links.error = ""
+                    if (links.text === "") root.startTransition([])
                 }
 
-                RButton { iconSource: "qrc:/icons/MdiLightContentPaste.svg"; iconOnly: true }
+                RButton {
+                    iconSource: "qrc:/icons/MdiLightContentPaste.svg"
+                    iconOnly: true
+                    enabled: Clipboard.text.length > 0
+                    onClicked: links.text = Clipboard.text
+                }
             }
 
             ColumnLayout {
+                id: uriBlock
                 visible: root.resolvedUris.length > 0
                 spacing: Theme.spacingSm
+                property bool exiting: false
+
+                function leave() {
+                    uriBlock.exiting = true
+                    exitTimer.restart()
+                }
+
+                Timer {
+                    id: exitTimer
+                    interval: 310
+                    onTriggered: {
+                        root.resolvedUris = root.previousResolvedUri
+                        root.previousResolvedUri = []
+                        uriBlock.exiting = false
+                    }
+                }
 
                 Repeater {
+                    id: uriRepeater
                     model: root.resolvedUris
 
                     ResolverUri {
-                        width: parent.width
+                        required property int index
+                        closable: root.resolvedUris.length > 1
+                        onDeleteClicked: root.removeUri(index)
+
+                        Connections {
+                            target: uriBlock
+                            function onExitingChanged() {
+                                if (uriBlock.exiting) exit()
+                                uriBlock.exiting = false
+                            }
+                        }
                     }
                 }
             }
@@ -158,7 +224,7 @@ Window {
             id: downloadButton
             text: qsTr("Download")
             variant: RButton.PrimaryVariant
-            enabled: !Object.keys(root.errors).length && root.resolvedUris.length > 0 || !root.isFetching
+            enabled: links.text !== "" && !Object.keys(root.errors).length && root.resolvedUris.length > 0 && !root.isFetching
             onClicked: root.submit()
         }
     }

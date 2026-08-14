@@ -82,7 +82,7 @@ class _Download(Base):
     gid: Mapped[str] = mapped_column(String, primary_key=True)
     status: Mapped[str | None] = mapped_column(String)
     dir: Mapped[str | None] = mapped_column("dir", String)
-    kind: Mapped[str | None] = mapped_column(String)
+    category: Mapped[str | None] = mapped_column("category", String)
     total_length: Mapped[int | None] = mapped_column(BigInteger)
     completed_length: Mapped[int | None] = mapped_column(BigInteger)
     upload_length: Mapped[int | None] = mapped_column(BigInteger)
@@ -106,7 +106,7 @@ def _toDownloadModel(row: _Download) -> Download:
         gid=row.gid,
         status=row.status,
         dir=row.dir,
-        kind=row.kind,
+        category=row.category,
         totalLength=row.total_length,
         completedLength=row.completed_length,
         uploadLength=row.upload_length,
@@ -190,8 +190,8 @@ class DownloadStore:
             row.status = status.status
         if status.dir is not None:
             row.dir = status.dir
-        if status.kind is not None:
-            row.kind = status.kind
+        if status.category is not None:
+            row.category = status.category
         if status.totalLength is not None:
             row.total_length = status.totalLength
         if status.completedLength is not None:

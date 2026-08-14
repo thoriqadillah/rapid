@@ -2,6 +2,9 @@ import QtQuick
 import "../components"
 import ".."
 
+// DownloadDialog is a Python-registered context property, invisible to
+// qmllint's static analysis.
+// qmllint disable unqualified
 Layout {
     id: root
     property string type: ''

@@ -164,7 +164,7 @@ Rectangle {
             destination: "document"
             label: qsTr("Documents")
             iconSource: "qrc:/icons/MdiSquareRounded.svg"
-            iconColor: Theme.colorCategoryDocs
+            iconColor: Theme.colorCategoryDocument
             Layout.fillWidth: true
             categoryItem: true
         }
@@ -173,7 +173,7 @@ Rectangle {
             destination: "image"
             label: qsTr("Images")
             iconSource: "qrc:/icons/MdiSquareRounded.svg"
-            iconColor: Theme.colorCategoryImages
+            iconColor: Theme.colorCategoryImage
             Layout.fillWidth: true
             categoryItem: true
         }

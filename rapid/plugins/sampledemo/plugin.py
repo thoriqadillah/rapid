@@ -3,7 +3,7 @@
 
 Speaks the rapid resolver protocol:
     rapid.ping    -> {"name": ..., "version": ..., "type": "resolver", "schemes": [...]}
-    rapid.resolve -> {"items": [{"title", "url", "kind"}]}
+    rapid.resolve -> {"items": [{"title", "url", "category"}]}
 """
 import json
 import sys
@@ -22,12 +22,12 @@ def resolve(url: str) -> list[dict[str, str]]:
         {
             "title": f"Sample video {video_id} (720p)",
             "url": f"https://example.com/video/{video_id}/720.mp4",
-            "kind": "video",
+            "category": "video",
         },
         {
             "title": f"Sample video {video_id} (audio)",
             "url": f"https://example.com/video/{video_id}/audio.m4a",
-            "kind": "audio",
+            "category": "audio",
         },
     ]
 

@@ -63,13 +63,14 @@ class DownloadService(QAbstractListModel):
     resolved = Signal(list, dict)  # resolvedUris, errors
     _notified = Signal(object)  # internal: Download, always delivered on the main thread
 
+
     def __init__(
         self,
         downloadDir: Path,
         store: DownloadStore,
         downloader: Downloader,
         resolver: Resolver,
-        plugin_dirs: list[Path] | None = None,
+        pluginDirs: list[Path] | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -83,7 +84,7 @@ class DownloadService(QAbstractListModel):
         self._timer = QTimer(self)
         self._timer.setInterval(POLL_INTERVAL_MS)
         self._timer.timeout.connect(self._poll)
-        self._pluginManager = PluginManager(plugin_dirs or [], self)
+        self._pluginManager = PluginManager(pluginDirs or [], self)
 
     def start(self) -> None:
         self._downloader.start()
@@ -143,6 +144,20 @@ class DownloadService(QAbstractListModel):
     @Slot(str, result=list)
     def speedHistory(self, gid: str) -> list[dict[str, int]]:
         return [sample.asDict() for sample in self._store.speedHistory(gid)]
+
+    @Slot(int, result=str)
+    def formatSize(self, bytes_: int) -> str:
+        """Human-readable size, e.g. 1536 -> "1.5 KB"."""
+        if not bytes_:
+            return ""
+        units = ("B", "KB", "MB", "GB", "TB")
+        value = float(bytes_)
+        i = 0
+        while value >= 1024 and i < len(units) - 1:
+            value /= 1024
+            i += 1
+        digits = 0 if value >= 100 or i == 0 else 1
+        return f"{value:.{digits}f} {units[i]}"
 
     @Slot(str, result=str)
     def pickFolder(self, start_dir: str) -> str:
@@ -239,18 +254,3 @@ class DownloadService(QAbstractListModel):
 
     def _poll(self) -> None:
         self._pool.submit(self._downloader.refresh)
-
-
-def registerService(engine: QQmlApplicationEngine, downloadDir: Path, plugin_dirs: list[Path]) -> DownloadService:
-    store = DownloadStore(Database())
-    downloader = Aria2Downloader(downloadDir=downloadDir)
-    service = DownloadService(
-        downloadDir,
-        store,
-        downloader,
-        downloader,
-        plugin_dirs,
-    )
-
-    engine.rootContext().setContextProperty("DownloadService", service)
-    return service

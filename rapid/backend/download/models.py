@@ -40,24 +40,6 @@ def _boolStr(value: bool | None) -> str | None:
     return "true" if value else "false"
 
 
-_VIDEO = {"mp4", "mkv", "webm", "avi", "mov", "flv", "m4v", "ts", "3gp"}
-_AUDIO = {"mp3", "m4a", "aac", "flac", "wav", "ogg", "opus", "wma"}
-_IMAGE = {"jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "heic", "avif"}
-
-
-def _inferKind(files: tuple[DownloadFile, ...]) -> str:
-    for file in files:
-        if file.path:
-            ext = Path(file.path).suffix.lower().lstrip(".")
-            if ext in _VIDEO:
-                return "video"
-            if ext in _AUDIO:
-                return "audio"
-            if ext in _IMAGE:
-                return "image"
-    return "other"
-
-
 @dataclass(frozen=True)
 class SpeedSample:
     ts: int
@@ -123,7 +105,7 @@ class Download:
     gid: str
     status: str | None = None
     dir: str | None = None
-    kind: str | None = None
+    category: str | None = None
     totalLength: int | None = None
     completedLength: int | None = None
     uploadLength: int | None = None
@@ -156,7 +138,7 @@ class Download:
             gid=str(gid) if gid is not None else "",
             status=_str(data.get("status")),
             dir=_str(data.get("dir")),
-            kind=_str(data.get("kind")),
+            category=_str(data.get("category")),
             totalLength=_toInt(data.get("totalLength")),
             completedLength=_toInt(data.get("completedLength")),
             uploadLength=_toInt(data.get("uploadLength")),
@@ -176,7 +158,7 @@ class Download:
             "gid": self.gid,
             "status": self.status,
             "dir": self.dir,
-            "kind": self.kind,
+            "category": self.category,
             "totalLength": _num(self.totalLength),
             "completedLength": _num(self.completedLength),
             "uploadLength": _num(self.uploadLength),
@@ -211,7 +193,7 @@ class ResolvedUrl:
     # Resource metadata.
     mimeType: str | None = None
     size: int | None = None
-    kind: str = "unknown"
+    category: str = "unknown"
 
     # HTTP request context.
     headers: dict[str, str] | None = None
@@ -232,7 +214,7 @@ class ResolvedUrl:
             filename=data.get("filename"),
             mimeType=data.get("mime_type"),
             size=data.get("size"),
-            kind=data.get("kind", "unknown"),
+            category=data.get("category", "unknown"),
             headers=dict(data.get("headers") or {}),
             cookies=dict(data.get("cookies") or {}),
             referer=data.get("referer"),

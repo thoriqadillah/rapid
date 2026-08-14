@@ -1,3 +1,5 @@
+from .database import Database
+from .clipboard import ClipboardService
 from .download import (
     Aria2Downloader,
     DownloadService,
@@ -12,6 +14,7 @@ from .plugin import PluginManager, PluginSpec
 
 __all__ = [
     "Aria2Downloader",
+    "ClipboardService",
     "DownloadService",
     "DownloadStore",
     "Download",
@@ -21,4 +24,5 @@ __all__ = [
     "PluginManager",
     "PluginSpec",
     "ResolvedUrl",
+    "Database",
 ]

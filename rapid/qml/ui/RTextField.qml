@@ -51,7 +51,7 @@ Item {
                 id: field
                 property bool loading: false
                 property url prefixIcon: ""
-                property url suffixIcon: loading ? "qrc:/icons/MdiLightLoading.svg" : ""
+                property url suffixIcon: ""
                 property int iconSize: Theme.iconMd
                 property color iconColor: Theme.colorTextMuted
                 readonly property int cornerRadius: Qt.platform.os === "linux" ? Theme.radiusSm : Theme.radiusMd
@@ -61,8 +61,8 @@ Item {
                 color: Theme.colorText
                 placeholderTextColor: Theme.colorTextMuted
                 padding: Theme.spacingMd
-                leftPadding: Theme.spacingMd + (prefixIconButton.visible ? field.iconSize + Theme.spacingXs : 0)
-                rightPadding: Theme.spacingMd + (suffixIconButton.visible ? field.iconSize + Theme.spacingXs : 0)
+                leftPadding: Theme.spacingMd + (prefixIconButton.visible ? field.iconSize + Theme.spacingSm : 0)
+                rightPadding: Theme.spacingMd + (suffixIconButton.visible ? field.iconSize + Theme.spacingSm : 0)
                 implicitHeight: Math.max(
                     Theme.touchTarget,
                     contentHeight + topPadding + bottomPadding
@@ -113,15 +113,6 @@ Item {
                     icon.height: field.iconSize
                     icon.color: field.iconColor
                     background: null
-
-                    RotationAnimator {
-                        target: suffixIconButton
-                        running: field.loading
-                        from: 0
-                        to: 360
-                        duration: 1000
-                        loops: Animation.Infinite
-                    }
                 }
             }
         }
@@ -134,5 +125,11 @@ Item {
             Layout.fillWidth: true
             wrapMode: Text.Wrap
         }
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        z: -1
+        onClicked: root.forceActiveFocus()
     }
 }

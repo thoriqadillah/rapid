@@ -31,10 +31,13 @@ QtObject {
     // input colors
     readonly property color colorInputBackground: Theme.colorSurface
 
-    readonly property color colorCategoryVideo: "#ee7b57"
-    readonly property color colorCategoryDocs: "#5b9bd5"
     readonly property color colorCategoryAudio: "#4fb783"
-    readonly property color colorCategoryImages: "#b98bd6"
+    readonly property color colorCategoryApplication: "#ffffff"
+    readonly property color colorCategoryCompressed: "#ffffff"
+    readonly property color colorCategoryDocument: "#5b9bd5"
+    readonly property color colorCategoryImage: "#b98bd6"
+    readonly property color colorCategoryVideo: "#ee7b57"
+    readonly property color colorCategoryUnknown: "#ffffff"
 
     // Text size
     readonly property int textSize: 14
@@ -68,8 +71,8 @@ QtObject {
 
     // Icons
     readonly property int iconXs: 10
-    readonly property int iconSm: 16
-    readonly property int iconMd: 20
+    readonly property int iconSm: 18
+    readonly property int iconMd: 24
     readonly property int iconLg: 32
     readonly property int iconXl: 48
 }

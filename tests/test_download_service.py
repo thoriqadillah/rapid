@@ -41,7 +41,7 @@ class FakeDownloader(Downloader, Resolver):
         return {} if uri.startswith("http") else {"url": "Enter a URL"}
 
     def resolve(self, uri: str) -> list[ResolvedUrl]:
-        return [ResolvedUrl(url=uri, title="x", kind="other")]
+        return [ResolvedUrl(url=uri, title="x", category="other")]
 
     def download(self, uri: ResolvedUrl) -> Download:
         gid = f"g{len(self.added) + 1}"
@@ -85,7 +85,7 @@ def _service(tmp_path: Path) -> tuple[DownloadService, FakeDownloader, DownloadS
     store = DownloadStore(Database(path=tmp_path / "database.db"))
     service = DownloadService(
         downloadDir=tmp_path,
-        plugin_dirs=[SAMPLE],
+        pluginDirs=[SAMPLE],
         store=store,
         downloader=fake,
         resolver=fake,
@@ -208,3 +208,12 @@ def test_resolve_returns_uris_and_errors_tuple(tmp_path: Path) -> None:
     uris, errors = _await_resolve(service, "")
     assert uris == []
     assert errors == {"url": "URL is required"}
+
+
+def test_format_size(tmp_path: Path) -> None:
+    service, _, _ = _service(tmp_path)
+    assert service.formatSize(0) == ""
+    assert service.formatSize(512) == "512 B"
+    assert service.formatSize(1536) == "1.5 KB"
+    assert service.formatSize(1024 * 1024) == "1.0 MB"
+    assert service.formatSize(1024 ** 4) == "1.0 TB"
