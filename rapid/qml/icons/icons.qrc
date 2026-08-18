@@ -19,6 +19,8 @@
         <file>MdiPlus.svg</file>
         <file>MdiSquareRounded.svg</file>
         <file>MdiLightPencil.svg</file>
+        <file>MdiLightCheck.svg</file>
         <file>MaterialSymbolsLightCloseRounded.svg</file>
+        <file>MdiLightUndoVariant.svg</file>
     </qresource>
 </RCC>

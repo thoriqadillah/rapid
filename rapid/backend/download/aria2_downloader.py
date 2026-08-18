@@ -1,4 +1,5 @@
 from __future__ import annotations
+from pprint import pprint, pp
 import mimetypes
 from urllib.parse import urlparse, unquote
 import subprocess
@@ -42,8 +43,6 @@ STATUS_KEYS = [
     "pieceLength",
     "status",
     "totalLength",
-    "uploadLength",
-    "uploadSpeed",
     "verifiedLength",
 ]
 
@@ -166,6 +165,7 @@ class Aria2Downloader(Downloader, Resolver):
         self._ws: websocket.WebSocket | None = None
         self._lock = Lock()
         self._lastSpawn = 0.0
+        self._ownsDaemon = False
 
         self._rpc = Aria2Rpc(
             host=host,
@@ -226,6 +226,14 @@ class Aria2Downloader(Downloader, Resolver):
         return str(uris[0].get("uri", fallback))
 
     @staticmethod
+    def _probeHeader(url: str, options: dict[str, Any] = {}) -> dict[str, str] | None:
+        try:
+            with urlopen(Request(url, method="HEAD", headers=options.get("headers", {})), timeout=5) as resp:
+                return resp.headers
+        except (HTTPError, URLError, OSError):
+            return None
+
+    @staticmethod
     def _getCategory(mimeType: str | None) -> str:
         if not mimeType:
             return "unknown"
@@ -275,6 +283,18 @@ class Aria2Downloader(Downloader, Resolver):
             LOG.warning("aria2 already running")
             return
 
+        # If a daemon is already serving our RPC port (e.g. an orphan left
+        # by a previous crashed run), adopt it instead of spawning a second
+        # one that fails to bind and immediately exits rc=1.
+        try:
+            self._rpc.call("aria2.getVersion", [])
+        except Aria2Error:
+            pass
+        else:
+            self._ownsDaemon = False
+            LOG.info("adopting existing aria2 on port %s", self._port)
+            return
+
         args = [
             "--enable-rpc",
             f"--rpc-listen-port={self._port}",
@@ -310,6 +330,7 @@ class Aria2Downloader(Downloader, Resolver):
             self._process = None
             return
 
+        self._ownsDaemon = True
         LOG.info("spawned aria2: %s %s", program, " ".join(args),)
 
     def start(self) -> None:
@@ -340,7 +361,7 @@ class Aria2Downloader(Downloader, Resolver):
                 pass
 
         process = self._process
-        if process is None:
+        if process is None or not self._ownsDaemon:
             return
 
         self._process = None
@@ -363,6 +384,8 @@ class Aria2Downloader(Downloader, Resolver):
         missing binary only retries every few seconds.
         """
         if not self._manageDaemon:
+            return
+        if not self._ownsDaemon:
             return
         if self._process is not None and self._process.poll() is None:
             return
@@ -496,16 +519,21 @@ class Aria2Downloader(Downloader, Resolver):
                 else self._getFilename(uri)
             )
 
-            size = self._parseInt(
-                file_info.get("length", 0)
-            )
+            fileSize = self._parseInt(file_info.get("length", 0))
 
             finalUrl = self._getFinalUrl(
                 file_info,
                 uri,
             )
 
-            mimeType = mimetypes.guess_type(filename or "", strict=False)[0]
+            headers = self._probeHeader(finalUrl, options)
+            mimeType = headers.get("Content-Type") if headers else mimetypes.guess_type(filename or "", strict=False)[0]
+            size = self._parseInt(headers.get("Content-Length", 0) if headers else fileSize)
+
+            if mimeType and filename:
+                suffix = Path(filename).suffix
+                if not (suffix and suffix[1:].isalpha()):
+                    filename += mimetypes.guess_extension(mimeType) or ""
 
             return [ResolvedUrl(
                 url=finalUrl,
@@ -603,30 +631,34 @@ class Aria2Downloader(Downloader, Resolver):
             "aria2.remove",
             [id],
         )
-
-        with self._lock:
-            self._listening = {entry for entry in self._listening if entry[0] != id}
+        self._unlisten(id)
 
     def purge(self, id: str) -> None:
         self._rpc.call(
             "aria2.removeDownloadResult",
             [id],
         )
-
-        with self._lock:
-            self._listening = {entry for entry in self._listening if entry[0] != id}
+        self._unlisten(id)
 
     def listen(self, id: str, onNotify: NotifyCallback, onError: ErrorCallback) -> None:
         with self._lock:
             self._listening.add((id, onNotify, onError))
 
+    def _unlisten(self, id: str) -> None:
+        with self._lock:
+            self._listening = {entry for entry in self._listening if entry[0] != id}
+
     def _notify(self, gid: str, onNotify: NotifyCallback, onError: ErrorCallback) -> None:
         try:
             status = self.getStatus(gid)
-            onNotify(status)
         except Aria2Error as exc:
             LOG.error(str(exc))
             onError(str(exc))
+            self._unlisten(gid)
+            return
+        onNotify(status)
+        if status.status in ("error", "removed", "complete"):
+            self._unlisten(gid)
 
     def refresh(self, id: str | None = None) -> None:
         if not self._running:

@@ -221,6 +221,46 @@ def test_refresh_emits_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "no status" in errors[0]
 
 
+def test_refresh_keeps_listening_while_active(monkeypatch: pytest.MonkeyPatch) -> None:
+    notified: list[Download] = []
+    dl = _downloader(monkeypatch, FakeRpc({"gid": "g", "status": "active"}))
+    dl._running = True
+    dl.listen("g", notified.append, lambda m: None)
+
+    dl.refresh()
+
+    assert notified[0].status == "active"
+    assert dl._listening != set()
+
+
+def test_refresh_unlistens_after_terminal_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    notified: list[Download] = []
+    dl = _downloader(
+        monkeypatch,
+        FakeRpc({"gid": "g", "status": "error", "errorMessage": "status=403"}),
+    )
+    dl._running = True
+    dl.listen("g", notified.append, lambda m: None)
+
+    dl.refresh()
+
+    assert [s.gid for s in notified] == ["g"]
+    assert notified[0].status == "error"
+    assert dl._listening == set()
+
+
+def test_refresh_unlistens_when_status_rpc_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    errors: list[str] = []
+    dl = _downloader(monkeypatch, FakeRpc([]))
+    dl._running = True
+    dl.listen("g", lambda s: None, errors.append)
+
+    dl.refresh()
+
+    assert len(errors) == 1
+    assert dl._listening == set()
+
+
 def test_ws_event_triggers_status_push(monkeypatch: pytest.MonkeyPatch) -> None:
     notified: list[Download] = []
     dl = _downloader(
@@ -250,6 +290,39 @@ def test_ws_non_event_message_is_ignored(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 # --- control -------------------------------------------------------------
+
+def test_spawn_daemon_adopts_existing_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    dl = _downloader(monkeypatch)
+    dl._spawnDaemon()
+    assert dl._ownsDaemon is False
+    assert dl._process is None
+    assert _call_methods(dl) == ["aria2.getVersion"]
+
+
+def test_spawn_daemon_owns_spawned_process(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Rpc(FakeRpc):
+        def call(self, method: str, params: list[object]) -> object:
+            self.calls.append((method, params))
+            # First call (adopt check) fails, readiness checks succeed.
+            if sum(1 for m, _ in self.calls if m == "aria2.getVersion") == 1:
+                raise Aria2Error("no daemon yet")
+            return {}
+
+    class FakePopen:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            pass
+
+        def poll(self) -> None:
+            return None
+
+    monkeypatch.setattr(aria2_downloader.subprocess, "Popen", FakePopen)
+    dl = _downloader(monkeypatch, Rpc())
+    dl._spawnDaemon()
+    assert dl._ownsDaemon is True
+    assert isinstance(dl._process, FakePopen)
+    dl.stop()
+    assert dl._process is None
+
 
 def test_pause_resume_remove_purge(monkeypatch: pytest.MonkeyPatch) -> None:
     dl = _downloader(monkeypatch)

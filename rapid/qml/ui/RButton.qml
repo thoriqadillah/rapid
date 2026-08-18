@@ -17,6 +17,7 @@ Controls.Button {
     property url iconSource: ""
     property int iconSize: Theme.iconMd
     property bool iconOnly: false
+    property string tooltip: ""
     property color foregroundColor: root.variant === RButton.PrimaryVariant
         ? Theme.colorTextInverted
         : Theme.colorText
@@ -57,6 +58,12 @@ Controls.Button {
     }
 
     hoverEnabled: true
+
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.NoButton
+        cursorShape: Qt.PointingHandCursor
+    }
     horizontalPadding: root.text == "" && root.iconOnly ? Theme.spacingMd : Theme.spacingXl
     verticalPadding: Theme.spacingXs
     spacing: Theme.spacingXs
@@ -75,5 +82,17 @@ Controls.Button {
         color: root.hovered && root.enabled
             ? root.hoveredColor
             : root.backgroundColor
+    }
+
+    Controls.ToolTip {
+        visible: root.hovered && root.tooltip !== ""
+        delay: 500
+        text: root.tooltip
+        background: Rectangle {
+            border.width: 1
+            border.color: Theme.colorBorder
+            radius: Theme.radiusSm
+            color: Theme.colorSurface
+        }
     }
 }

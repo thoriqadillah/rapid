@@ -5,7 +5,7 @@ import subprocess
 import time
 from pathlib import Path
 from typing import Any
-from dataclasses import fields as _fields
+from dataclasses import fields as _fields, replace
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
@@ -88,6 +88,16 @@ class DownloadService(QAbstractListModel):
 
     def start(self) -> None:
         self._downloader.start()
+        for download in self._downloads:
+            if download.status in ("complete", "error", "removed"):
+                continue
+            # Restored from the DB on a fresh app run; resume live updates
+            # only for downloads the daemon still knows about.
+            try:
+                self._downloader.getStatus(download.gid)
+            except Exception:
+                continue
+            self._downloader.listen(download.gid, self._notified.emit, self._onError)
         self._timer.start()
 
     def stop(self) -> None:
@@ -111,6 +121,8 @@ class DownloadService(QAbstractListModel):
         value = getattr(download, name)
         if name == "files":
             return [f.asDict() for f in value]
+        if name == "resolved":
+            return value.asDict() if value else None
         return value
 
     def roleNames(self) -> dict[int, QByteArray]:
@@ -217,6 +229,7 @@ class DownloadService(QAbstractListModel):
 
     def _download(self, resolved: ResolvedUrl) -> str:
         download = self._downloader.download(resolved)
+        download = replace(download, resolved=resolved)
         self._store.upsert(download)
         self._downloader.listen(download.gid, self._notified.emit, self._onError)
         self._insert(download)
@@ -238,12 +251,15 @@ class DownloadService(QAbstractListModel):
         self.endRemoveRows()
 
     def _onNotify(self, download: Download) -> None:
-        self._store.upsert(download)
-        speed = download.downloadSpeed or 0
-        if speed > 0:
-            self._store.addSpeedSample(download.gid, int(time.time() * 1000), speed)
         row = self._row_of(download.gid)
         if row is not None:
+            if download.resolved is None:
+                download = replace(download, resolved=self._downloads[row].resolved)
+            if download.status == "complete" and not download.downloadSpeed:
+                download = replace(download, downloadSpeed=self._downloads[row].downloadSpeed)
+
+            self._store.upsert(download)
+            self._store.addSpeedSample(download.gid, int(time.time() * 1000), download.downloadSpeed or 0)
             self._downloads[row] = download
             index = self.index(row)
             self.dataChanged.emit(index, index, list(_ROLE_NAMES))

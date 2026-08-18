@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 
 def _str(value: Any) -> str | None:
@@ -117,6 +118,7 @@ class Download:
     verifiedLength: int | None = None
     errorCode: int | None = None
     errorMessage: str | None = None
+    resolved: "ResolvedUrl | None" = None
     files: tuple[DownloadFile, ...] = ()
 
     @property
@@ -170,6 +172,7 @@ class Download:
             "verifiedLength": _num(self.verifiedLength),
             "errorCode": _num(self.errorCode),
             "errorMessage": self.errorMessage,
+            "resolved": self.resolved.asDict() if self.resolved else None,
             "files": [f.asDict() for f in self.files],
         }
 
@@ -212,11 +215,11 @@ class ResolvedUrl:
             url=str(data["url"]),
             title=data.get("title"),
             filename=data.get("filename"),
-            mimeType=data.get("mime_type"),
+            mimeType=data.get("mimeType"),
             size=data.get("size"),
             category=data.get("category", "unknown"),
-            headers=dict(data.get("headers") or {}),
-            cookies=dict(data.get("cookies") or {}),
+            headers=data.get("headers"),
+            cookies=data.get("cookies"),
             referer=data.get("referer"),
             resolverName=data.get("resolverName"),
         )

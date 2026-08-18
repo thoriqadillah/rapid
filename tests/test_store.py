@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from rapid.backend import DownloadFile, Download, DownloadStore, FileUri, SpeedSample
+from rapid.backend import (
+    DownloadFile,
+    Download,
+    DownloadStore,
+    FileUri,
+    ResolvedUrl,
+    SpeedSample,
+)
 from rapid.backend.database.database import Database
 
 
@@ -97,6 +104,26 @@ def test_persists_files_and_uris(tmp_path: Path) -> None:
 
 def test_get_missing_returns_none(tmp_path: Path) -> None:
     assert _store(tmp_path).get("nope") is None
+
+
+def test_persists_resolved_url(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    resolved = ResolvedUrl(
+        url="https://x/final.mp4",
+        title="final",
+        filename="final.mp4",
+        mimeType="video/mp4",
+        size=1024,
+        category="video",
+        headers={"Referer": "https://ref.example.com"},
+        cookies={"session": "abc123"},
+        referer="https://ref.example.com",
+        resolverName="Rapid",
+    )
+    store.upsert(_download("abc", status="active", resolved=resolved))
+    assert store.get("abc") == Download(
+        gid="abc", status="active", resolved=resolved
+    )
 
 
 def test_persists_across_instances(tmp_path: Path) -> None:

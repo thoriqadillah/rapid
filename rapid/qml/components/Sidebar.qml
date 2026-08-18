@@ -153,7 +153,7 @@ Rectangle {
 
         SidebarItem {
             destination: "audio"
-            label: qsTr("Audios")
+            label: qsTr("Audio")
             iconSource: "qrc:/icons/MdiSquareRounded.svg"
             iconColor: Theme.colorCategoryAudio
             Layout.fillWidth: true
@@ -161,8 +161,26 @@ Rectangle {
         }
 
         SidebarItem {
+            destination: "application"
+            label: qsTr("Application")
+            iconSource: "qrc:/icons/MdiSquareRounded.svg"
+            iconColor: Theme.colorCategoryApplication
+            Layout.fillWidth: true
+            categoryItem: true
+        }
+
+        SidebarItem {
+            destination: "compressed"
+            label: qsTr("Compressed")
+            iconSource: "qrc:/icons/MdiSquareRounded.svg"
+            iconColor: Theme.colorCategoryCompressed
+            Layout.fillWidth: true
+            categoryItem: true
+        }
+
+        SidebarItem {
             destination: "document"
-            label: qsTr("Documents")
+            label: qsTr("Document")
             iconSource: "qrc:/icons/MdiSquareRounded.svg"
             iconColor: Theme.colorCategoryDocument
             Layout.fillWidth: true

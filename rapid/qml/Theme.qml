@@ -11,11 +11,13 @@ QtObject {
 
     readonly property color colorPrimary: palette.highlight
     readonly property color colorPrimaryHover: Qt.darker(palette.highlight, 1.1)
+    readonly property color colorAccent: palette.accent
+    readonly property color colorAccentHover: Qt.darker(palette.accent, 1.1)
     readonly property color colorDanger: "#e03131"
     readonly property color colorDangerHover: Qt.darker(Theme.colorDanger, 1.1)
-    // readonly property color colorSuccess: ""
-    // readonly property color colorWarning: ""
-    // readonly property color colorInfo: ""
+    readonly property color colorSuccess: "#2f9e44"
+    readonly property color colorWarning: "#f08c00"
+    readonly property color colorInfo: "#1971c2"
 
     readonly property color colorSurface: palette.button
 
@@ -32,12 +34,24 @@ QtObject {
     readonly property color colorInputBackground: Theme.colorSurface
 
     readonly property color colorCategoryAudio: "#4fb783"
-    readonly property color colorCategoryApplication: "#ffffff"
-    readonly property color colorCategoryCompressed: "#ffffff"
+    readonly property color colorCategoryApplication: "#f0b429"
+    readonly property color colorCategoryCompressed: "#bd4b4b"
     readonly property color colorCategoryDocument: "#5b9bd5"
     readonly property color colorCategoryImage: "#b98bd6"
     readonly property color colorCategoryVideo: "#ee7b57"
     readonly property color colorCategoryUnknown: "#ffffff"
+
+    function categoryColor(category: string): color {
+        switch (category) {
+            case "audio": return colorCategoryAudio
+            case "application": return colorCategoryApplication
+            case "compressed": return colorCategoryCompressed
+            case "document": return colorCategoryDocument
+            case "image": return colorCategoryImage
+            case "video": return colorCategoryVideo
+            default: return colorCategoryUnknown
+        }
+    }
 
     // Text size
     readonly property int textSize: 14

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
+
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -8,6 +10,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    JSON,
     String,
     UniqueConstraint,
     delete,
@@ -23,7 +26,7 @@ from sqlalchemy.orm import (
 )
 
 from ..database.database import Base, Database
-from .models import DownloadFile, Download, FileUri, SpeedSample
+from .models import DownloadFile, Download, FileUri, ResolvedUrl, SpeedSample
 
 
 def _now() -> datetime:
@@ -94,6 +97,7 @@ class _Download(Base):
     verified_length: Mapped[int | None] = mapped_column(BigInteger)
     error_code: Mapped[int | None] = mapped_column(Integer)
     error_message: Mapped[str | None] = mapped_column(String)
+    resolved_url: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     files: Mapped[list[_FileRow]] = relationship(
@@ -118,6 +122,7 @@ def _toDownloadModel(row: _Download) -> Download:
         verifiedLength=row.verified_length,
         errorCode=row.error_code,
         errorMessage=row.error_message,
+        resolved=ResolvedUrl.fromDict(row.resolved_url) if row.resolved_url else None,
         files=tuple(
             DownloadFile(
                 index=f.index,
@@ -214,6 +219,8 @@ class DownloadStore:
             row.error_code = status.errorCode
         if status.errorMessage is not None:
             row.error_message = status.errorMessage
+        if status.resolved is not None:
+            row.resolved_url = status.resolved.asDict()
 
         existing = {f.index: f for f in row.files}
         seen: set[int] = set()

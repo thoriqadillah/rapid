@@ -127,7 +127,12 @@ def test_add_url_downloads_and_persists(tmp_path: Path) -> None:
 
     assert fake.added == ["http://example.com/a.bin"]
     assert added == ["g1"]
-    assert store.get("g1") == Download(gid="g1", status="active", totalLength=100)
+    assert store.get("g1") == Download(
+        gid="g1",
+        status="active",
+        totalLength=100,
+        resolved=ResolvedUrl(url="http://example.com/a.bin", title="x", category="other"),
+    )
 
 
 def test_model_exposes_downloads(tmp_path: Path) -> None:
@@ -167,12 +172,87 @@ def test_poll_propagates_status_and_speed_samples(tmp_path: Path) -> None:
 
     assert changed == ["g1"]
     assert store.get("g1") == Download(
-        gid="g1", status="active", totalLength=100, downloadSpeed=512
+        gid="g1",
+        status="active",
+        totalLength=100,
+        downloadSpeed=512,
+        resolved=ResolvedUrl(url="http://example.com/a.bin", title="x", category="other"),
     )
     assert store.speedHistory("g1")[0].speed == 512
     roles = {bytes(v).decode("utf-8"): k for k, v in service.roleNames().items()}
     assert service.data(service.index(0), roles["downloadSpeed"]) == 512
 
+    service.stop()
+
+
+def test_completion_keeps_last_speed(tmp_path: Path) -> None:
+    service, fake, store = _service(tmp_path)
+    service.start()
+    service.download(_await_resolve(service, "http://example.com/a.bin")[0])
+
+    fake._statuses["g1"] = Download(
+        gid="g1", status="active", totalLength=100, downloadSpeed=512
+    )
+    service._poll()
+    app = QCoreApplication.instance()
+    for _ in range(10):
+        app.processEvents()
+
+    fake._statuses["g1"] = Download(gid="g1", status="complete", totalLength=100)
+    service._poll()
+    for _ in range(10):
+        app.processEvents()
+
+    roles = {bytes(v).decode("utf-8"): k for k, v in service.roleNames().items()}
+    assert service.data(service.index(0), roles["downloadSpeed"]) == 512
+    assert store.get("g1").downloadSpeed == 512
+
+    service.stop()
+
+
+def test_start_relistens_restored_downloads(tmp_path: Path) -> None:
+    app = QGuiApplication.instance()
+    if app is None:
+        QGuiApplication([])
+    fake = FakeDownloader()
+    store = DownloadStore(Database(path=tmp_path / "relisten.db"))
+    store.upsert(Download(gid="g1", status="active", totalLength=100))
+    store.upsert(Download(gid="g2", status="complete", totalLength=100))
+    fake._statuses["g1"] = Download(gid="g1", status="active", totalLength=100)
+    service = DownloadService(
+        downloadDir=tmp_path,
+        pluginDirs=[SAMPLE],
+        store=store,
+        downloader=fake,
+        resolver=fake,
+    )
+    assert service.rowCount() == 2
+
+    service.start()
+
+    assert "g1" in fake._listeners  # still live in the daemon -> re-listened
+    assert "g2" not in fake._listeners  # terminal -> skipped
+    service.stop()
+
+
+def test_start_skips_restored_downloads_missing_from_daemon(tmp_path: Path) -> None:
+    app = QGuiApplication.instance()
+    if app is None:
+        QGuiApplication([])
+    fake = FakeDownloader()
+    store = DownloadStore(Database(path=tmp_path / "relisten2.db"))
+    store.upsert(Download(gid="g1", status="active", totalLength=100))
+    service = DownloadService(
+        downloadDir=tmp_path,
+        pluginDirs=[SAMPLE],
+        store=store,
+        downloader=fake,
+        resolver=fake,
+    )
+
+    service.start()
+
+    assert "g1" not in fake._listeners  # getStatus raised -> not re-listened
     service.stop()
 
 

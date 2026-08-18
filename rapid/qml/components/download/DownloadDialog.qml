@@ -18,6 +18,7 @@ Window {
     property var errors: ({})
     property var previousResolvedUri: []
     property bool isFetching: false
+    property bool isEditing: false
 
     minimumWidth: 480
     height: scroll.height + dialogButtons.height + Theme.spacingLg + Theme.spacingLg
@@ -60,7 +61,7 @@ Window {
     }
 
     function submit() {
-        DownloadService.download(resolvedUris, options)
+        DownloadService.download(resolvedUris)
         root.close()
     }
 
@@ -116,6 +117,7 @@ Window {
             margins: Theme.spacingSm
         }
         clip: true
+        Controls.ScrollBar.horizontal.policy: Controls.ScrollBar.AlwaysOff
         Controls.ScrollBar.vertical.policy: Controls.ScrollBar.AsNeeded
 
         ColumnLayout {
@@ -143,6 +145,7 @@ Window {
                     iconOnly: true
                     enabled: Clipboard.text.length > 0
                     onClicked: links.text = Clipboard.text
+                    tooltip: qsTr("Paste from clipboard")
                 }
             }
 
@@ -175,6 +178,12 @@ Window {
                         required property int index
                         closable: root.resolvedUris.length > 1
                         onDeleteClicked: root.removeUri(index)
+                        onSaved: (newUri) => {
+                            root.resolvedUris[index] = newUri
+                        }
+                        onEditingChanged: () => {
+                            root.isEditing = root.resolvedUris.some((_, i) => uriRepeater.itemAt(i)?.editing)
+                        }
 
                         Connections {
                             target: uriBlock
@@ -197,7 +206,12 @@ Window {
                     text: root.defaultDir
                     Layout.fillWidth: true
 
-                    RButton { iconSource: "qrc:/icons/MdiLightFolder.svg"; onClicked: root.pickFolder(); iconOnly: true }
+                    RButton {
+                        iconSource: "qrc:/icons/MdiLightFolder.svg"
+                        iconOnly: true
+                        tooltip: qsTr("Pick folder")
+                        onClicked: root.pickFolder()
+                    }
                 }
             }
 
@@ -224,7 +238,7 @@ Window {
             id: downloadButton
             text: qsTr("Download")
             variant: RButton.PrimaryVariant
-            enabled: links.text !== "" && !Object.keys(root.errors).length && root.resolvedUris.length > 0 && !root.isFetching
+            enabled: links.text !== "" && !Object.keys(root.errors).length && root.resolvedUris.length > 0 && !root.isFetching && !root.isEditing
             onClicked: root.submit()
         }
     }

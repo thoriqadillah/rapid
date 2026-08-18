@@ -17,19 +17,54 @@ Rectangle {
     property int size: root.modelData.size || 0
     property bool checked: root.modelData.checked || false
     property bool closable: false
+    property bool editing: false
 
-    signal editClicked()
     signal deleteClicked()
+    signal saved(var newUri)
 
-    readonly property color categoryColor: {
-        switch (root.category) {
-            case "audio": return Theme.colorCategoryAudio;
-            case "application": return Theme.colorCategoryApplication;
-            case "compressed": return Theme.colorCategoryCompressed;
-            case "video": return Theme.colorCategoryVideo;
-            case "image": return Theme.colorCategoryImage;
-            default: return Theme.colorCategoryUnknown;
+    function categoryFromName(name) {
+        const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : ""
+        const categories = {
+            audio: "mp3 wav flac ogg m4a aac wma opus",
+            video: "mp4 mkv webm avi mov m4v flv wmv mpg mpeg 3gp",
+            image: "png jpg jpeg gif bmp svg webp ico tiff avif",
+            document: "pdf doc docx txt md epub rtf odt xls xlsx csv ppt pptx json xml html",
+            compressed: "zip rar 7z gz tar bz2 xz zst iso",
+            application: "exe msi apk dmg deb rpm bin jar",
         }
+        for (const category of Object.keys(categories)) {
+            if (categories[category].split(" ").includes(ext)) return category
+        }
+        return "unknown"
+    }
+
+    function updateCategory(name) {
+        const category = root.categoryFromName(name)
+        root.category = category
+    }
+
+    function saveTitle() {
+        const name = titleEdit.text.trim()
+        if (name.length == 0) {
+            root.editing = false
+            return
+        }
+
+        root.title = name
+        root.category = root.categoryFromName(name)
+
+        const data = root.modelData
+        data.title = root.title
+        data.category = root.category
+        root.saved(data)
+        root.editing = false
+    }
+
+    function undoChange() {
+        root.title = root.modelData.title
+        root.category = root.modelData.category
+        titleEdit.text = root.modelData.title
+        root.editing = false
     }
 
     readonly property string categoryIcon: {
@@ -44,9 +79,21 @@ Rectangle {
         }
     }
 
+    readonly property string categoryName: {
+        switch (root.category) {
+            case "audio": return "Audio";
+            case "application": return "Application";
+            case "compressed": return "Compressed";
+            case "document": return "Document";
+            case "image": return "Image";
+            case "video": return "Video";
+            default: return "Unknown";
+        }
+    }
+
     radius: Theme.radiusSm
     color: Theme.colorSurface
-    border.color: root.categoryColor
+    border.color: Theme.categoryColor(root.category)
     implicitWidth: row.implicitWidth + Theme.spacingMd * 2
     implicitHeight: row.implicitHeight + Theme.spacingMd * 2
     Layout.fillWidth: true
@@ -88,11 +135,11 @@ Rectangle {
             icon.source: root.categoryIcon
             icon.width: height
             icon.height: height
-            icon.color: root.categoryColor
+            icon.color: Theme.categoryColor(root.category)
             enabled: false
             padding: Theme.spacingSm
             background: Rectangle {
-                color: root.categoryColor
+                color: Theme.categoryColor(root.category)
                 opacity: 0.15
                 radius: Theme.radiusSm
             }
@@ -105,11 +152,42 @@ Rectangle {
             Layout.fillWidth: true
 
             Text {
+                visible: !root.editing
                 text: root.title
                 color: Theme.colorText
                 elide: Text.ElideMiddle
                 Layout.fillWidth: true
                 font.pixelSize: Theme.textSize
+            }
+
+            Controls.TextField {
+                property int borderHeight: 1
+
+                id: titleEdit
+                visible: root.editing
+                text: root.title
+                selectByMouse: true
+                Layout.fillWidth: true
+                color: Theme.colorText
+                font.pixelSize: Theme.textSize
+                implicitHeight: Theme.textSize + Theme.spacingXs - titleEdit.borderHeight
+                verticalAlignment: Text.AlignVCenter
+                padding: 0
+                Keys.onReturnPressed: root.saveTitle()
+                Keys.onEnterPressed: root.saveTitle()
+                onTextChanged: root.updateCategory(titleEdit.text)
+
+                background: Rectangle {
+                    id: activeBorder
+                    color: "transparent"
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        height: titleEdit.borderHeight
+                        color: titleEdit.activeFocus ? Theme.colorPrimary : Theme.colorTextMuted
+                    }
+                }
             }
 
             ColumnLayout {
@@ -125,7 +203,7 @@ Rectangle {
                 }
 
                 Text {
-                    text: [DownloadService.formatSize(root.size), root.category].filter(Boolean).join(" · ")
+                    text: [DownloadService.formatSize(root.size), root.categoryName].filter(Boolean).join(" · ")
                     color: Theme.colorTextMuted
                     font.pixelSize: Theme.textSizeSm
                     Layout.fillWidth: true
@@ -137,16 +215,44 @@ Rectangle {
             spacing: Theme.spacingXs
 
             RButton {
+                visible: root.editing
                 Layout.alignment: Qt.AlignVCenter
-                iconSource: "qrc:/icons/MdiLightPencil.svg"
+                iconSource: "qrc:/icons/MdiLightUndoVariant.svg"
+                tooltip: "Undo change"
                 iconOnly: true
-                onClicked: root.editClicked()
+                onClicked: root.undoChange()
             }
 
             RButton {
-                visible: root.closable
+                visible: root.editing
+                Layout.alignment: Qt.AlignVCenter
+                iconSource: "qrc:/icons/MdiLightCheck.svg"
+                tooltip: "Save"
+                foregroundColor: Theme.colorSuccess
+                iconOnly: true
+                onClicked: root.saveTitle()
+            }
+
+            RButton {
+                visible: !root.editing
+                Layout.alignment: Qt.AlignVCenter
+                iconSource: "qrc:/icons/MdiLightPencil.svg"
+                tooltip: "Edit"
+                iconOnly: true
+                onClicked: {
+                    root.editing = true
+                    Qt.callLater(() => {
+                        titleEdit.forceActiveFocus()
+                        titleEdit.selectAll()
+                    })
+                }
+            }
+
+            RButton {
+                visible: root.closable && !root.editing
                 Layout.alignment: Qt.AlignVCenter
                 iconSource: "qrc:/icons/MaterialSymbolsLightCloseRounded.svg"
+                tooltip: "Remove from download list"
                 foregroundColor: Theme.colorDanger
                 iconOnly: true
                 onClicked: root.deleteClicked()
