@@ -88,9 +88,7 @@ class _Download(Base):
     category: Mapped[str | None] = mapped_column("category", String)
     total_length: Mapped[int | None] = mapped_column(BigInteger)
     completed_length: Mapped[int | None] = mapped_column(BigInteger)
-    upload_length: Mapped[int | None] = mapped_column(BigInteger)
     download_speed: Mapped[int | None] = mapped_column(BigInteger)
-    upload_speed: Mapped[int | None] = mapped_column(BigInteger)
     connections: Mapped[int | None] = mapped_column(Integer)
     num_pieces: Mapped[int | None] = mapped_column(Integer)
     piece_length: Mapped[int | None] = mapped_column(BigInteger)
@@ -98,6 +96,7 @@ class _Download(Base):
     error_code: Mapped[int | None] = mapped_column(Integer)
     error_message: Mapped[str | None] = mapped_column(String)
     resolved_url: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     files: Mapped[list[_FileRow]] = relationship(
@@ -113,9 +112,7 @@ def _toDownloadModel(row: _Download) -> Download:
         category=row.category,
         totalLength=row.total_length,
         completedLength=row.completed_length,
-        uploadLength=row.upload_length,
         downloadSpeed=row.download_speed,
-        uploadSpeed=row.upload_speed,
         connections=row.connections,
         numPieces=row.num_pieces,
         pieceLength=row.piece_length,
@@ -156,9 +153,11 @@ class DownloadStore:
         with self._session_factory() as session:
             rows = (
                 session.execute(
-                    select(_Download).options(
+                    select(_Download)
+                    .options(
                         selectinload(_Download.files).selectinload(_FileRow.uris)
                     )
+                    .order_by(_Download.created_at.desc())
                 )
                 .scalars()
                 .all()
@@ -182,7 +181,7 @@ class DownloadStore:
         with self._session_factory() as session:
             row = session.get(_Download, gid)
             if row is None:
-                row = _Download(gid=gid)
+                row = _Download(gid=gid, created_at=_now())
                 session.add(row)
 
             self._applyDownload(session, row, status)
@@ -201,12 +200,8 @@ class DownloadStore:
             row.total_length = status.totalLength
         if status.completedLength is not None:
             row.completed_length = status.completedLength
-        if status.uploadLength is not None:
-            row.upload_length = status.uploadLength
         if status.downloadSpeed is not None:
             row.download_speed = status.downloadSpeed
-        if status.uploadSpeed is not None:
-            row.upload_speed = status.uploadSpeed
         if status.connections is not None:
             row.connections = status.connections
         if status.numPieces is not None:

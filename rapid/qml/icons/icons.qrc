@@ -22,5 +22,6 @@
         <file>MdiLightCheck.svg</file>
         <file>MaterialSymbolsLightCloseRounded.svg</file>
         <file>MdiLightUndoVariant.svg</file>
+        <file>MdiLightFormatAlignBottom.svg</file>
     </qresource>
 </RCC>

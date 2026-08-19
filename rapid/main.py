@@ -31,9 +31,7 @@ def downloader_service(engine: QQmlApplicationEngine) -> DownloadService:
 
 
 def clipboard_service(context: QQmlContext) -> ClipboardService:
-    service = ClipboardService()
-    context.setContextProperty("Clipboard", service)
-    return service
+    return ClipboardService()
 
 
 def main() -> int:
@@ -56,6 +54,7 @@ def main() -> int:
         engine, QUrl.fromLocalFile(str(BASE_DIR / "qml" / "components" / "download" / "DownloadDialog.qml"))
     )
     clipboard = clipboard_service(dialogContext)
+    engine.rootContext().setContextProperty("Clipboard", clipboard)
     downloadDialog = dialogComponent.create(dialogContext)
     if downloadDialog is None:
         return 1

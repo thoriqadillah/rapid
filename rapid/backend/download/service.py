@@ -157,11 +157,11 @@ class DownloadService(QAbstractListModel):
     def speedHistory(self, gid: str) -> list[dict[str, int]]:
         return [sample.asDict() for sample in self._store.speedHistory(gid)]
 
-    @Slot(int, result=str)
+    @Slot('qint64', result=str)  # type: ignore
     def formatSize(self, bytes_: int) -> str:
         """Human-readable size, e.g. 1536 -> "1.5 KB"."""
         if not bytes_:
-            return ""
+            return "—"
         units = ("B", "KB", "MB", "GB", "TB")
         value = float(bytes_)
         i = 0
@@ -237,9 +237,8 @@ class DownloadService(QAbstractListModel):
         return download.gid
 
     def _insert(self, download: Download) -> None:
-        row = len(self._downloads)
-        self.beginInsertRows(QModelIndex(), row, row)
-        self._downloads.append(download)
+        self.beginInsertRows(QModelIndex(), 0, 0)
+        self._downloads.insert(0, download)
         self.endInsertRows()
 
     def _remove(self, gid: str) -> None:

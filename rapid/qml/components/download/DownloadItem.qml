@@ -11,7 +11,7 @@ Rectangle {
     id: root
 
     // Role values from DownloadService (a QAbstractListModel).
-    required property var gid
+required property var gid
     required property var status
     required property var resolved
     required property var files
@@ -25,7 +25,13 @@ Rectangle {
     property int sizeColumnWidth: 125
     property int etaColumnWidth: 125
 
-    color: rowMouse.containsMouse ? Theme.colorSurface : "transparent"
+    property bool menuOpen: false
+    property bool highlighted: false
+
+    signal contextMenuRequested(var data)
+
+    color: highlighted || (rowMouse.containsMouse && !menuOpen)
+        ? Theme.colorSurface : "transparent"
     implicitHeight: row.implicitHeight + Theme.spacingSm * 2
 
     readonly property string displayName: {
@@ -35,6 +41,14 @@ Rectangle {
         const path = paths.length > 0 ? paths[0].path : ""
         if (path) return path.split("/").pop() || path
         return root.gid
+    }
+
+    readonly property string fileDir: {
+        const paths = root.files
+        const path = paths.length > 0 ? paths[0].path : ""
+        if (!path) return ""
+        const idx = path.lastIndexOf("/")
+        return idx > 0 ? path.slice(0, idx) : ""
     }
 
     readonly property double percent: {
@@ -85,6 +99,17 @@ Rectangle {
         id: rowMouse
         anchors.fill: parent
         hoverEnabled: true
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        onClicked: function (mouse) {
+            if (mouse.button === Qt.RightButton) {
+                root.contextMenuRequested({
+                    gid: root.gid,
+                    status: root.status,
+                    fileDir: root.fileDir,
+                    resolved: root.resolved
+                })
+            }
+        }
     }
 
     Rectangle {
@@ -120,11 +145,14 @@ Rectangle {
             Layout.alignment: Qt.AlignVCenter
         }
 
-        Text {
+        TextEdit {
             text: root.displayName
             color: Theme.colorText
             font.pixelSize: Theme.textSize
-            elide: Text.ElideMiddle
+            readOnly: true
+            selectByMouse: true
+            clip: true
+            verticalAlignment: Text.AlignVCenter
             Layout.fillWidth: true
         }
 
@@ -148,10 +176,13 @@ Rectangle {
                 }
             }
 
-            Text {
+            TextEdit {
                 text: qsTr("%1%").arg(Math.round(root.percent * 100))
                 color: Theme.colorTextMuted
                 font.pixelSize: Theme.textSize
+                readOnly: true
+                selectByMouse: true
+                verticalAlignment: Text.AlignVCenter
                 Layout.preferredWidth: percentMetrics.advanceWidth("100%")
                 Layout.minimumWidth: percentMetrics.advanceWidth("100%")
                 Layout.maximumWidth: percentMetrics.advanceWidth("100%")
@@ -163,29 +194,38 @@ Rectangle {
             }
         }
 
-        Text {
+        TextEdit {
             text: root.speedText
             color: Theme.colorText
             font.pixelSize: Theme.textSize
-            elide: Text.ElideRight
+            readOnly: true
+            selectByMouse: true
+            clip: true
+            verticalAlignment: Text.AlignVCenter
             Layout.preferredWidth: root.speedColumnWidth
             Layout.minimumWidth: root.speedColumnWidth
             Layout.maximumWidth: root.speedColumnWidth
         }
 
-        Text {
+        TextEdit {
             text: root.sizeText
             color: Theme.colorText
             font.pixelSize: Theme.textSize
+            readOnly: true
+            selectByMouse: true
+            verticalAlignment: Text.AlignVCenter
             Layout.preferredWidth: root.sizeColumnWidth
             Layout.minimumWidth: root.sizeColumnWidth
             Layout.maximumWidth: root.sizeColumnWidth
         }
 
-        Text {
+        TextEdit {
             text: root.etaText
             color: root.isError ? Theme.colorDanger : Theme.colorText
             font.pixelSize: Theme.textSize
+            readOnly: true
+            selectByMouse: true
+            verticalAlignment: Text.AlignVCenter
             Layout.preferredWidth: root.etaColumnWidth
             Layout.minimumWidth: root.etaColumnWidth
             Layout.maximumWidth: root.etaColumnWidth

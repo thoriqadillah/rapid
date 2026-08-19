@@ -109,9 +109,7 @@ class Download:
     category: str | None = None
     totalLength: int | None = None
     completedLength: int | None = None
-    uploadLength: int | None = None
     downloadSpeed: int | None = None
-    uploadSpeed: int | None = None
     connections: int | None = None
     numPieces: int | None = None
     pieceLength: int | None = None
@@ -143,9 +141,7 @@ class Download:
             category=_str(data.get("category")),
             totalLength=_toInt(data.get("totalLength")),
             completedLength=_toInt(data.get("completedLength")),
-            uploadLength=_toInt(data.get("uploadLength")),
             downloadSpeed=_toInt(data.get("downloadSpeed")),
-            uploadSpeed=_toInt(data.get("uploadSpeed")),
             connections=_toInt(data.get("connections")),
             numPieces=_toInt(data.get("numPieces")),
             pieceLength=_toInt(data.get("pieceLength")),
@@ -163,9 +159,7 @@ class Download:
             "category": self.category,
             "totalLength": _num(self.totalLength),
             "completedLength": _num(self.completedLength),
-            "uploadLength": _num(self.uploadLength),
             "downloadSpeed": _num(self.downloadSpeed),
-            "uploadSpeed": _num(self.uploadSpeed),
             "connections": _num(self.connections),
             "numPieces": _num(self.numPieces),
             "pieceLength": _num(self.pieceLength),

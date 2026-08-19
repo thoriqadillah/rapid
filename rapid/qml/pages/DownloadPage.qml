@@ -94,6 +94,10 @@ Layout {
             QL.Layout.topMargin: Theme.spacingSm
 
             ListView {
+                property bool contextMenuOpen: false
+                property string contextMenuGid: ""
+                signal contextMenuRequested(var data)
+
                 id: list
                 anchors.fill: parent
                 clip: true
@@ -108,6 +112,20 @@ Layout {
                     speedColumnWidth: root.speedColumnWidth
                     sizeColumnWidth: root.sizeColumnWidth
                     etaColumnWidth: root.etaColumnWidth
+
+                    menuOpen: list.contextMenuOpen
+                    highlighted: list.contextMenuGid === gid
+                    onContextMenuRequested: function (data) { list.contextMenuRequested(data) }
+                }
+
+                onContextMenuRequested: function (data) {
+                    list.contextMenuOpen = true
+                    list.contextMenuGid = data.gid
+                    itemMenu.gid = data.gid
+                    itemMenu.status = data.status
+                    itemMenu.fileDir = data.fileDir
+                    itemMenu.resolved = data.resolved
+                    itemMenu.popup()
                 }
 
                 add: Transition {
@@ -116,13 +134,38 @@ Layout {
                 }
             }
 
-            Text {
+            Column {
                 visible: list.count === 0
                 anchors.centerIn: parent
-                text: qsTr("No downloads yet")
-                color: Theme.colorTextMuted
-                font.pixelSize: Theme.textSize
+                spacing: Theme.spacingMd
+
+                Controls.Button {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    enabled: false
+                    padding: 0
+                    display: Controls.AbstractButton.IconOnly
+                    icon.source: "qrc:/icons/MdiLightFormatAlignBottom.svg"
+                    icon.width: Theme.iconXl
+                    icon.height: Theme.iconXl
+                    icon.color: Theme.colorTextMuted
+                    background: null
+                }
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: qsTr("No downloads yet")
+                    color: Theme.colorTextMuted
+                    font.pixelSize: Theme.textSize
+                }
             }
+        }
+    }
+
+    Download.DownloadItemContextMenu {
+        id: itemMenu
+        onClosed: {
+            list.contextMenuOpen = false
+            list.contextMenuGid = ""
         }
     }
 }

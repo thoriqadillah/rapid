@@ -231,7 +231,7 @@ class Aria2Downloader(Downloader, Resolver):
             with urlopen(Request(url, method="HEAD", headers=options.get("headers", {})), timeout=5) as resp:
                 return resp.headers
         except (HTTPError, URLError, OSError):
-            return None
+            raise
 
     @staticmethod
     def _getCategory(mimeType: str | None) -> str:
@@ -474,6 +474,11 @@ class Aria2Downloader(Downloader, Resolver):
         )
 
         try:
+            headers = self._probeHeader(uri, options)
+        except:
+            raise
+
+        try:
             fields = [
                 "gid",
                 "status",
@@ -526,7 +531,6 @@ class Aria2Downloader(Downloader, Resolver):
                 uri,
             )
 
-            headers = self._probeHeader(finalUrl, options)
             mimeType = headers.get("Content-Type") if headers else mimetypes.guess_type(filename or "", strict=False)[0]
             size = self._parseInt(headers.get("Content-Length", 0) if headers else fileSize)
 
