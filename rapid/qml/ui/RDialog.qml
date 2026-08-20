@@ -1,0 +1,73 @@
+import QtQuick
+import QtQuick.Layouts
+import ".."
+
+// Generic window-style dialog (a real Window, not a popup) with an overlay on
+// its owner window. Both the body and the action area are slots:
+//   - default property `content` : arbitrary body UI (Vue <slot>)
+//   - `footer`                    : arbitrary action buttons (any, not just OK/Cancel)
+
+// qmllint disable unqualified
+Window {
+    id: root
+
+    default property alias content: body.data
+    property alias footer: footerArea.data
+
+    property Window owner: null
+
+    signal opened
+
+    minimumWidth: 500
+    height: body.implicitHeight + footerArea.implicitHeight + Theme.spacingLg * 3
+    visible: false
+    color: Theme.colorBackground
+
+    // qmllint disable missing-property
+    function setOverlay(show) {
+        const overlay = root.owner ? root.owner.dialogOverlay : null;
+        if (overlay)
+            overlay.visible = show;
+    }
+    // qmllint enable missing-property
+
+    function openFor(newOwner) {
+        root.owner = newOwner ?? null;
+        root.setOverlay(true);
+        root.show();
+        root.opened();
+    }
+
+    onVisibleChanged: if (!root.visible) root.setOverlay(false)
+    Component.onDestruction: root.setOverlay(false)
+
+    Connections {
+        target: root.owner
+        enabled: root.owner !== null
+        function onClosing() {
+            root.close();
+        }
+    }
+
+    ColumnLayout {
+        id: body
+        anchors {
+            top: parent.top
+            left: parent.left
+            right: parent.right
+            margins: Theme.spacingSm
+        }
+    }
+
+    RowLayout {
+        id: footerArea
+        spacing: Theme.spacingMd
+        layoutDirection: Qt.RightToLeft
+        anchors {
+            left: parent.left
+            right: parent.right
+            bottom: parent.bottom
+            margins: Theme.spacingMd
+        }
+    }
+}

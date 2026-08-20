@@ -199,10 +199,8 @@ class DownloadService(QAbstractListModel):
 
     @Slot(str)
     def remove(self, gid: str) -> None:
+        """Stop the download; it stays in the list until purged."""
         self._downloader.remove(gid)
-        self._store.remove(gid)
-        self._remove(gid)
-        self.downloadRemoved.emit(gid)
 
     @Slot(str)
     def purge(self, gid: str) -> None:
@@ -210,8 +208,20 @@ class DownloadService(QAbstractListModel):
         self._store.remove(gid)
         self._remove(gid)
         self.downloadRemoved.emit(gid)
+        self._deleteFromDisk(gid)
 
     # --- internals ----------------------------------------------------------
+
+    def _deleteFromDisk(self, gid: str) -> None:
+        row = self._row_of(gid)
+        if row is not None:
+            for file in self._downloads[row].files:
+                path = file.path
+                if path:
+                    try:
+                        Path(path).unlink(missing_ok=True)
+                    except OSError:
+                        pass
 
     def _downloadAt(self, index: QModelIndex | QPersistentModelIndex) -> Download | None:
         if not index.isValid():
@@ -254,11 +264,13 @@ class DownloadService(QAbstractListModel):
         if row is not None:
             if download.resolved is None:
                 download = replace(download, resolved=self._downloads[row].resolved)
-            if download.status == "complete" and not download.downloadSpeed:
+            if download.status != "active" and not download.downloadSpeed:
                 download = replace(download, downloadSpeed=self._downloads[row].downloadSpeed)
 
             self._store.upsert(download)
-            self._store.addSpeedSample(download.gid, int(time.time() * 1000), download.downloadSpeed or 0)
+            if download.status == "active":
+                self._store.addSpeedSample(download.gid, int(time.time() * 1000), download.downloadSpeed or 0)
+
             self._downloads[row] = download
             index = self.index(row)
             self.dataChanged.emit(index, index, list(_ROLE_NAMES))

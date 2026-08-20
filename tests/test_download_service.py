@@ -196,12 +196,41 @@ def test_completion_keeps_last_speed(tmp_path: Path) -> None:
     service._poll()
     app = QCoreApplication.instance()
     for _ in range(10):
-        app.processEvents()
+        if app:
+            app.processEvents()
 
     fake._statuses["g1"] = Download(gid="g1", status="complete", totalLength=100)
     service._poll()
     for _ in range(10):
-        app.processEvents()
+        if app:
+            app.processEvents()
+
+    roles = {bytes(v).decode("utf-8"): k for k, v in service.roleNames().items()}
+    assert service.data(service.index(0), roles["downloadSpeed"]) == 512
+    download = store.get("g1")
+    assert download is not None
+    assert download.downloadSpeed == 512
+
+    service.stop()
+
+
+def test_pause_freezes_speed(tmp_path: Path) -> None:
+    service, fake, store = _service(tmp_path)
+    service.start()
+    service.download(_await_resolve(service, "http://example.com/a.bin")[0])
+
+    fake._statuses["g1"] = Download(gid="g1", status="active", totalLength=100, downloadSpeed=512)
+    service._poll()
+    app = QCoreApplication.instance()
+    for _ in range(10):
+        if app:
+            app.processEvents()
+
+    fake._statuses["g1"] = Download(gid="g1", status="paused", totalLength=100, downloadSpeed=128)
+    service._poll()
+    for _ in range(10):
+        if app:
+            app.processEvents()
 
     roles = {bytes(v).decode("utf-8"): k for k, v in service.roleNames().items()}
     assert service.data(service.index(0), roles["downloadSpeed"]) == 512
@@ -256,7 +285,7 @@ def test_start_skips_restored_downloads_missing_from_daemon(tmp_path: Path) -> N
     service.stop()
 
 
-def test_remove_deletes_from_store(tmp_path: Path) -> None:
+def test_remove_stops_but_keeps_in_store(tmp_path: Path) -> None:
     service, fake, store = _service(tmp_path)
     service.download(_await_resolve(service, "http://example.com/a.bin")[0])
 
@@ -266,8 +295,8 @@ def test_remove_deletes_from_store(tmp_path: Path) -> None:
     service.remove("g1")
 
     assert fake.removed == ["g1"]
-    assert store.all() == {}
-    assert removed == ["g1"]
+    assert "g1" in store.all()
+    assert removed == []
 
 
 def test_purge_deletes_from_store(tmp_path: Path) -> None:

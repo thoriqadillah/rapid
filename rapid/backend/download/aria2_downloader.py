@@ -631,18 +631,22 @@ class Aria2Downloader(Downloader, Resolver):
         )
 
     def remove(self, id: str) -> None:
-        self._rpc.call(
-            "aria2.remove",
-            [id],
-        )
+        self._removeAny(id, ("aria2.remove", "aria2.removeDownloadResult"))
         self._unlisten(id)
 
     def purge(self, id: str) -> None:
-        self._rpc.call(
-            "aria2.removeDownloadResult",
-            [id],
-        )
+        self._removeAny(id, ("aria2.removeDownloadResult", "aria2.remove"))
         self._unlisten(id)
+
+    def _removeAny(self, id: str, methods: tuple[str, ...]) -> None:
+        # The gid may be active, finished, or already gone from aria2
+        # entirely; each RPC only accepts one of those states.
+        for method in methods:
+            try:
+                self._rpc.call(method, [id])
+                return
+            except Aria2Error:
+                continue
 
     def listen(self, id: str, onNotify: NotifyCallback, onError: ErrorCallback) -> None:
         with self._lock:

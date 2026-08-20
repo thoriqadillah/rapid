@@ -9,7 +9,8 @@ Controls.Button {
         BaseVariant,
         PrimaryVariant,
         SecondaryVariant,
-        GhostVariant
+        GhostVariant,
+        DangerVariant
     }
 
     property int variant: RButton.BaseVariant
@@ -18,27 +19,47 @@ Controls.Button {
     property int iconSize: Theme.iconMd
     property bool iconOnly: false
     property string tooltip: ""
-    property color foregroundColor: root.variant === RButton.PrimaryVariant
+    property color foregroundColor: (root.variant === RButton.PrimaryVariant
+        || root.variant === RButton.DangerVariant
+        || (root.outlined && root.hovered))
         ? Theme.colorTextInverted
         : Theme.colorText
-    property int cornerRadius: Qt.platform.os === "linux" ? Theme.radiusSm : Theme.radiusMd
+    property int cornerRadius: Theme.radiusSm
 
     readonly property color backgroundColor: {
         switch (root.variant) {
         case RButton.SecondaryVariant:
-            return Theme.colorButtonBase
+            return Theme.colorAccent
         case RButton.BaseVariant:
             return Theme.colorButtonBase
         case RButton.GhostVariant:
             return 'transparent'
+        case RButton.DangerVariant:
+            return Theme.colorDanger
         default:
             return Theme.colorPrimary
+        }
+    }
+
+    readonly property color variantColor: {
+        switch (root.variant) {
+        case RButton.DangerVariant:
+            return Theme.colorDanger
+        case RButton.SecondaryVariant:
+            return Theme.colorAccent
+        case RButton.PrimaryVariant:
+            return Theme.colorPrimary
+        default:
+            return Theme.colorBorder
         }
     }
 
     readonly property color hoveredColor: {
         switch (root.variant) {
         case RButton.SecondaryVariant:
+            return Theme.colorAccentHover
+        case RButton.DangerVariant:
+            return Theme.colorDangerHover
         case RButton.GhostVariant:
         case RButton.BaseVariant:
             return Theme.colorButtonBaseHover
@@ -50,7 +71,7 @@ Controls.Button {
     icon.source: root.iconSource
     icon.width: root.iconSize
     icon.height: root.iconSize
-    icon.color: root.foregroundColor
+    icon.color: root.hovered && root.enabled ? Theme.colorTextInverted : root.foregroundColor
 
     FontMetrics {
         id: buttonFontMetrics
@@ -73,15 +94,15 @@ Controls.Button {
         root.implicitContentHeight + root.verticalPadding * 2
     )
     opacity: enabled ? 1 : 0.5
-    palette.buttonText: root.foregroundColor
+    palette.buttonText: root.hovered && root.enabled ? Theme.colorTextInverted : root.foregroundColor
 
     background: Rectangle {
         radius: root.cornerRadius
         border.width: root.outlined ? 1 : 0
-        border.color: root.outlined ? Theme.colorBorder : "transparent"
-        color: root.hovered && root.enabled
-            ? root.hoveredColor
-            : root.backgroundColor
+        border.color: root.outlined ? root.variantColor : "transparent"
+        color: root.outlined
+            ? (root.hovered && root.enabled ? root.variantColor : "transparent")
+            : (root.hovered && root.enabled ? root.hoveredColor : root.backgroundColor)
     }
 
     Controls.ToolTip {

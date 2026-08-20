@@ -8,10 +8,9 @@ import "../../ui"
 // DownloadService and Clipboard are Python-registered context properties,
 // invisible to qmllint's static analysis.
 // qmllint disable unqualified
-Window {
+RDialog {
     id: root
 
-    property Window owner: null
     property string defaultDir: ""
     property var resolvedUris: []
     property var options: ({})
@@ -21,101 +20,14 @@ Window {
     property bool isEditing: false
 
     minimumWidth: 480
-    height: scroll.height + dialogButtons.height + Theme.spacingLg + Theme.spacingLg
-    visible: false
     title: qsTr("New download")
-    color: Theme.colorBackground
 
-// Click empty dialog space to drop focus from any text field.
-    MouseArea {
-        anchors.fill: parent
-        z: -1
-        onClicked: root.contentItem.forceActiveFocus()
-    }
-
-    // When linked to an owner (e.g. the main window), exit when it exits.
-    Connections {
-        target: root.owner
-        enabled: root.owner !== null
-        function onClosing() {
-            root.close()
-        }
-    }
-
-    // Spawn as its own window. `owner` is the window to die with (null = independent).
-    function openFor(newOwner) {
-        root.owner = newOwner ?? null
-        root.show()
-        root.resolve()
-    }
-
-    Timer {
-        id: resolveTimer
-        interval: 300
-        onTriggered: root.resolve()
-    }
-
-    function pickFolder() {
-        const dir = DownloadService.pickFolder(saveDir.text)
-        if (dir) saveDir.text = dir
-    }
-
-    function submit() {
-        DownloadService.download(resolvedUris)
-        root.close()
-    }
-
-    function reset() {
-        links.text = ""
-        saveDir.text = root.defaultDir
-        root.resolvedUris = []
-        root.errors = ({})
-        root.previousResolvedUri = []
-        root.isFetching = false
-        resolveTimer.stop()
-        exitTimer.stop()
-    }
-
+    onOpened: root.resolve()
     onClosing: root.reset()
-
-    function removeUri(id) {
-        root.resolvedUris = root.resolvedUris.filter((_, idx) => idx !== id)
-    }
-
-    function resolve() {
-        if (links.text === "") return
-        root.isFetching = true
-        DownloadService.resolve(links.text)
-    }
-
-    function startTransition(newUris) {
-        if (root.resolvedUris.length > 0) {
-            root.previousResolvedUri = newUris
-            uriBlock.leave()
-            return
-        }
-
-        root.resolvedUris = newUris
-    }
-
-    Connections {
-        target: DownloadService
-        function onResolved(uris, errors) {
-            root.errors = errors
-            root.isFetching = false
-            links.error = errors.url ?? ""
-            root.startTransition(uris)
-        }
-    }
 
     Controls.ScrollView {
         id: scroll
-        anchors {
-            top: parent.top
-            left: parent.left
-            right: parent.right
-            margins: Theme.spacingSm
-        }
+        Layout.fillWidth: true
         clip: true
         Controls.ScrollBar.horizontal.policy: Controls.ScrollBar.AlwaysOff
         Controls.ScrollBar.vertical.policy: Controls.ScrollBar.AsNeeded
@@ -124,6 +36,13 @@ Window {
             id: form
             width: scroll.availableWidth
             spacing: Theme.spacingLg
+
+            MouseArea {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                z: -1
+                onClicked: links.field.forceActiveFocus(false)
+            }
 
             RTextField {
                 id: links
@@ -134,10 +53,18 @@ Window {
                 Layout.fillWidth: true
 
                 onTextChanged: {
-                    resolveTimer.restart()
-                    root.errors = ({})
-                    links.error = ""
-                    if (links.text === "") root.startTransition([])
+                    resolveTimer.restart();
+                    root.errors = ({});
+                    links.error = "";
+
+                    if (links.text === "")
+                        root.startTransition([]);
+                    else
+                        root.startTransition([
+                            {
+                                loading: true
+                            }
+                        ]);
                 }
 
                 RButton {
@@ -151,22 +78,23 @@ Window {
 
             ColumnLayout {
                 id: uriBlock
-                visible: root.resolvedUris.length > 0
+                visible: root.resolvedUris.length > 0 || root.isFetching
                 spacing: Theme.spacingSm
+                Layout.minimumHeight: 75
                 property bool exiting: false
 
                 function leave() {
-                    uriBlock.exiting = true
-                    exitTimer.restart()
+                    uriBlock.exiting = true;
+                    exitTimer.restart();
                 }
 
                 Timer {
                     id: exitTimer
                     interval: 310
                     onTriggered: {
-                        root.resolvedUris = root.previousResolvedUri
-                        root.previousResolvedUri = []
-                        uriBlock.exiting = false
+                        root.resolvedUris = root.previousResolvedUri;
+                        root.previousResolvedUri = [];
+                        uriBlock.exiting = false;
                     }
                 }
 
@@ -178,18 +106,19 @@ Window {
                         required property int index
                         closable: root.resolvedUris.length > 1
                         onDeleteClicked: root.removeUri(index)
-                        onSaved: (newUri) => {
-                            root.resolvedUris[index] = newUri
+                        onSaved: newUri => {
+                            root.resolvedUris[index] = newUri;
                         }
                         onEditingChanged: () => {
-                            root.isEditing = root.resolvedUris.some((_, i) => uriRepeater.itemAt(i)?.editing)
+                            root.isEditing = root.resolvedUris.some((_, i) => uriRepeater.itemAt(i)?.editing);
                         }
 
                         Connections {
                             target: uriBlock
                             function onExitingChanged() {
-                                if (uriBlock.exiting) exit()
-                                uriBlock.exiting = false
+                                if (uriBlock.exiting)
+                                    exit();
+                                uriBlock.exiting = false;
                             }
                         }
                     }
@@ -214,21 +143,71 @@ Window {
                     }
                 }
             }
-
         }
     }
 
-    Controls.DialogButtonBox {
-        id: dialogButtons
-        padding: 0
-        background: Rectangle { color: Theme.colorBackground }
-        anchors {
-            left: parent.left
-            right: parent.right
-            bottom: parent.bottom
-            margins: Theme.spacingSm
+    Timer {
+        id: resolveTimer
+        interval: 300
+        onTriggered: root.resolve()
+    }
+
+    function pickFolder() {
+        const dir = DownloadService.pickFolder(saveDir.text);
+        if (dir)
+            saveDir.text = dir;
+    }
+
+    function submit() {
+        DownloadService.download(resolvedUris);
+        root.close();
+    }
+
+    function reset() {
+        links.text = "";
+        saveDir.text = root.defaultDir;
+        root.resolvedUris = [];
+        root.errors = ({});
+        root.previousResolvedUri = [];
+        root.isFetching = false;
+        resolveTimer.stop();
+        exitTimer.stop();
+    }
+
+    function removeUri(id) {
+        root.resolvedUris = root.resolvedUris.filter((_, idx) => idx !== id);
+    }
+
+    function resolve() {
+        if (links.text === "")
+            return;
+        root.isFetching = true;
+        DownloadService.resolve(links.text);
+    }
+
+    function startTransition(newUris) {
+        if (root.resolvedUris.length > 0) {
+            root.previousResolvedUri = newUris;
+            uriBlock.leave();
+            return;
         }
-        alignment: Qt.AlignRight
+
+        root.resolvedUris = newUris;
+    }
+
+    Connections {
+        target: DownloadService
+        function onResolved(uris, errors) {
+            root.errors = errors;
+            root.isFetching = false;
+            links.error = errors.url ?? "";
+            root.startTransition(uris);
+        }
+    }
+
+    footer: RowLayout {
+        spacing: Theme.spacingMd
+
         RButton {
             text: qsTr("Cancel")
             onClicked: root.close()

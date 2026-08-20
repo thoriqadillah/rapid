@@ -11,13 +11,15 @@ Rectangle {
     id: root
 
     required property var modelData
-    property string title: root.modelData.title || root.modelData.filename || root.modelData.url
-    property string url: root.modelData.url
+    property string title: (root.modelData.title || root.modelData.filename || root.modelData.url) ?? ""
+    property string url: root.modelData.url ?? ""
     property string category: root.modelData.category || "unknown"
     property int size: root.modelData.size || 0
     property bool checked: root.modelData.checked || false
     property bool closable: false
     property bool editing: false
+    property bool readonly: false
+    property bool loading: modelData.loading || false
 
     signal deleteClicked()
     signal saved(var newUri)
@@ -93,9 +95,9 @@ Rectangle {
 
     radius: Theme.radiusSm
     color: Theme.colorSurface
-    border.color: Theme.categoryColor(root.category)
-    implicitWidth: row.implicitWidth + Theme.spacingMd * 2
-    implicitHeight: row.implicitHeight + Theme.spacingMd * 2
+    border.color: root.loading ? Theme.colorBorder : Theme.categoryColor(root.category)
+    implicitWidth: (root.loading ? loadingIndicator.implicitWidth + Theme.spacingSm : row.implicitWidth) + Theme.spacingMd * 2
+    implicitHeight: (root.loading ? loadingIndicator.implicitHeight + Theme.spacingSm : row.implicitHeight) + Theme.spacingMd * 2
     Layout.fillWidth: true
 
     opacity: 0
@@ -103,6 +105,10 @@ Rectangle {
 
     function exit() {
         if (root.opacity === 1.0) exitAnimation.start()
+    }
+
+    function enter() {
+        enterAnimation.start()
     }
 
     ParallelAnimation {
@@ -121,6 +127,27 @@ Rectangle {
 
     Component.onCompleted: enterAnimation.start()
 
+    Controls.Button {
+        id: loadingIndicator
+        anchors.centerIn: parent
+        icon.source: "qrc:/icons/MdiLightLoading.svg"
+        icon.width: Theme.touchTarget
+        icon.height: Theme.touchTarget
+        icon.color: Theme.colorTextMuted
+        enabled: false
+        visible: root.loading
+        padding: 0
+        background: null
+
+        RotationAnimation on rotation {
+            running: root.loading
+            from: 0
+            to: 360
+            duration: 1000
+            loops: Animation.Infinite
+        }
+    }
+
     RowLayout {
         id: row
         anchors.fill: parent
@@ -129,6 +156,7 @@ Rectangle {
         anchors.topMargin: Theme.spacingMd
         anchors.bottomMargin: Theme.spacingMd
         spacing: Theme.spacingMd
+        visible: !root.loading
 
         Controls.Button {
             id: categoryIcon
@@ -203,7 +231,7 @@ Rectangle {
                 }
 
                 Text {
-                    text: [DownloadService.formatSize(root.size), root.categoryName].filter(Boolean).join(" · ")
+                    text: [DownloadService.formatSize(root.size), root.categoryName].filter(v => Boolean(v) && v !== "—").join(" · ")
                     color: Theme.colorTextMuted
                     font.pixelSize: Theme.textSizeSm
                     Layout.fillWidth: true
@@ -234,7 +262,7 @@ Rectangle {
             }
 
             RButton {
-                visible: !root.editing
+                visible: !root.editing && !root.readonly
                 Layout.alignment: Qt.AlignVCenter
                 iconSource: "qrc:/icons/MdiLightPencil.svg"
                 tooltip: "Edit"

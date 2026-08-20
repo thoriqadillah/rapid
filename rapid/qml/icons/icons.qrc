@@ -23,5 +23,10 @@
         <file>MaterialSymbolsLightCloseRounded.svg</file>
         <file>MdiLightUndoVariant.svg</file>
         <file>MdiLightFormatAlignBottom.svg</file>
+        <file>MdiLightPause.svg</file>
+        <file>MdiLightPlay.svg</file>
+        <file>MdiLightStop.svg</file>
+        <file>MdiLightLogout.svg</file>
+        <file>MaterialSymbolsLightDeleteForeverOutlineSharp.svg</file>
     </qresource>
 </RCC>
