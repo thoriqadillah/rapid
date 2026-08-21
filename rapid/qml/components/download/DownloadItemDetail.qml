@@ -194,7 +194,7 @@ Rectangle {
             RButton {
                 text: qsTr("Stop")
                 enabled: root.canPause
-                onClicked: DownloadService.remove(root.gid)
+                onClicked: DownloadService.stop(root.gid)
                 iconSource: "qrc:/icons/MdiLightStop.svg"
             }
 

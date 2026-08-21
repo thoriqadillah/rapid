@@ -1,31 +1,21 @@
+from rapid.backend.setting import Settings
 import signal
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QStandardPaths, QTimer, QUrl, QCoreApplication
+from PySide6.QtCore import QTimer, QUrl, QCoreApplication
 from PySide6.QtWidgets import QApplication
 from PySide6.QtQml import QQmlApplicationEngine, QQmlComponent, QQmlContext
 
-from .backend import Aria2Downloader, ClipboardService, Database, DownloadService, DownloadStore
-from .qml.icons import icons_rc  # noqa: F401  registers qrc resources on import
+from rapid.backend import Aria2Downloader, ClipboardService, Database, DownloadService, DownloadStore
+from rapid.qml.icons import icons_rc  # noqa: F401  registers qrc resources on import
 
 BASE_DIR = Path(__file__).resolve().parent
-DOWNLOAD_DIR = Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DownloadLocation))
-PLUGIN_DIRS = [
-    BASE_DIR / "plugins",
-    Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)) / "plugins",
-]
 
-def downloader_service(engine: QQmlApplicationEngine) -> DownloadService:
+def downloader_service(engine: QQmlApplicationEngine, settings: Settings) -> DownloadService:
     store = DownloadStore(Database())
-    downloader = Aria2Downloader(downloadDir=DOWNLOAD_DIR)
-    service = DownloadService(
-        DOWNLOAD_DIR,
-        store,
-        downloader,
-        downloader,
-        PLUGIN_DIRS,
-    )
+    downloader = Aria2Downloader(settings=settings)
+    service = DownloadService(settings, store, downloader, downloader)
     engine.rootContext().setContextProperty("DownloadService", service)
     return service
 
@@ -37,6 +27,7 @@ def clipboard_service(context: QQmlContext) -> ClipboardService:
 def main() -> int:
     QCoreApplication.setApplicationName("rapid")
     app = QApplication(sys.argv)
+    settings = Settings.default(BASE_DIR)
 
     signal.signal(signal.SIGINT, lambda *_: app.quit())
     signal.signal(signal.SIGTERM, lambda *_: app.quit())
@@ -47,7 +38,7 @@ def main() -> int:
     signal_pump.start(200)
 
     engine = QQmlApplicationEngine()
-    downloader = downloader_service(engine)
+    downloader = downloader_service(engine, settings)
 
     dialogContext = QQmlContext(engine.rootContext(), engine)
     dialogComponent = QQmlComponent(
@@ -60,7 +51,7 @@ def main() -> int:
         return 1
 
     clipboard.setParent(downloadDialog)
-    downloadDialog.setProperty("defaultDir", str(DOWNLOAD_DIR))
+    downloadDialog.setProperty("defaultDir", str(settings.downloadDir))
     engine.rootContext().setContextProperty("DownloadDialog", downloadDialog)
 
     engine.load(QUrl.fromLocalFile(str(BASE_DIR / "qml" / "Main.qml")))
@@ -69,7 +60,7 @@ def main() -> int:
 
     downloader.start()
     exit_code = app.exec()
-    downloader.stop()
+    downloader.close()
 
     del engine  # tear down QML before app to avoid shutdown warnings
     return exit_code

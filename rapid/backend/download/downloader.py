@@ -33,15 +33,15 @@ class Downloader(ABC):
         pass
 
     @abstractmethod
-    def pause(self, id: str) -> None:
+    def pause(self, id: str) -> Download:
         pass
 
     @abstractmethod
-    def resume(self, id: str) -> None:
+    def resume(self, id: str) -> Download:
         pass
 
     @abstractmethod
-    def remove(self, id: str) -> None:
+    def remove(self, id: str) -> Download:
         pass
 
     @abstractmethod
@@ -55,6 +55,11 @@ class Downloader(ABC):
     @abstractmethod
     def listen(self, id: str, onNotify: NotifyCallback, onError: ErrorCallback) -> None:
         """Start listening for status changes for a download."""
+        pass
+
+    @abstractmethod
+    def unlisten(self, id: str) -> None:
+        """Stop listening for status changes for a download."""
         pass
 
     @abstractmethod

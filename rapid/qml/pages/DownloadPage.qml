@@ -139,9 +139,9 @@ Layout {
                     onRemoveRequested: function (gid) {
                         if (list.expandedGid === gid) {
                             list.expandedGid = "";
-                            DownloadService.purge(gid);
+                            DownloadService.delete(gid);
                         } else {
-                            DownloadService.purge(gid);
+                            DownloadService.delete(gid);
                         }
                     }
                     onContextMenuRequested: function (data) {

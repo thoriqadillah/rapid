@@ -1,5 +1,7 @@
 from __future__ import annotations
+import pytest
 
+from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import QCoreApplication
@@ -14,8 +16,19 @@ from rapid.backend.download.downloader import (
     Resolver,
 )
 from rapid.backend.download.models import Download, ResolvedUrl
+from rapid.backend.setting.models import Settings
 
 SAMPLE = Path(__file__).resolve().parent.parent / "rapid" / "plugins"
+
+
+@pytest.fixture
+def settings(tmp_path: Path) -> Settings:
+    return Settings(
+        dataDir=tmp_path / "rapid" / "data",
+        downloadDir=tmp_path / "rapid" / "downloads",
+        pluginDirs=[SAMPLE],
+        baseDir=tmp_path,
+    )
 
 
 class FakeDownloader(Downloader, Resolver):
@@ -50,15 +63,26 @@ class FakeDownloader(Downloader, Resolver):
         self.added.append(uri.url)
         return download
 
-    def pause(self, id: str) -> None:
-        pass
+    def pause(self, id: str) -> Download:
+        d = self._statuses[id]
+        d = replace(d, status="paused")
+        self._statuses[id] = d
+        return d
 
-    def resume(self, id: str) -> None:
-        pass
+    def resume(self, id: str) -> Download:
+        d = self._statuses[id]
+        d = replace(d, status="active")
+        self._statuses[id] = d
+        return d
 
-    def remove(self, id: str) -> None:
+    def remove(self, id: str) -> Download:
         self.removed.append(id)
-        self._listeners.pop(id, None)
+        d = self._statuses.get(id)
+        if d is not None:
+            d = replace(d, status="removed")
+            self._statuses[id] = d
+        assert d is not None
+        return d
 
     def purge(self, id: str) -> None:
         self.purged.append(id)
@@ -70,6 +94,9 @@ class FakeDownloader(Downloader, Resolver):
     def listen(self, id: str, onNotify: NotifyCallback, onError: ErrorCallback) -> None:
         self._listeners[id] = (onNotify, onError)
 
+    def unlisten(self, id: str) -> None:
+        self._listeners.pop(id, None)
+
     def refresh(self, id: str | None = None) -> None:
         for gid, (onNotify, _) in self._listeners.items():
             if id is not None and gid != id:
@@ -77,15 +104,14 @@ class FakeDownloader(Downloader, Resolver):
             onNotify(self._statuses[gid])
 
 
-def _service(tmp_path: Path) -> tuple[DownloadService, FakeDownloader, DownloadStore]:
+def _service(settings: Settings) -> tuple[DownloadService, FakeDownloader, DownloadStore]:
     app = QGuiApplication.instance()
     if app is None:
         QGuiApplication([])
     fake = FakeDownloader()
-    store = DownloadStore(Database(path=tmp_path / "database.db"))
+    store = DownloadStore(Database(path=settings.dataDir / "database.db"))
     service = DownloadService(
-        downloadDir=tmp_path,
-        pluginDirs=[SAMPLE],
+        settings=settings,
         store=store,
         downloader=fake,
         resolver=fake,
@@ -108,16 +134,16 @@ def _await_resolve(service: DownloadService, url: str) -> tuple[list, dict]:
     return done["uris"], done["errors"]
 
 
-def test_start_stops_downloader(tmp_path: Path) -> None:
-    service, fake, _ = _service(tmp_path)
+def test_start_stops_downloader(settings: Settings) -> None:
+    service, fake, _ = _service(settings)
     service.start()
     assert fake.started
-    service.stop()
+    service.close()
     assert fake.stopped
 
 
-def test_add_url_downloads_and_persists(tmp_path: Path) -> None:
-    service, fake, store = _service(tmp_path)
+def test_add_url_downloads_and_persists(settings: Settings) -> None:
+    service, fake, store = _service(settings)
 
     added: list[str] = []
     service.downloadAdded.connect(added.append)
@@ -135,8 +161,8 @@ def test_add_url_downloads_and_persists(tmp_path: Path) -> None:
     )
 
 
-def test_model_exposes_downloads(tmp_path: Path) -> None:
-    service, fake, _ = _service(tmp_path)
+def test_model_exposes_downloads(settings: Settings) -> None:
+    service, fake, _ = _service(settings)
 
     service.download(_await_resolve(service, "http://example.com/a.bin")[0])
     service.download(_await_resolve(service, "http://example.com/b.bin")[0])
@@ -145,19 +171,19 @@ def test_model_exposes_downloads(tmp_path: Path) -> None:
         return {bytes(v).decode("utf-8"): k for k, v in service.roleNames().items()}[name]
 
     assert service.rowCount() == 2
-    assert service.data(service.index(0), role("gid")) == "g1"
+    assert service.data(service.index(0), role("gid")) == "g2"
     assert service.data(service.index(0), role("status")) == "active"
     assert service.data(service.index(0), role("totalLength")) == 100
-    assert service.data(service.index(1), role("gid")) == "g2"
+    assert service.data(service.index(1), role("gid")) == "g1"
     assert service.data(service.index(2), role("gid")) is None
 
-    service.remove("g1")
+    service.stop("g2")
     assert service.rowCount() == 1
-    assert service.data(service.index(0), role("gid")) == "g2"
+    assert service.data(service.index(0), role("gid")) == "g1"
 
 
-def test_poll_propagates_status_and_speed_samples(tmp_path: Path) -> None:
-    service, fake, store = _service(tmp_path)
+def test_poll_propagates_status_and_speed_samples(settings: Settings) -> None:
+    service, fake, store = _service(settings)
     service.start()
     service.download(_await_resolve(service, "http://example.com/a.bin")[0])
 
@@ -182,11 +208,11 @@ def test_poll_propagates_status_and_speed_samples(tmp_path: Path) -> None:
     roles = {bytes(v).decode("utf-8"): k for k, v in service.roleNames().items()}
     assert service.data(service.index(0), roles["downloadSpeed"]) == 512
 
-    service.stop()
+    service.close()
 
 
-def test_completion_keeps_last_speed(tmp_path: Path) -> None:
-    service, fake, store = _service(tmp_path)
+def test_completion_keeps_last_speed(settings: Settings) -> None:
+    service, fake, store = _service(settings)
     service.start()
     service.download(_await_resolve(service, "http://example.com/a.bin")[0])
 
@@ -211,11 +237,11 @@ def test_completion_keeps_last_speed(tmp_path: Path) -> None:
     assert download is not None
     assert download.downloadSpeed == 512
 
-    service.stop()
+    service.close()
 
 
-def test_pause_freezes_speed(tmp_path: Path) -> None:
-    service, fake, store = _service(tmp_path)
+def test_pause_freezes_speed(settings: Settings) -> None:
+    service, fake, store = _service(settings)
     service.start()
     service.download(_await_resolve(service, "http://example.com/a.bin")[0])
 
@@ -234,23 +260,24 @@ def test_pause_freezes_speed(tmp_path: Path) -> None:
 
     roles = {bytes(v).decode("utf-8"): k for k, v in service.roleNames().items()}
     assert service.data(service.index(0), roles["downloadSpeed"]) == 512
-    assert store.get("g1").downloadSpeed == 512
+    d = store.get("g1")
+    assert d is not None
+    assert d.downloadSpeed == 512
 
-    service.stop()
+    service.close()
 
 
-def test_start_relistens_restored_downloads(tmp_path: Path) -> None:
+def test_start_relistens_restored_downloads(settings: Settings) -> None:
     app = QGuiApplication.instance()
     if app is None:
         QGuiApplication([])
     fake = FakeDownloader()
-    store = DownloadStore(Database(path=tmp_path / "relisten.db"))
+    store = DownloadStore(Database(path=settings.dataDir / "relisten.db"))
     store.upsert(Download(gid="g1", status="active", totalLength=100))
     store.upsert(Download(gid="g2", status="complete", totalLength=100))
     fake._statuses["g1"] = Download(gid="g1", status="active", totalLength=100)
     service = DownloadService(
-        downloadDir=tmp_path,
-        pluginDirs=[SAMPLE],
+        settings,
         store=store,
         downloader=fake,
         resolver=fake,
@@ -261,19 +288,18 @@ def test_start_relistens_restored_downloads(tmp_path: Path) -> None:
 
     assert "g1" in fake._listeners  # still live in the daemon -> re-listened
     assert "g2" not in fake._listeners  # terminal -> skipped
-    service.stop()
+    service.close()
 
 
-def test_start_skips_restored_downloads_missing_from_daemon(tmp_path: Path) -> None:
+def test_start_skips_restored_downloads_missing_from_daemon(settings: Settings) -> None:
     app = QGuiApplication.instance()
     if app is None:
         QGuiApplication([])
     fake = FakeDownloader()
-    store = DownloadStore(Database(path=tmp_path / "relisten2.db"))
+    store = DownloadStore(Database(path=settings.dataDir / "relisten2.db"))
     store.upsert(Download(gid="g1", status="active", totalLength=100))
     service = DownloadService(
-        downloadDir=tmp_path,
-        pluginDirs=[SAMPLE],
+        settings,
         store=store,
         downloader=fake,
         resolver=fake,
@@ -282,33 +308,33 @@ def test_start_skips_restored_downloads_missing_from_daemon(tmp_path: Path) -> N
     service.start()
 
     assert "g1" not in fake._listeners  # getStatus raised -> not re-listened
-    service.stop()
+    service.close()
 
 
-def test_remove_stops_but_keeps_in_store(tmp_path: Path) -> None:
-    service, fake, store = _service(tmp_path)
+def test_remove_stops_but_keeps_in_store(settings: Settings) -> None:
+    service, fake, store = _service(settings)
     service.download(_await_resolve(service, "http://example.com/a.bin")[0])
 
     removed: list[str] = []
     service.downloadRemoved.connect(removed.append)
 
-    service.remove("g1")
+    service.stop("g1")
 
     assert fake.removed == ["g1"]
     assert "g1" in store.all()
     assert removed == []
 
 
-def test_purge_deletes_from_store(tmp_path: Path) -> None:
-    service, fake, store = _service(tmp_path)
+def test_purge_deletes_from_store(settings: Settings) -> None:
+    service, fake, store = _service(settings)
     service.download(_await_resolve(service, "http://example.com/a.bin")[0])
-    service.purge("g1")
+    service.delete("g1")
     assert fake.purged == ["g1"]
     assert store.all() == {}
 
 
-def test_resolve_returns_uris_and_errors_tuple(tmp_path: Path) -> None:
-    service, _, _ = _service(tmp_path)
+def test_resolve_returns_uris_and_errors_tuple(settings: Settings) -> None:
+    service, _, _ = _service(settings)
 
     uris, errors = _await_resolve(service, "http://example.com/a.bin")
     assert errors == {}
@@ -319,9 +345,9 @@ def test_resolve_returns_uris_and_errors_tuple(tmp_path: Path) -> None:
     assert errors == {"url": "URL is required"}
 
 
-def test_format_size(tmp_path: Path) -> None:
-    service, _, _ = _service(tmp_path)
-    assert service.formatSize(0) == ""
+def test_format_size(settings: Settings) -> None:
+    service, _, _ = _service(settings)
+    assert service.formatSize(0) == "—"
     assert service.formatSize(512) == "512 B"
     assert service.formatSize(1536) == "1.5 KB"
     assert service.formatSize(1024 * 1024) == "1.0 MB"

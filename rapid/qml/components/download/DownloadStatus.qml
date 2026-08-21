@@ -51,13 +51,14 @@ Rectangle {
 
     Rectangle {
         id: pill
+        visible: root.showPill
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
         width: Math.max(label.implicitWidth + Theme.spacingMd * 2, root.minimumWidth)
         implicitHeight: label.implicitHeight + Theme.spacingXs * 2
         radius: Theme.radiusPill
         color: "transparent"
-        border.width: root.showPill ? 1 : 0
+        border.width: 1
         border.color: root.statusColor
 
         Text {
@@ -67,5 +68,14 @@ Rectangle {
             color: root.statusColor
             font.pixelSize: Theme.textSizeSm
         }
+    }
+
+    Text {
+        visible: !root.showPill
+        text: root.displayText
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+        font.pixelSize: Theme.textSize
+        color: root.statusColor
     }
 }

@@ -27,12 +27,11 @@ from PySide6.QtWidgets import QFileDialog
 
 from ..database.database import Database
 from ..plugin import PluginManager
+from ..setting.models import Settings
 from .aria2_downloader import Aria2Downloader
 from .downloader import Downloader, Resolver
 from .models import Download, ResolvedUrl
 from .store import DownloadStore
-
-POLL_INTERVAL_MS = 1000
 
 _ROLE_BY_NAME: dict[str, int] = {
     field.name: int(Qt.ItemDataRole.UserRole) + i + 1
@@ -66,15 +65,14 @@ class DownloadService(QAbstractListModel):
 
     def __init__(
         self,
-        downloadDir: Path,
+        settings: Settings,
         store: DownloadStore,
         downloader: Downloader,
         resolver: Resolver,
-        pluginDirs: list[Path] | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
-        self._downloadDir = downloadDir
+        self._settings = settings
         self._store = store
         self._downloader = downloader
         self._resolver = resolver
@@ -82,14 +80,14 @@ class DownloadService(QAbstractListModel):
         self._downloads: list[Download] = list(self._store.all().values())
         self._notified.connect(self._onNotify)
         self._timer = QTimer(self)
-        self._timer.setInterval(POLL_INTERVAL_MS)
+        self._timer.setInterval(settings.pollIntervalMs)
         self._timer.timeout.connect(self._poll)
-        self._pluginManager = PluginManager(pluginDirs or [], self)
+        self._pluginManager = PluginManager(settings.pluginDirs, self)
 
     def start(self) -> None:
         self._downloader.start()
         for download in self._downloads:
-            if download.status in ("complete", "error", "removed"):
+            if download.status != "active":
                 continue
             # Restored from the DB on a fresh app run; resume live updates
             # only for downloads the daemon still knows about.
@@ -100,7 +98,7 @@ class DownloadService(QAbstractListModel):
             self._downloader.listen(download.gid, self._notified.emit, self._onError)
         self._timer.start()
 
-    def stop(self) -> None:
+    def close(self) -> None:
         self._timer.stop()
         self._downloader.stop()
 
@@ -186,25 +184,33 @@ class DownloadService(QAbstractListModel):
             return result.stdout.decode().strip() if result.returncode == 0 else ""
 
         return QFileDialog.getExistingDirectory(
-            None, "Select destination", start_dir or str(self._downloadDir)
+            None, "Select destination", start_dir or str(self._settings.downloadDir)
         )
 
     @Slot(str)
     def pause(self, gid: str) -> None:
-        self._downloader.pause(gid)
+        d = self._downloader.pause(gid)
+        self._downloader.unlisten(gid)
+        self._onNotify(d)
 
     @Slot(str)
     def resume(self, gid: str) -> None:
-        self._downloader.resume(gid)
+        d = self._downloader.resume(gid)
+        self._onNotify(d)
+        self._downloader.listen(gid, self._onNotify, self._onError)
 
     @Slot(str)
-    def remove(self, gid: str) -> None:
-        """Stop the download; it stays in the list until purged."""
-        self._downloader.remove(gid)
+    def stop(self, gid: str) -> None:
+        """Stop the download and drop it from the list; it stays in the store until purged."""
+        d = self._downloader.remove(gid)
+        self._downloader.unlisten(gid)
+        self._onNotify(d)
+        self._remove(gid)
 
     @Slot(str)
-    def purge(self, gid: str) -> None:
+    def delete(self, gid: str) -> None:
         self._downloader.purge(gid)
+        self._downloader.unlisten(gid)
         self._store.remove(gid)
         self._remove(gid)
         self.downloadRemoved.emit(gid)
@@ -243,8 +249,14 @@ class DownloadService(QAbstractListModel):
         self._store.upsert(download)
         self._downloader.listen(download.gid, self._notified.emit, self._onError)
         self._insert(download)
+        self._onNotify(download)
         self.downloadAdded.emit(download.gid)
         return download.gid
+
+    def _replace(self, row: int, download: Download) -> None:
+        self._downloads[row] = download
+        index = self.index(row)
+        self.dataChanged.emit(index, index, list(_ROLE_NAMES))
 
     def _insert(self, download: Download) -> None:
         self.beginInsertRows(QModelIndex(), 0, 0)
@@ -262,18 +274,23 @@ class DownloadService(QAbstractListModel):
     def _onNotify(self, download: Download) -> None:
         row = self._row_of(download.gid)
         if row is not None:
-            if download.resolved is None:
-                download = replace(download, resolved=self._downloads[row].resolved)
-            if download.status != "active" and not download.downloadSpeed:
-                download = replace(download, downloadSpeed=self._downloads[row].downloadSpeed)
+            download = replace(
+                download,
+                resolved=download.resolved or self._downloads[row].resolved,
+                downloadSpeed=(
+                    self._downloads[row].downloadSpeed
+                    if download.status != "active"
+                    else download.downloadSpeed or self._downloads[row].downloadSpeed
+                ),
+                completedLength=download.completedLength or self._downloads[row].completedLength,
+                totalLength=download.totalLength or self._downloads[row].totalLength,
+            )
 
             self._store.upsert(download)
-            if download.status == "active":
+            if download.status == "active" and download.downloadSpeed:
                 self._store.addSpeedSample(download.gid, int(time.time() * 1000), download.downloadSpeed or 0)
 
-            self._downloads[row] = download
-            index = self.index(row)
-            self.dataChanged.emit(index, index, list(_ROLE_NAMES))
+            self._replace(row, download)
         self.downloadChanged.emit(download.gid)
 
     def _onError(self, message: str) -> None:

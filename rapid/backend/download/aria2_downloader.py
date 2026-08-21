@@ -25,6 +25,7 @@ from .downloader import (
     NotifyCallback,
 )
 from .models import Download, ResolvedUrl
+from ..setting.models import Settings
 
 LOG = logging.getLogger(__name__)
 
@@ -144,17 +145,15 @@ class Aria2Downloader(Downloader, Resolver):
     def __init__(
         self,
         *,
-        host: str = "127.0.0.1",
-        port: int = 6800,
-        token: str = "",
-        downloadDir: Path | None = None,
+        settings: Settings,
         manageDaemon: bool = True,
         onGlobalNotify: GlobalNotifyCallback | None = None,
     ) -> None:
-        self._host = host
-        self._port = port
-        self._token = token
-        self._downloadDir = downloadDir
+        self._settings = settings
+        self._host = settings.aria2Host
+        self._port = settings.aria2Port
+        self._token = settings.aria2Token
+        self._downloadDir = settings.downloadDir
         self._manageDaemon = manageDaemon
         self._running = False
 
@@ -168,9 +167,9 @@ class Aria2Downloader(Downloader, Resolver):
         self._ownsDaemon = False
 
         self._rpc = Aria2Rpc(
-            host=host,
-            port=port,
-            token=token,
+            host=settings.aria2Host,
+            port=settings.aria2Port,
+            token=settings.aria2Token,
         )
 
 
@@ -231,7 +230,9 @@ class Aria2Downloader(Downloader, Resolver):
             with urlopen(Request(url, method="HEAD", headers=options.get("headers", {})), timeout=5) as resp:
                 return resp.headers
         except (HTTPError, URLError, OSError):
-            raise
+            # The HEAD probe is best-effort metadata; a failure just means
+            # we fall back to aria2's file info and MIME guessing.
+            return None
 
     @staticmethod
     def _getCategory(mimeType: str | None) -> str:
@@ -298,13 +299,13 @@ class Aria2Downloader(Downloader, Resolver):
         args = [
             "--enable-rpc",
             f"--rpc-listen-port={self._port}",
+            f"--dir={self._downloadDir}",
+            f"--save-session={self._settings.aria2SessionFile}",
+            f"--input-file={self._settings.aria2SessionFile}",
         ]
 
         if self._token:
             args.append(f"--rpc-secret={self._token}")
-
-        if self._downloadDir is not None:
-            args.append(f"--dir={self._downloadDir}")
 
         import subprocess
 
@@ -473,10 +474,7 @@ class Aria2Downloader(Downloader, Resolver):
             ],
         )
 
-        try:
-            headers = self._probeHeader(uri, options)
-        except:
-            raise
+        headers = self._probeHeader(uri, options)
 
         try:
             fields = [
@@ -536,7 +534,7 @@ class Aria2Downloader(Downloader, Resolver):
 
             if mimeType and filename:
                 suffix = Path(filename).suffix
-                if not (suffix and suffix[1:].isalpha()):
+                if not (suffix and suffix[1:].isalnum()):
                     filename += mimetypes.guess_extension(mimeType) or ""
 
             return [ResolvedUrl(
@@ -618,25 +616,28 @@ class Aria2Downloader(Downloader, Resolver):
 
         return self.getStatus(gid)
 
-    def pause(self, id: str) -> None:
+    def pause(self, id: str) -> Download:
         self._rpc.call(
             "aria2.pause",
             [id],
         )
 
-    def resume(self, id: str) -> None:
+        return self.getStatus(id)
+
+    def resume(self, id: str) -> Download:
         self._rpc.call(
             "aria2.unpause",
             [id],
         )
 
-    def remove(self, id: str) -> None:
+        return self.getStatus(id)
+
+    def remove(self, id: str) -> Download:
         self._removeAny(id, ("aria2.remove", "aria2.removeDownloadResult"))
-        self._unlisten(id)
+        return self.getStatus(id)
 
     def purge(self, id: str) -> None:
         self._removeAny(id, ("aria2.removeDownloadResult", "aria2.remove"))
-        self._unlisten(id)
 
     def _removeAny(self, id: str, methods: tuple[str, ...]) -> None:
         # The gid may be active, finished, or already gone from aria2
@@ -652,7 +653,7 @@ class Aria2Downloader(Downloader, Resolver):
         with self._lock:
             self._listening.add((id, onNotify, onError))
 
-    def _unlisten(self, id: str) -> None:
+    def unlisten(self, id: str) -> None:
         with self._lock:
             self._listening = {entry for entry in self._listening if entry[0] != id}
 
@@ -662,11 +663,11 @@ class Aria2Downloader(Downloader, Resolver):
         except Aria2Error as exc:
             LOG.error(str(exc))
             onError(str(exc))
-            self._unlisten(gid)
+            self.unlisten(gid)
             return
         onNotify(status)
         if status.status in ("error", "removed", "complete"):
-            self._unlisten(gid)
+            self.unlisten(gid)
 
     def refresh(self, id: str | None = None) -> None:
         if not self._running:

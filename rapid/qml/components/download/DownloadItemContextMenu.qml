@@ -26,17 +26,12 @@ Controls.Menu {
     Controls.MenuItem {
         text: qsTr("Stop")
         enabled: root.status === "active" || root.status === "waiting"
-        onTriggered: DownloadService.remove(root.gid)
+        onTriggered: DownloadService.stop(root.gid)
     }
     Controls.MenuItem {
         text: qsTr("Delete")
         enabled: root.status === "complete" || root.status === "error"
-        onTriggered: DownloadService.purge(root.gid)
-    }
-    Controls.MenuItem {
-        text: qsTr("Retry")
-        enabled: root.status === "error" || root.status === "complete"
-        onTriggered: DownloadService.download([root.resolved])
+        onTriggered: DownloadService.delete(root.gid)
     }
 
     Controls.MenuSeparator {}

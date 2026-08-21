@@ -1,4 +1,5 @@
 from __future__ import annotations
+from dataclasses import replace
 
 import functools
 import json
@@ -19,6 +20,17 @@ from rapid.backend.download import aria2_downloader
 from rapid.backend.download.aria2_downloader import Aria2Downloader, Aria2Error, Aria2Rpc
 from rapid.backend.download.downloader import ErrorCallback, GlobalNotifyCallback, NotifyCallback
 from rapid.backend.download.models import Download, ResolvedUrl
+from rapid.backend.setting.models import Settings
+
+
+@pytest.fixture
+def settings(tmp_path: Path) -> Settings:
+    return Settings(
+        dataDir=tmp_path / "rapid" / "data",
+        downloadDir=tmp_path / "rapid" / "downloads",
+        pluginDirs=[],
+        baseDir=tmp_path,
+    )
 
 
 class _Resp:
@@ -49,6 +61,7 @@ class FakeRpc:
 
 def _downloader(
     monkeypatch: pytest.MonkeyPatch,
+    settings: Settings,
     rpc: FakeRpc | None = None,
     *,
     onGlobalNotify: GlobalNotifyCallback | None = None,
@@ -56,6 +69,7 @@ def _downloader(
     fake = rpc or FakeRpc()
     monkeypatch.setattr(aria2_downloader, "Aria2Rpc", lambda **kwargs: fake)
     return Aria2Downloader(
+        settings=settings,
         manageDaemon=False,
         onGlobalNotify=onGlobalNotify,
     )
@@ -67,7 +81,7 @@ def _call_methods(dl: Aria2Downloader) -> list[str]:
 
 # --- resolver ------------------------------------------------------------
 
-def test_resolve_returns_resolved_url_and_cleans_up(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resolve_returns_resolved_url_and_cleans_up(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
     status = {
         "gid": "gid-1",
         "status": "complete",
@@ -81,7 +95,7 @@ def test_resolve_returns_resolved_url_and_cleans_up(monkeypatch: pytest.MonkeyPa
             }
         ],
     }
-    dl = _downloader(monkeypatch, FakeRpc("gid-1", status))
+    dl = _downloader(monkeypatch, settings, FakeRpc("gid-1", status))
 
     items = dl.resolve("http://start")
 
@@ -101,8 +115,8 @@ def test_resolve_returns_resolved_url_and_cleans_up(monkeypatch: pytest.MonkeyPa
     ]
 
 
-def test_resolve_falls_back_to_uri_when_no_file_info(monkeypatch: pytest.MonkeyPatch) -> None:
-    dl = _downloader(monkeypatch, FakeRpc("gid-1", {"gid": "gid-1", "status": "complete", "files": []}))
+def test_resolve_falls_back_to_uri_when_no_file_info(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
+    dl = _downloader(monkeypatch, settings, FakeRpc("gid-1", {"gid": "gid-1", "status": "complete", "files": []}))
 
     items = dl.resolve("http://x/video.mp4")
 
@@ -112,7 +126,7 @@ def test_resolve_falls_back_to_uri_when_no_file_info(monkeypatch: pytest.MonkeyP
     assert items[0].category == "video"
 
 
-def test_on_resolved_halts_active_download(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_on_resolved_halts_active_download(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
     class Rpc(FakeRpc):
         def call(self, method: str, params: list[object]) -> object:
             self.calls.append((method, params))
@@ -121,14 +135,14 @@ def test_on_resolved_halts_active_download(monkeypatch: pytest.MonkeyPatch) -> N
             return {}
 
     rpc = Rpc()
-    _downloader(monkeypatch, rpc)._onResolved("gid-1")
+    _downloader(monkeypatch, settings, rpc)._onResolved("gid-1")
 
     assert rpc.calls == [("aria2.remove", ["gid-1"])] + [
         ("aria2.removeDownloadResult", ["gid-1"])] * 5
 
 
-def test_resolve_dry_run_option_is_forced(monkeypatch: pytest.MonkeyPatch) -> None:
-    dl = _downloader(monkeypatch, FakeRpc("gid-1", {"gid": "gid-1", "status": "complete", "files": []}))
+def test_resolve_dry_run_option_is_forced(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
+    dl = _downloader(monkeypatch, settings, FakeRpc("gid-1", {"gid": "gid-1", "status": "complete", "files": []}))
     dl.resolve("http://x/f.mp4", options={"dry-run": "false"})
     _, params = cast(FakeRpc, dl._rpc).calls[0]
     options = cast(dict[str, object], params[1])
@@ -138,8 +152,8 @@ def test_resolve_dry_run_option_is_forced(monkeypatch: pytest.MonkeyPatch) -> No
 
 # --- download ------------------------------------------------------------
 
-def test_download_returns_status_without_listening(monkeypatch: pytest.MonkeyPatch) -> None:
-    dl = _downloader(monkeypatch, FakeRpc("gid-9", {"gid": "gid-9", "status": "active"}))
+def test_download_returns_status_without_listening(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
+    dl = _downloader(monkeypatch, settings, FakeRpc("gid-9", {"gid": "gid-9", "status": "active"}))
 
     download = dl.download(ResolvedUrl(url="http://x/f.mp4"))
 
@@ -149,8 +163,8 @@ def test_download_returns_status_without_listening(monkeypatch: pytest.MonkeyPat
     assert _call_methods(dl) == ["aria2.addUri", "aria2.tellStatus"]
 
 
-def test_listen_registers_callbacks(monkeypatch: pytest.MonkeyPatch) -> None:
-    dl = _downloader(monkeypatch)
+def test_listen_registers_callbacks(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
+    dl = _downloader(monkeypatch, settings)
     notify: NotifyCallback = lambda s: None
     error: ErrorCallback = lambda m: None
 
@@ -159,15 +173,15 @@ def test_listen_registers_callbacks(monkeypatch: pytest.MonkeyPatch) -> None:
     assert dl._listening == {("g", notify, error)}
 
 
-def test_download_raises_without_gid(monkeypatch: pytest.MonkeyPatch) -> None:
-    dl = _downloader(monkeypatch, FakeRpc(None))
+def test_download_raises_without_gid(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
+    dl = _downloader(monkeypatch, settings, FakeRpc(None))
     with pytest.raises(Aria2Error, match="GID"):
         dl.download(ResolvedUrl(url="http://x/f.mp4"))
 
 
 # --- status --------------------------------------------------------------
 
-def test_get_status_parses_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_status_parses_payload(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
     payload = {
         "gid": "g",
         "status": "complete",
@@ -175,7 +189,7 @@ def test_get_status_parses_payload(monkeypatch: pytest.MonkeyPatch) -> None:
         "completedLength": "100",
         "downloadSpeed": "0",
     }
-    dl = _downloader(monkeypatch, FakeRpc(payload))
+    dl = _downloader(monkeypatch, settings, FakeRpc(payload))
 
     status = dl.getStatus("g")
 
@@ -184,19 +198,20 @@ def test_get_status_parses_payload(monkeypatch: pytest.MonkeyPatch) -> None:
     assert status.progress == 1.0
 
 
-def test_get_status_non_dict_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    dl = _downloader(monkeypatch, FakeRpc([]))
+def test_get_status_non_dict_raises(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
+    dl = _downloader(monkeypatch, settings, FakeRpc([]))
     with pytest.raises(Aria2Error, match="no status"):
         dl.getStatus("g")
 
 
 # --- callbacks -----------------------------------------------------------
 
-def test_refresh_notifies_listeners(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_refresh_notifies_listeners(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
     notified: list[Download] = []
     global_seen: list[dict[str, object]] = []
     dl = _downloader(
         monkeypatch,
+        settings,
         FakeRpc({"gid": "g", "status": "active"}, {"downloadSpeed": 123}),
         onGlobalNotify=global_seen.append,
     )
@@ -209,9 +224,9 @@ def test_refresh_notifies_listeners(monkeypatch: pytest.MonkeyPatch) -> None:
     assert global_seen == [{"downloadSpeed": 123}]
 
 
-def test_refresh_emits_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_refresh_emits_errors(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
     errors: list[str] = []
-    dl = _downloader(monkeypatch, FakeRpc([]))
+    dl = _downloader(monkeypatch, settings, FakeRpc([]))
     dl._running = True
     dl.listen("g", lambda s: None, errors.append)
 
@@ -221,9 +236,9 @@ def test_refresh_emits_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "no status" in errors[0]
 
 
-def test_refresh_keeps_listening_while_active(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_refresh_keeps_listening_while_active(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
     notified: list[Download] = []
-    dl = _downloader(monkeypatch, FakeRpc({"gid": "g", "status": "active"}))
+    dl = _downloader(monkeypatch, settings, FakeRpc({"gid": "g", "status": "active"}))
     dl._running = True
     dl.listen("g", notified.append, lambda m: None)
 
@@ -233,10 +248,11 @@ def test_refresh_keeps_listening_while_active(monkeypatch: pytest.MonkeyPatch) -
     assert dl._listening != set()
 
 
-def test_refresh_unlistens_after_terminal_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_refresh_unlistens_after_terminal_error(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
     notified: list[Download] = []
     dl = _downloader(
         monkeypatch,
+        settings,
         FakeRpc({"gid": "g", "status": "error", "errorMessage": "status=403"}),
     )
     dl._running = True
@@ -249,9 +265,9 @@ def test_refresh_unlistens_after_terminal_error(monkeypatch: pytest.MonkeyPatch)
     assert dl._listening == set()
 
 
-def test_refresh_unlistens_when_status_rpc_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_refresh_unlistens_when_status_rpc_fails(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
     errors: list[str] = []
-    dl = _downloader(monkeypatch, FakeRpc([]))
+    dl = _downloader(monkeypatch, settings, FakeRpc([]))
     dl._running = True
     dl.listen("g", lambda s: None, errors.append)
 
@@ -261,10 +277,11 @@ def test_refresh_unlistens_when_status_rpc_fails(monkeypatch: pytest.MonkeyPatch
     assert dl._listening == set()
 
 
-def test_ws_event_triggers_status_push(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_ws_event_triggers_status_push(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
     notified: list[Download] = []
     dl = _downloader(
         monkeypatch,
+        settings,
         FakeRpc({"gid": "g", "status": "complete"}),
     )
     dl._running = True
@@ -277,8 +294,8 @@ def test_ws_event_triggers_status_push(monkeypatch: pytest.MonkeyPatch) -> None:
     assert [s.gid for s in notified] == ["g"]
 
 
-def test_ws_non_event_message_is_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
-    dl = _downloader(monkeypatch)
+def test_ws_non_event_message_is_ignored(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
+    dl = _downloader(monkeypatch, settings)
     dl._running = True
     dl.listen("g", lambda s: None, lambda m: None)
 
@@ -291,15 +308,15 @@ def test_ws_non_event_message_is_ignored(monkeypatch: pytest.MonkeyPatch) -> Non
 
 # --- control -------------------------------------------------------------
 
-def test_spawn_daemon_adopts_existing_one(monkeypatch: pytest.MonkeyPatch) -> None:
-    dl = _downloader(monkeypatch)
+def test_spawn_daemon_adopts_existing_one(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
+    dl = _downloader(monkeypatch, settings)
     dl._spawnDaemon()
     assert dl._ownsDaemon is False
     assert dl._process is None
     assert _call_methods(dl) == ["aria2.getVersion"]
 
 
-def test_spawn_daemon_owns_spawned_process(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_spawn_daemon_owns_spawned_process(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
     class Rpc(FakeRpc):
         def call(self, method: str, params: list[object]) -> object:
             self.calls.append((method, params))
@@ -316,7 +333,7 @@ def test_spawn_daemon_owns_spawned_process(monkeypatch: pytest.MonkeyPatch) -> N
             return None
 
     monkeypatch.setattr(aria2_downloader.subprocess, "Popen", FakePopen)
-    dl = _downloader(monkeypatch, Rpc())
+    dl = _downloader(monkeypatch, settings, Rpc())
     dl._spawnDaemon()
     assert dl._ownsDaemon is True
     assert isinstance(dl._process, FakePopen)
@@ -324,24 +341,29 @@ def test_spawn_daemon_owns_spawned_process(monkeypatch: pytest.MonkeyPatch) -> N
     assert dl._process is None
 
 
-def test_pause_resume_remove_purge(monkeypatch: pytest.MonkeyPatch) -> None:
-    dl = _downloader(monkeypatch)
+def test_pause_resume_remove_purge(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
+    dl = _downloader(monkeypatch, settings)
     cb = lambda s: None
 
     dl.listen("g", cb, cb)
     dl.pause("g")
     dl.resume("g")
     dl.remove("g")
+    dl.unlisten("g")
     assert dl._listening == set()
 
     dl.listen("g", cb, cb)
     dl.purge("g")
+    dl.unlisten("g")
     assert dl._listening == set()
 
     assert _call_methods(dl) == [
         "aria2.pause",
+        "aria2.tellStatus",
         "aria2.unpause",
+        "aria2.tellStatus",
         "aria2.remove",
+        "aria2.tellStatus",
         "aria2.removeDownloadResult",
     ]
 
@@ -385,14 +407,14 @@ def _serve_file(tmp_path: Path, name: str, payload: bytes) -> tuple[ThreadingHTT
 
 def _spawn(
     tmp_path: Path,
+    settings: Settings,
     *,
     onGlobalNotify: GlobalNotifyCallback | None = None,
 ) -> Aria2Downloader:
     download_dir = tmp_path / "dl"
     download_dir.mkdir(parents=True, exist_ok=True)
     dl = Aria2Downloader(
-        port=_free_port(),
-        downloadDir=download_dir,
+        settings=replace(settings, downloadDir=download_dir, aria2Port=_free_port()),
         manageDaemon=True,
         onGlobalNotify=onGlobalNotify,
     )
@@ -403,7 +425,11 @@ def _spawn(
 
 @pytest.fixture(scope="module")
 def daemon(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Aria2Downloader]:
-    dl = _spawn(tmp_path_factory.mktemp("daemon"))
+    base = tmp_path_factory.mktemp("daemon")
+    dl = _spawn(
+        base,
+        Settings(dataDir=base / "data", downloadDir=base / "dl", pluginDirs=[], baseDir=base),
+    )
     yield dl
     dl.stop()
 
@@ -446,10 +472,10 @@ def test_download_completes_and_file_exists(
 
 
 @pytest.mark.skipif(shutil.which("aria2c") is None, reason="aria2c not installed")
-def test_refresh_pushes_status_to_callback(tmp_path: Path) -> None:
+def test_refresh_pushes_status_to_callback(tmp_path: Path, settings: Settings) -> None:
     server, port = _serve_file(tmp_path, "note.bin", b"z" * (256 * 1024))
     statuses: list[str | None] = []
-    daemon = _spawn(tmp_path)
+    daemon = _spawn(tmp_path, settings)
     try:
         download = daemon.download(ResolvedUrl(url=f"http://127.0.0.1:{port}/note.bin"))
         gid = download.gid
@@ -468,11 +494,13 @@ def test_refresh_pushes_status_to_callback(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(shutil.which("aria2c") is None, reason="aria2c not installed")
-def test_websocket_pushes_status_without_polling(tmp_path: Path) -> None:
+def test_websocket_pushes_status_without_polling(
+    tmp_path: Path, settings: Settings
+) -> None:
     server = _ThrottledServer(b"z" * (1024 * 1024), bytes_per_second=128 * 1024)
     Thread(target=server.serve_forever, daemon=True).start()
     statuses: list[str | None] = []
-    daemon = _spawn(tmp_path)
+    daemon = _spawn(tmp_path, settings)
     try:
         download = daemon.download(
             ResolvedUrl(url=f"http://127.0.0.1:{server.port}/slow.bin")
