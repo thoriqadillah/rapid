@@ -1,10 +1,10 @@
 from __future__ import annotations
-from pprint import pprint
+from turtle import down
 import shutil
 import subprocess
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast, Callable, Union
 from dataclasses import fields as _fields, replace
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
@@ -18,12 +18,13 @@ from PySide6.QtCore import (
     QModelIndex,
     QObject,
     QPersistentModelIndex,
+    Property,
+    QSortFilterProxyModel,
     QTimer,
     Qt,
     Signal,
     Slot,
 )
-from PySide6.QtWidgets import QFileDialog
 
 from ..database.database import Database
 from ..plugin import PluginManager
@@ -60,6 +61,7 @@ class DownloadService(QAbstractListModel):
     downloadRemoved = Signal(str)
     errorOccurred = Signal(str)
     resolved = Signal(list, dict)  # resolvedUris, errors
+    countsChanged = Signal()  # sidebar badges
     _notified = Signal(object)  # internal: Download, always delivered on the main thread
 
 
@@ -78,7 +80,7 @@ class DownloadService(QAbstractListModel):
         self._resolver = resolver
         self._pool = ThreadPoolExecutor(max_workers=2)
         self._downloads: list[Download] = list(self._store.all().values())
-        self._notified.connect(self._onNotify)
+        self._notified.connect(self._notify)
         self._timer = QTimer(self)
         self._timer.setInterval(settings.pollIntervalMs)
         self._timer.timeout.connect(self._poll)
@@ -95,7 +97,7 @@ class DownloadService(QAbstractListModel):
                 self._downloader.getStatus(download.gid)
             except Exception:
                 continue
-            self._downloader.listen(download.gid, self._notified.emit, self._onError)
+            self._downloader.listen(download.gid, self._notified.emit, self._error)
         self._timer.start()
 
     def close(self) -> None:
@@ -127,6 +129,15 @@ class DownloadService(QAbstractListModel):
         return {role: QByteArray(name.encode("utf-8")) for name, role in _ROLE_BY_NAME.items()}
 
     # --- QML-facing slots --------------------------------------------------
+
+    @Property(dict, notify=cast(Callable[[], None], countsChanged))
+    def counts(self) -> dict[str, int]:
+        """Live download counts by category, e.g. {"all": 12, "video": 4}."""
+        counts: dict[str, int] = {"all": len(self._downloads)}
+        for download in self._downloads:
+            if download.category:
+                counts[download.category] = counts.get(download.category, 0) + 1
+        return counts
 
     @Slot(str)
     def resolve(self, url: str) -> None:
@@ -183,6 +194,7 @@ class DownloadService(QAbstractListModel):
             result = subprocess.run([program, *args], capture_output=True, timeout=60)
             return result.stdout.decode().strip() if result.returncode == 0 else ""
 
+        from PySide6.QtWidgets import QFileDialog
         return QFileDialog.getExistingDirectory(
             None, "Select destination", start_dir or str(self._settings.downloadDir)
         )
@@ -191,21 +203,20 @@ class DownloadService(QAbstractListModel):
     def pause(self, gid: str) -> None:
         d = self._downloader.pause(gid)
         self._downloader.unlisten(gid)
-        self._onNotify(d)
+        self._notify(d)
 
     @Slot(str)
     def resume(self, gid: str) -> None:
         d = self._downloader.resume(gid)
-        self._onNotify(d)
-        self._downloader.listen(gid, self._onNotify, self._onError)
+        self._notify(d)
+        self._downloader.listen(gid, self._notify, self._error)
 
     @Slot(str)
     def stop(self, gid: str) -> None:
         """Stop the download and drop it from the list; it stays in the store until purged."""
         d = self._downloader.remove(gid)
         self._downloader.unlisten(gid)
-        self._onNotify(d)
-        self._remove(gid)
+        self._notify(d)
 
     @Slot(str)
     def delete(self, gid: str) -> None:
@@ -245,11 +256,11 @@ class DownloadService(QAbstractListModel):
 
     def _download(self, resolved: ResolvedUrl) -> str:
         download = self._downloader.download(resolved)
-        download = replace(download, resolved=resolved)
+        download = replace(download, resolved=resolved, category=resolved.category)
         self._store.upsert(download)
-        self._downloader.listen(download.gid, self._notified.emit, self._onError)
+        self._downloader.listen(download.gid, self._notified.emit, self._error)
         self._insert(download)
-        self._onNotify(download)
+        self._notify(download)
         self.downloadAdded.emit(download.gid)
         return download.gid
 
@@ -262,6 +273,7 @@ class DownloadService(QAbstractListModel):
         self.beginInsertRows(QModelIndex(), 0, 0)
         self._downloads.insert(0, download)
         self.endInsertRows()
+        self.countsChanged.emit()
 
     def _remove(self, gid: str) -> None:
         row = self._row_of(gid)
@@ -270,13 +282,16 @@ class DownloadService(QAbstractListModel):
         self.beginRemoveRows(QModelIndex(), row, row)
         del self._downloads[row]
         self.endRemoveRows()
+        self.countsChanged.emit()
 
-    def _onNotify(self, download: Download) -> None:
+    def _notify(self, download: Download) -> None:
         row = self._row_of(download.gid)
         if row is not None:
+            previous = self._downloads[row]
             download = replace(
                 download,
-                resolved=download.resolved or self._downloads[row].resolved,
+                resolved=download.resolved or previous.resolved,
+                category=download.category or previous.category,
                 downloadSpeed=(
                     self._downloads[row].downloadSpeed
                     if download.status != "active"
@@ -291,10 +306,64 @@ class DownloadService(QAbstractListModel):
                 self._store.addSpeedSample(download.gid, int(time.time() * 1000), download.downloadSpeed or 0)
 
             self._replace(row, download)
+            if download.category != previous.category:
+                self.countsChanged.emit()
         self.downloadChanged.emit(download.gid)
 
-    def _onError(self, message: str) -> None:
+    def _error(self, message: str) -> None:
         self.errorOccurred.emit(message)
 
     def _poll(self) -> None:
         self._pool.submit(self._downloader.refresh)
+
+
+class DownloadFilterProxy(QSortFilterProxyModel):
+    """Filters the download list by category; empty category shows everything."""
+
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self._category = ""
+        self._search = ""
+
+    @Slot(str)
+    def setCategory(self, category: str) -> None:
+        if category == self._category:
+            return
+        self._category = category
+        self.invalidateRowsFilter()
+
+    @Slot(str)
+    def setSearch(self, search: str) -> None:
+        search = search.strip().lower()
+        if search == self._search:
+            return
+        self._search = search.lower()
+        self.invalidateRowsFilter()
+
+    def filterAcceptsRow(self, source_row: int, source_parent: Union[QModelIndex, QPersistentModelIndex]) -> bool:
+        model = self.sourceModel()
+        index = model.index(source_row, 0, source_parent)
+
+        if self._category:
+            if model.data(index, _ROLE_BY_NAME["category"]) != self._category:
+                return False
+
+        if self._search:
+            if self._search in (model.data(index, _ROLE_BY_NAME["gid"]) or "").lower():
+                return True
+
+            resolved = model.data(index, _ROLE_BY_NAME["resolved"])
+            if resolved:
+                title = (resolved.get("title") or resolved.get("filename") or "").lower()
+                if self._search in title:
+                    return True
+
+            files = model.data(index, _ROLE_BY_NAME["files"])
+            if files:
+                name = (files[0].get("path") or "").rsplit("/", 1)[-1].lower()
+                if self._search in name:
+                    return True
+
+            return False
+
+        return True

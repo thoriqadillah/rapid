@@ -3,6 +3,7 @@ from .clipboard import ClipboardService
 from .download import (
     Aria2Downloader,
     DownloadService,
+    DownloadFilterProxy,
     DownloadFile,
     Download,
     DownloadStore,
@@ -16,6 +17,7 @@ __all__ = [
     "Aria2Downloader",
     "ClipboardService",
     "DownloadService",
+    "DownloadFilterProxy",
     "DownloadStore",
     "Download",
     "DownloadFile",

@@ -10,6 +10,7 @@ Controls.Button {
         PrimaryVariant,
         SecondaryVariant,
         GhostVariant,
+        WarningVariant,
         DangerVariant
     }
 
@@ -34,6 +35,8 @@ Controls.Button {
             return Theme.colorButtonBase
         case RButton.GhostVariant:
             return 'transparent'
+        case RButton.WarningVariant:
+            return Theme.colorWarning
         case RButton.DangerVariant:
             return Theme.colorDanger
         default:
@@ -49,6 +52,8 @@ Controls.Button {
             return Theme.colorAccent
         case RButton.PrimaryVariant:
             return Theme.colorPrimary
+        case RButton.WarningVariant:
+            return Theme.colorWarning
         default:
             return Theme.colorBorder
         }
@@ -63,6 +68,8 @@ Controls.Button {
         case RButton.GhostVariant:
         case RButton.BaseVariant:
             return Theme.colorButtonBaseHover
+        case RButton.WarningVariant:
+            return Theme.colorWarningHover
         default:
             return Theme.colorPrimaryHover
         }

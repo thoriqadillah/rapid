@@ -41,7 +41,7 @@ Rectangle {
     property real detailHeight: 0
     Behavior on detailHeight {
         NumberAnimation {
-            duration: 250
+            duration: 150
             easing.type: Easing.OutCubic
         }
     }

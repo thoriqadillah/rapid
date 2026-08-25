@@ -1,5 +1,6 @@
 from __future__ import annotations
-from pprint import pprint, pp
+from pprint import pprint
+import re
 import mimetypes
 from urllib.parse import urlparse, unquote
 import subprocess
@@ -228,6 +229,8 @@ class Aria2Downloader(Downloader, Resolver):
     def _probeHeader(url: str, options: dict[str, Any] = {}) -> dict[str, str] | None:
         try:
             with urlopen(Request(url, method="HEAD", headers=options.get("headers", {})), timeout=5) as resp:
+                pprint(resp)
+                pprint(resp.headers)
                 return resp.headers
         except (HTTPError, URLError, OSError):
             # The HEAD probe is best-effort metadata; a failure just means
@@ -235,20 +238,27 @@ class Aria2Downloader(Downloader, Resolver):
             return None
 
     @staticmethod
-    def _getCategory(mimeType: str | None) -> str:
-        if not mimeType:
+    def _getCategory(mimeType: str | None, fileName: str | None) -> str:
+        if fileName:
+            guessMimeType = mimetypes.guess_type(fileName, strict=False)[0]
+
+        if not mimeType or not guessMimeType:
             return "unknown"
 
-        if mimeType.startswith("video/"):
+        if mimeType.startswith("video/") or guessMimeType.startswith("video/"):
             return "video"
 
-        if mimeType.startswith("audio/"):
+        if mimeType.startswith("audio/") or guessMimeType.startswith("audio/"):
             return "audio"
 
-        if mimeType.startswith("image/"):
+        if mimeType.startswith("image/") or guessMimeType.startswith("image/"):
             return "image"
 
-        if mimeType.startswith("text/") or mimeType in {
+        if mimeType.startswith("text/") or guessMimeType.startswith("text/") or (mimeType in {
+            "application/pdf",
+            "application/json",
+            "application/xml",
+        }) or guessMimeType in {
             "application/pdf",
             "application/json",
             "application/xml",
@@ -256,6 +266,12 @@ class Aria2Downloader(Downloader, Resolver):
             return "document"
 
         if mimeType in {
+            "application/zip",
+            "application/x-rar-compressed",
+            "application/x-7z-compressed",
+            "application/gzip",
+            "application/x-tar",
+        } or guessMimeType in {
             "application/zip",
             "application/x-rar-compressed",
             "application/x-7z-compressed",
@@ -456,8 +472,7 @@ class Aria2Downloader(Downloader, Resolver):
         self.refresh(gid if isinstance(gid, str) else None)
 
     def shouldResolve(self, uri: str) -> bool:
-        _ = uri
-        return True
+        return any(re.search(pattern, uri) for pattern in _VALID_SCHEMES)
 
     def resolve(self, uri: str, options: dict[str, Any] = {}) -> list[ResolvedUrl]:
         options = {
@@ -543,7 +558,7 @@ class Aria2Downloader(Downloader, Resolver):
                 filename=filename,
                 mimeType=mimeType,
                 size=size,
-                category=self._getCategory(mimeType),
+                category=self._getCategory(mimeType, filename),
                 headers=options.get("headers", {}),
                 cookies=options.get("cookies", {}),
                 resolverName="Rapid",

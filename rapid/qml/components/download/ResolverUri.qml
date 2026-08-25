@@ -57,6 +57,7 @@ Rectangle {
 
         const data = root.modelData
         data.title = root.title
+        data.filename = root.title
         data.category = root.category
         root.saved(data)
         root.editing = false

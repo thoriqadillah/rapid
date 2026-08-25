@@ -14,12 +14,6 @@ Item {
         Header {}
     }
 
-    property Component defaultSidebarComponent: Component {
-        Sidebar {
-            onDestinationSelected: destination => root.destinationSelected(destination)
-        }
-    }
-
 
     property bool sidebarOpen: true
     default property alias content: contentArea.data
@@ -30,7 +24,7 @@ Item {
     // ---- Sidebar slot ----
     Loader {
         id: sidebarLoader
-        sourceComponent: root.sidebarContent ?? root.defaultSidebarComponent
+        sourceComponent: root.sidebarContent
         onLoaded: item.open = Qt.binding(() => root.sidebarOpen)
         anchors {
             top: parent.top
@@ -38,6 +32,15 @@ Item {
             left: parent.left
         }
 
+    }
+
+    // Forward signals from whichever sidebar is loaded
+    Connections {
+        target: sidebarLoader.item
+        ignoreUnknownSignals: true
+        function onDestinationSelected(destination) {
+            root.destinationSelected(destination)
+        }
     }
 
     // ---- Header slot ----

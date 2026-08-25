@@ -52,6 +52,15 @@ Rectangle {
     readonly property bool canPause: root.status === "active" || root.status === "waiting"
     readonly property bool canResume: root.status === "paused"
 
+    readonly property string statusText: {
+        switch (root.status) {
+            case "removed":
+                return "Stopped"
+            default:
+                return root.status.charAt(0).toUpperCase() + root.status.slice(1)
+        }
+    }
+
     ColumnLayout {
         id: content
         property int columnWidth: 100
@@ -169,7 +178,7 @@ Rectangle {
             }
 
             Text {
-                text: root.status.charAt(0).toUpperCase() + root.status.slice(1)
+                text: root.statusText
                 color: Theme.colorText
                 font.pixelSize: Theme.textSize
                 Layout.fillWidth: true
@@ -181,7 +190,7 @@ Rectangle {
             spacing: Theme.spacingSm
 
             RButton {
-                variant: root.canResume ? RButton.PrimaryVariant : RButton.SecondaryVariant
+                variant: root.canResume ? RButton.PrimaryVariant : RButton.WarningVariant
                 text: root.canResume ? qsTr("Resume") : qsTr("Pause")
                 enabled: root.canPause || root.canResume
                 iconSource: root.canResume ? "qrc:/icons/MdiLightPlay.svg" : "qrc:/icons/MdiLightPause.svg"

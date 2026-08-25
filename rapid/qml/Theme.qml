@@ -11,12 +11,13 @@ QtObject {
 
     readonly property color colorPrimary: palette.highlight
     readonly property color colorPrimaryHover: Qt.darker(palette.highlight, 1.1)
-    readonly property color colorAccent: palette.accent
+    readonly property color colorAccent: "#1971c2"
     readonly property color colorAccentHover: Qt.darker(palette.accent, 1.1)
     readonly property color colorDanger: "#e03131"
     readonly property color colorDangerHover: Qt.darker(Theme.colorDanger, 1.1)
     readonly property color colorSuccess: "#2f9e44"
     readonly property color colorWarning: "#f08c00"
+    readonly property color colorWarningHover: Qt.darker(Theme.colorWarning, 1.1)
     readonly property color colorInfo: "#1971c2"
 
     readonly property color colorSurface: palette.button

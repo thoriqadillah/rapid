@@ -1,14 +1,13 @@
 import QtQuick
 import QtQuick.Controls as Controls
-import QtQuick.Layouts as QL
-import "../components"
+import QtQuick.Layouts
 import "../components/download" as Download
 import ".."
 
-// DownloadService and DownloadDialog are Python-registered context properties,
-// invisible to qmllint's static analysis.
+// DownloadService, DownloadFilter and DownloadDialog are Python-registered
+// context properties, invisible to qmllint's static analysis.
 // qmllint disable unqualified
-Layout {
+Download.DownloadLayout {
     id: root
     property string type: ''
 
@@ -25,6 +24,13 @@ Layout {
             type = destination;
     }
 
+    onTypeChanged: {
+        DownloadFilter.setCategory(type)
+        list.expandedGid = ""
+    }
+
+    onSearchTextChanged: DownloadFilter.setSearch(searchText)
+
     Connections {
         target: root
         function onAddClicked() {
@@ -32,7 +38,7 @@ Layout {
         }
     }
 
-    QL.ColumnLayout {
+    ColumnLayout {
         anchors.fill: parent
         anchors.leftMargin: Theme.spacingPageLeft
         anchors.rightMargin: Theme.spacingPageRight
@@ -41,11 +47,11 @@ Layout {
         spacing: 0
 
         Rectangle {
-            QL.Layout.fillWidth: true
+            Layout.fillWidth: true
             implicitHeight: headerRow.implicitHeight + Theme.spacingSm * 2
             color: Theme.colorBase
 
-            QL.RowLayout {
+            RowLayout {
                 id: headerRow
                 anchors {
                     fill: parent
@@ -55,61 +61,61 @@ Layout {
                 spacing: Theme.spacingMd
 
                 Item {
-                    QL.Layout.preferredWidth: Theme.iconXs
-                    QL.Layout.minimumWidth: Theme.iconXs
-                    QL.Layout.maximumWidth: Theme.iconXs
+                    Layout.preferredWidth: Theme.iconXs
+                    Layout.minimumWidth: Theme.iconXs
+                    Layout.maximumWidth: Theme.iconXs
                 }
 
                 Text {
                     text: qsTr("Name")
                     color: Theme.colorTextMuted
                     font.pixelSize: Theme.textSize
-                    QL.Layout.fillWidth: true
-                    QL.Layout.minimumWidth: root.nameColumnMinWidth
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: root.nameColumnMinWidth
                 }
 
                 Text {
                     text: qsTr("Progress")
                     color: Theme.colorTextMuted
                     font.pixelSize: Theme.textSize
-                    QL.Layout.preferredWidth: root.progressColumnWidth
-                    QL.Layout.minimumWidth: root.progressColumnWidth
-                    QL.Layout.maximumWidth: root.progressColumnWidth
+                    Layout.preferredWidth: root.progressColumnWidth
+                    Layout.minimumWidth: root.progressColumnWidth
+                    Layout.maximumWidth: root.progressColumnWidth
                 }
 
                 Text {
                     text: qsTr("Speed")
                     color: Theme.colorTextMuted
                     font.pixelSize: Theme.textSize
-                    QL.Layout.preferredWidth: root.speedColumnWidth
-                    QL.Layout.minimumWidth: root.speedColumnWidth
-                    QL.Layout.maximumWidth: root.speedColumnWidth
+                    Layout.preferredWidth: root.speedColumnWidth
+                    Layout.minimumWidth: root.speedColumnWidth
+                    Layout.maximumWidth: root.speedColumnWidth
                 }
 
                 Text {
                     text: qsTr("Size")
                     color: Theme.colorTextMuted
                     font.pixelSize: Theme.textSize
-                    QL.Layout.preferredWidth: root.sizeColumnWidth
-                    QL.Layout.minimumWidth: root.sizeColumnWidth
-                    QL.Layout.maximumWidth: root.sizeColumnWidth
+                    Layout.preferredWidth: root.sizeColumnWidth
+                    Layout.minimumWidth: root.sizeColumnWidth
+                    Layout.maximumWidth: root.sizeColumnWidth
                 }
 
                 Text {
                     text: qsTr("Estimation")
                     color: Theme.colorTextMuted
                     font.pixelSize: Theme.textSize
-                    QL.Layout.preferredWidth: root.etaColumnWidth
-                    QL.Layout.minimumWidth: root.etaColumnWidth
-                    QL.Layout.maximumWidth: root.etaColumnWidth
+                    Layout.preferredWidth: root.etaColumnWidth
+                    Layout.minimumWidth: root.etaColumnWidth
+                    Layout.maximumWidth: root.etaColumnWidth
                 }
             }
         }
 
         Item {
-            QL.Layout.fillWidth: true
-            QL.Layout.fillHeight: true
-            QL.Layout.topMargin: Theme.spacingSm
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.topMargin: Theme.spacingSm
 
             ListView {
                 id: list
@@ -120,7 +126,7 @@ Layout {
                 anchors.fill: parent
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
-                model: DownloadService
+                model: DownloadFilter
                 Controls.ScrollBar.vertical: Controls.ScrollBar {
                     policy: Controls.ScrollBar.AsNeeded
                 }
@@ -164,12 +170,12 @@ Layout {
                         property: "opacity"
                         from: 0
                         to: 1
-                        duration: 300
+                        duration: 150
                     }
                     NumberAnimation {
-                        property: "y"
-                        from: -Theme.spacingXs
-                        duration: 300
+                        property: "x"
+                        from: -Theme.spacingXl
+                        duration: 150
                         easing.type: Easing.OutCubic
                     }
                 }
@@ -178,12 +184,12 @@ Layout {
                         NumberAnimation {
                             property: "opacity"
                             to: 0
-                            duration: 300
+                            duration: 150
                         }
                         NumberAnimation {
-                            property: "y"
-                            to: -height
-                            duration: 300
+                            property: "x"
+                            to: Theme.spacingXl
+                            duration: 150
                             easing.type: Easing.InCubic
                         }
                     }

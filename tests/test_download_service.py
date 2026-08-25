@@ -54,7 +54,7 @@ class FakeDownloader(Downloader, Resolver):
         return {} if uri.startswith("http") else {"url": "Enter a URL"}
 
     def resolve(self, uri: str) -> list[ResolvedUrl]:
-        return [ResolvedUrl(url=uri, title="x", category="other")]
+        return [ResolvedUrl(url=uri, title="x", category="unknown")]
 
     def download(self, uri: ResolvedUrl) -> Download:
         gid = f"g{len(self.added) + 1}"
@@ -157,7 +157,8 @@ def test_add_url_downloads_and_persists(settings: Settings) -> None:
         gid="g1",
         status="active",
         totalLength=100,
-        resolved=ResolvedUrl(url="http://example.com/a.bin", title="x", category="other"),
+        category="unknown",
+        resolved=ResolvedUrl(url="http://example.com/a.bin", title="x", category="unknown"),
     )
 
 
@@ -202,7 +203,8 @@ def test_poll_propagates_status_and_speed_samples(settings: Settings) -> None:
         status="active",
         totalLength=100,
         downloadSpeed=512,
-        resolved=ResolvedUrl(url="http://example.com/a.bin", title="x", category="other"),
+        category="unknown",
+        resolved=ResolvedUrl(url="http://example.com/a.bin", title="x", category="unknown"),
     )
     assert store.speedHistory("g1")[0].speed == 512
     roles = {bytes(v).decode("utf-8"): k for k, v in service.roleNames().items()}

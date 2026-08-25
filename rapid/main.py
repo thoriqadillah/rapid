@@ -4,10 +4,10 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QTimer, QUrl, QCoreApplication
-from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine, QQmlComponent, QQmlContext
 
-from rapid.backend import Aria2Downloader, ClipboardService, Database, DownloadService, DownloadStore
+from rapid.backend import Aria2Downloader, ClipboardService, Database, DownloadFilterProxy, DownloadService, DownloadStore
 from rapid.qml.icons import icons_rc  # noqa: F401  registers qrc resources on import
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -17,6 +17,10 @@ def downloader_service(engine: QQmlApplicationEngine, settings: Settings) -> Dow
     downloader = Aria2Downloader(settings=settings)
     service = DownloadService(settings, store, downloader, downloader)
     engine.rootContext().setContextProperty("DownloadService", service)
+
+    downloadFilter = DownloadFilterProxy(service)
+    downloadFilter.setSourceModel(service)
+    engine.rootContext().setContextProperty("DownloadFilter", downloadFilter)
     return service
 
 
@@ -26,7 +30,7 @@ def clipboard_service(context: QQmlContext) -> ClipboardService:
 
 def main() -> int:
     QCoreApplication.setApplicationName("rapid")
-    app = QApplication(sys.argv)
+    app = QGuiApplication(sys.argv)
     settings = Settings.default(BASE_DIR)
 
     signal.signal(signal.SIGINT, lambda *_: app.quit())
