@@ -63,10 +63,7 @@ Item {
                 padding: Theme.spacingMd
                 leftPadding: Theme.spacingMd + (prefixIconButton.visible ? field.iconSize + Theme.spacingSm : 0)
                 rightPadding: Theme.spacingMd + (suffixIconButton.visible ? field.iconSize + Theme.spacingSm : 0)
-                implicitHeight: Math.max(
-                    Theme.touchTarget,
-                    contentHeight + topPadding + bottomPadding
-                )
+                implicitHeight: Theme.touchTarget
 
                 background: Rectangle {
                     radius: field.cornerRadius

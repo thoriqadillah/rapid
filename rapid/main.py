@@ -1,4 +1,4 @@
-from rapid.backend.setting import Settings
+import os
 import signal
 import sys
 from pathlib import Path
@@ -7,8 +7,9 @@ from PySide6.QtCore import QTimer, QUrl, QCoreApplication
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine, QQmlComponent, QQmlContext
 
-from rapid.backend import Aria2Downloader, ClipboardService, Database, DownloadFilterProxy, DownloadService, DownloadStore
 from rapid.qml.icons import icons_rc  # noqa: F401  registers qrc resources on import
+from rapid.backend import Aria2Downloader, ClipboardService, Database, DownloadFilterProxy, DownloadService, DownloadStore
+from rapid.backend.setting import Settings
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -39,7 +40,7 @@ def main() -> int:
     # never get delivered without this: wake up periodically to run them.
     signal_pump = QTimer()
     signal_pump.timeout.connect(lambda: None)
-    signal_pump.start(200)
+    signal_pump.start(1000)
 
     engine = QQmlApplicationEngine()
     downloader = downloader_service(engine, settings)
@@ -71,4 +72,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    os._exit(main())

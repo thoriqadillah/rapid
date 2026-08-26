@@ -77,15 +77,6 @@ Rectangle {
             readonly: true
         }
 
-        Text {
-            visible: !!root.errorMessage && root.status === "error"
-            text: root.errorMessage || ""
-            color: Theme.colorDanger
-            font.pixelSize: Theme.textSizeSm
-            Layout.fillWidth: true
-            wrapMode: Text.Wrap
-        }
-
         DownloadSpeedSample {
             gid: root.gid
             category: root.resolved.category
@@ -186,6 +177,27 @@ Rectangle {
         }
 
         RowLayout {
+            visible: !!root.errorMessage && root.status === "error"
+            Layout.fillWidth: true
+            spacing: Theme.spacingMd
+
+            Text {
+                text: qsTr("Error")
+                color: Theme.colorTextMuted
+                font.pixelSize: Theme.textSize
+                Layout.minimumWidth: content.columnWidth
+            }
+
+            Text {
+                text: root.errorMessage || ""
+                color: Theme.colorDanger
+                font.pixelSize: Theme.textSize
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+            }
+        }
+
+        RowLayout {
             Layout.fillWidth: true
             spacing: Theme.spacingSm
 
@@ -230,6 +242,7 @@ Rectangle {
             color: Theme.colorText
             font.pixelSize: Theme.textSize
             wrapMode: Text.WordWrap
+            Layout.fillWidth: true
         }
 
         footer: RowLayout {

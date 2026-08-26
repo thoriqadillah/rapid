@@ -13,6 +13,7 @@ Rectangle {
     // Role values from DownloadService (a QAbstractListModel).
     required property var gid
     required property var status
+    required property var category
     required property var resolved
     required property var files
     required property var totalLength
@@ -149,7 +150,7 @@ Rectangle {
                 icon.source: "qrc:/icons/MdiSquareRounded.svg"
                 icon.width: Theme.iconXs
                 icon.height: Theme.iconXs
-                icon.color: Theme.categoryColor(root.resolved.category)
+                icon.color: Theme.categoryColor(root.category)
                 background: null
                 Layout.preferredWidth: Theme.iconXs
                 Layout.preferredHeight: Theme.iconXs
@@ -184,7 +185,7 @@ Rectangle {
                         width: parent.width * root.percent
                         height: parent.height
                         radius: height / 2
-                        color: root.isError ? Theme.colorDanger : Theme.categoryColor(root.resolved.category)
+                        color: root.isError ? Theme.colorDanger : Theme.categoryColor(root.category)
                     }
                 }
 

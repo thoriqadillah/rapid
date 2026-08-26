@@ -29,7 +29,10 @@ Download.DownloadLayout {
         list.expandedGid = ""
     }
 
-    onSearchTextChanged: DownloadFilter.setSearch(searchText)
+    onSearchTextChanged: {
+        DownloadFilter.setSearch(searchText)
+        list.expandedGid = ""
+    }
 
     Connections {
         target: root

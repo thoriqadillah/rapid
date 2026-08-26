@@ -1,5 +1,4 @@
 from __future__ import annotations
-from turtle import down
 import shutil
 import subprocess
 import time
@@ -102,6 +101,7 @@ class DownloadService(QAbstractListModel):
 
     def close(self) -> None:
         self._timer.stop()
+        self._pool.shutdown(wait=True, cancel_futures=True)
         self._downloader.stop()
 
     # --- model interface --------------------------------------------------
@@ -293,12 +293,12 @@ class DownloadService(QAbstractListModel):
                 resolved=download.resolved or previous.resolved,
                 category=download.category or previous.category,
                 downloadSpeed=(
-                    self._downloads[row].downloadSpeed
+                    previous.downloadSpeed
                     if download.status != "active"
-                    else download.downloadSpeed or self._downloads[row].downloadSpeed
+                    else download.downloadSpeed or previous.downloadSpeed
                 ),
-                completedLength=download.completedLength or self._downloads[row].completedLength,
-                totalLength=download.totalLength or self._downloads[row].totalLength,
+                completedLength=download.completedLength or previous.completedLength,
+                totalLength=download.totalLength or previous.totalLength,
             )
 
             self._store.upsert(download)
@@ -337,7 +337,7 @@ class DownloadFilterProxy(QSortFilterProxyModel):
         search = search.strip().lower()
         if search == self._search:
             return
-        self._search = search.lower()
+        self._search = search
         self.invalidateRowsFilter()
 
     def filterAcceptsRow(self, source_row: int, source_parent: Union[QModelIndex, QPersistentModelIndex]) -> bool:
@@ -349,9 +349,6 @@ class DownloadFilterProxy(QSortFilterProxyModel):
                 return False
 
         if self._search:
-            if self._search in (model.data(index, _ROLE_BY_NAME["gid"]) or "").lower():
-                return True
-
             resolved = model.data(index, _ROLE_BY_NAME["resolved"])
             if resolved:
                 title = (resolved.get("title") or resolved.get("filename") or "").lower()

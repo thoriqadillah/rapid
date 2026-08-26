@@ -8,7 +8,7 @@ import time
 from http.server import BaseHTTPRequestHandler, SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from socket import socket
-from threading import Thread
+from threading import Event, Thread
 from typing import Callable, Iterator, cast
 from unittest import mock
 from urllib.error import HTTPError, URLError
@@ -317,6 +317,8 @@ def test_spawn_daemon_adopts_existing_one(monkeypatch: pytest.MonkeyPatch, setti
 
 
 def test_spawn_daemon_owns_spawned_process(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
+    popen_kwargs: dict[str, object] = {}
+
     class Rpc(FakeRpc):
         def call(self, method: str, params: list[object]) -> object:
             self.calls.append((method, params))
@@ -327,7 +329,7 @@ def test_spawn_daemon_owns_spawned_process(monkeypatch: pytest.MonkeyPatch, sett
 
     class FakePopen:
         def __init__(self, *args: object, **kwargs: object) -> None:
-            pass
+            popen_kwargs.update(kwargs)
 
         def poll(self) -> None:
             return None
@@ -337,8 +339,29 @@ def test_spawn_daemon_owns_spawned_process(monkeypatch: pytest.MonkeyPatch, sett
     dl._spawnDaemon()
     assert dl._ownsDaemon is True
     assert isinstance(dl._process, FakePopen)
+    assert popen_kwargs["start_new_session"] is True
     dl.stop()
     assert dl._process is None
+
+
+def test_stop_joins_websocket_thread(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
+    dl = _downloader(monkeypatch, settings)
+    started = Event()
+
+    def run() -> None:
+        started.set()
+        while dl._running:
+            time.sleep(0.01)
+
+    monkeypatch.setattr(dl, "_wsRun", run)
+    dl.start()
+    assert started.wait(1)
+    thread = dl._wsThread
+
+    dl.stop()
+
+    assert thread is not None and not thread.is_alive()
+    assert dl._wsThread is None
 
 
 def test_pause_resume_remove_purge(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:

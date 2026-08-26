@@ -16,7 +16,7 @@ class ClipboardService(QObject):
     def copy(self, text: str) -> None:
         QGuiApplication.clipboard().setText(text)
 
-    @Property(str, notify=cast(Callable[..., object], textChanged))
+    @Property(str, notify=cast(Callable[..., str], textChanged))
     def text(self) -> str:
         return QGuiApplication.clipboard().text()
 

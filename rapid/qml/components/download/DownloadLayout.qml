@@ -87,6 +87,14 @@ Layout {
                         iconSource: "qrc:/icons/MdiSquareRounded.svg",
                         iconColor: Theme.colorCategoryVideo,
                         categoryItem: true
+                    },
+                    {
+                        destination: "unknown",
+                        label: qsTr("Unknown"),
+                        count: root.countFor("unknown"),
+                        iconSource: "qrc:/icons/MdiSquareRounded.svg",
+                        iconColor: Theme.colorCategoryUnknown,
+                        categoryItem: true
                     }
                 ]
             }

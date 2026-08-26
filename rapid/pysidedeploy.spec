@@ -7,7 +7,7 @@ project_file =
 icon = /home/thoriqadillah/workspace/rapid/.venv/lib/python3.13/site-packages/PySide6/scripts/deploy_lib/pyside_icon.jpg
 
 [python]
-python_path = /home/thoriqadillah/workspace/rapid/.venv/bin/python
+python_path = /home/thoriqadillah/workspace/rapid/.venv/bin/python3
 packages = Nuitka==4.0
 android_packages = buildozer==1.5.0,cython==0.29.33
 

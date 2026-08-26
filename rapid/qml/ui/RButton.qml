@@ -97,7 +97,6 @@ Controls.Button {
     spacing: Theme.spacingXs
     implicitHeight: Math.max(
         Theme.touchTarget,
-        Math.max(buttonFontMetrics.height, Theme.iconSm) + Theme.spacingMd * 2,
         root.implicitContentHeight + root.verticalPadding * 2
     )
     opacity: enabled ? 1 : 0.5

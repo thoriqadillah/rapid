@@ -1,5 +1,4 @@
 from __future__ import annotations
-from pprint import pprint
 import re
 import mimetypes
 from urllib.parse import urlparse, unquote
@@ -10,6 +9,7 @@ import json
 import logging
 import shutil
 import time
+from concurrent.futures import ThreadPoolExecutor
 import websocket
 from dataclasses import replace
 from pathlib import Path
@@ -69,14 +69,12 @@ class Aria2Rpc:
         token: str = "",
         timeout: float = 10.0,
     ) -> None:
-        import json
 
         self._url = f"http://{host}:{port}/jsonrpc"
         self._token = token
         self._timeout = timeout
         self._next_id = 0
         self._lock = Lock()
-        self._json = json
 
     def call(self, method: str, params: list[Any]) -> Any:
         from urllib.request import Request
@@ -102,7 +100,7 @@ class Aria2Rpc:
         request = Request(
             self._url,
             method="POST",
-            data=self._json.dumps(payload).encode("utf-8"),
+            data=json.dumps(payload).encode("utf-8"),
             headers={
                 "Content-Type": "application/json",
             },
@@ -124,7 +122,7 @@ class Aria2Rpc:
             ) from exc
 
         try:
-            message = self._json.loads(data)
+            message = json.loads(data)
         except Exception as exc:
             raise Aria2Error("aria2 returned invalid JSON") from exc
 
@@ -163,6 +161,7 @@ class Aria2Downloader(Downloader, Resolver):
         self._globalNotifyCallback = onGlobalNotify
 
         self._ws: websocket.WebSocket | None = None
+        self._wsThread: Thread | None = None
         self._lock = Lock()
         self._lastSpawn = 0.0
         self._ownsDaemon = False
@@ -229,8 +228,6 @@ class Aria2Downloader(Downloader, Resolver):
     def _probeHeader(url: str, options: dict[str, Any] = {}) -> dict[str, str] | None:
         try:
             with urlopen(Request(url, method="HEAD", headers=options.get("headers", {})), timeout=5) as resp:
-                pprint(resp)
-                pprint(resp.headers)
                 return resp.headers
         except (HTTPError, URLError, OSError):
             # The HEAD probe is best-effort metadata; a failure just means
@@ -329,6 +326,7 @@ class Aria2Downloader(Downloader, Resolver):
             [program, *args],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            start_new_session=True,
         )
 
         deadline = time.time() + 5.0
@@ -358,11 +356,12 @@ class Aria2Downloader(Downloader, Resolver):
             self._spawnDaemon()
 
         self._running = True
-        Thread(
+        self._wsThread = Thread(
             target=self._wsRun,
             name="aria2-websocket",
             daemon=True,
-        ).start()
+        )
+        self._wsThread.start()
 
     def stop(self) -> None:
         self._running = False
@@ -376,6 +375,11 @@ class Aria2Downloader(Downloader, Resolver):
                 ws.close()
             except Exception:
                 pass
+
+        thread = self._wsThread
+        self._wsThread = None
+        if thread is not None:
+            thread.join()
 
         process = self._process
         if process is None or not self._ownsDaemon:
@@ -457,9 +461,6 @@ class Aria2Downloader(Downloader, Resolver):
         if not isinstance(msg, dict):
             return
 
-        # aria2 pushes lifecycle notifications over WebSocket; each one
-        # means the download's state just changed, so push a fresh status
-        # to its listeners. Progress still requires polling (no such event).
         if msg.get("method") not in WS_EVENTS:
             return
 
@@ -469,10 +470,33 @@ class Aria2Downloader(Downloader, Resolver):
             item = params[-1]
             if isinstance(item, dict):
                 gid = item.get("gid")
+
         self.refresh(gid if isinstance(gid, str) else None)
 
     def shouldResolve(self, uri: str) -> bool:
         return any(re.search(pattern, uri) for pattern in _VALID_SCHEMES)
+
+    def _pollStatus(self, gid: str) -> dict[str, Any]:
+        fields = [
+            "gid",
+            "status",
+            "totalLength",
+            "completedLength",
+            "files",
+        ]
+        status = self._rpc.call("aria2.tellStatus", [gid, fields])
+
+        # Dry-run resolution is asynchronous: aria2 fills in length
+        # only after the HEAD request completes. Poll briefly for it.
+        deadline = time.time() + 2.0
+        while (
+            status.get("status") not in ("complete", "error")
+            and time.time() < deadline
+        ):
+            time.sleep(0.1)
+            status = self._rpc.call("aria2.tellStatus", [gid, fields])
+
+        return status
 
     def resolve(self, uri: str, options: dict[str, Any] = {}) -> list[ResolvedUrl]:
         options = {
@@ -481,61 +505,28 @@ class Aria2Downloader(Downloader, Resolver):
             "use-head": "true",
         }
 
-        gid = self._rpc.call(
-            "aria2.addUri",
-            [
-                [uri],
-                options,
-            ],
-        )
-
-        headers = self._probeHeader(uri, options)
-
-        try:
-            fields = [
-                "gid",
-                "status",
-                "totalLength",
-                "completedLength",
-                "files",
-            ]
-            status = self._rpc.call(
-                "aria2.tellStatus",
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            gid_fut = pool.submit(
+                self._rpc.call,
+                "aria2.addUri",
                 [
-                    gid,
-                    fields,
+                    [uri],
+                    options,
                 ],
             )
+            headers_fut = pool.submit(self._probeHeader, uri, options)
 
-            # Dry-run resolution is asynchronous: aria2 fills in length
-            # only after the HEAD request completes. Poll briefly for it.
-            deadline = time.time() + 2.0
-            while (
-                status.get("status") not in ("complete", "error")
-                and time.time() < deadline
-            ):
-                time.sleep(0.1)
-                status = self._rpc.call(
-                    "aria2.tellStatus",
-                    [
-                        gid,
-                        fields,
-                    ],
-                )
+            gid = gid_fut.result()
+            headers = headers_fut.result()
+
+        try:
+            status = self._pollStatus(gid)
 
             files = status.get("files", [])
-            file_info = (
-                files[0]
-                if files
-                else {}
-            )
+            file_info = files[0] if files else {}
 
             path = file_info.get("path")
-            filename = (
-                Path(path).name
-                if path
-                else self._getFilename(uri)
-            )
+            filename = Path(path).name if path else self._getFilename(uri)
 
             fileSize = self._parseInt(file_info.get("length", 0))
 
@@ -568,13 +559,7 @@ class Aria2Downloader(Downloader, Resolver):
             self._onResolved(gid)
 
     def getStatus(self, id: str) -> Download:
-        result = self._rpc.call(
-            "aria2.tellStatus",
-            [
-                id,
-                STATUS_KEYS,
-            ],
-        )
+        result = self._rpc.call("aria2.tellStatus", [id, STATUS_KEYS])
 
         if not isinstance(result, dict):
             raise Aria2Error(
