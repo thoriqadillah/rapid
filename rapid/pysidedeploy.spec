@@ -24,7 +24,7 @@ plugins =
 
 [nuitka]
 macos.permissions = 
-mode = onefile
+mode = standalone
 extra_args = --verbose --noinclude-qt-translations --static-libpython=no
 
 [buildozer]

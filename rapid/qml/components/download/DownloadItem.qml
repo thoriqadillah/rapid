@@ -11,6 +11,7 @@ Rectangle {
     id: root
 
     // Role values from DownloadService (a QAbstractListModel).
+    required property int index
     required property var gid
     required property var status
     required property var category
@@ -35,7 +36,7 @@ Rectangle {
     signal toggleExpanded
     signal removeRequested(var gid)
 
-    color: highlighted || root.expanded || (rowHovered && !menuOpen) ? Theme.colorSurface : "transparent"
+    color: highlighted || root.expanded || (rowHovered && !menuOpen) ? Theme.colorSurface : (index % 2 !== 0 ? Qt.rgba(Theme.colorSurface.r, Theme.colorSurface.g, Theme.colorSurface.b, 0.25) : "transparent")
     clip: true
     height: row.implicitHeight + Theme.spacingSm * 2 + root.detailHeight
 
@@ -127,155 +128,153 @@ Rectangle {
         opacity: 0.4
     }
 
-    ColumnLayout {
-        id: column
-        anchors.fill: parent
-        spacing: 0
+    RowLayout {
+        id: row
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.topMargin: Theme.spacingSm
+        anchors.bottomMargin: Theme.spacingSm
+        anchors.leftMargin: Theme.spacingLg
+        anchors.rightMargin: Theme.spacingLg
+        spacing: Theme.spacingMd
+
+        Controls.Button {
+            id: icon
+
+            enabled: false
+            opacity: 1
+            padding: 0
+            display: Controls.AbstractButton.IconOnly
+            icon.source: "qrc:/icons/MdiSquareRounded.svg"
+            icon.width: Theme.iconXs
+            icon.height: Theme.iconXs
+            icon.color: Theme.categoryColor(root.category)
+            background: null
+            Layout.preferredWidth: Theme.iconXs
+            Layout.preferredHeight: Theme.iconXs
+            Layout.alignment: Qt.AlignVCenter
+        }
+
+        Text {
+            text: root.displayName
+            color: Theme.colorText
+            font.pixelSize: Theme.textSize
+            elide: Text.ElideRight
+            verticalAlignment: Text.AlignVCenter
+            Layout.fillWidth: true
+            Layout.minimumWidth: root.nameColumnMinWidth
+        }
 
         RowLayout {
-            id: row
-            Layout.fillWidth: true
-            Layout.preferredHeight: row.implicitHeight + Theme.spacingSm * 2
-            Layout.leftMargin: Theme.spacingLg
-            Layout.rightMargin: Theme.spacingLg
-            spacing: Theme.spacingMd
+            Layout.preferredWidth: root.progressColumnWidth
+            Layout.minimumWidth: root.progressColumnWidth
+            Layout.maximumWidth: root.progressColumnWidth
+            spacing: Theme.spacingSm
 
-            Controls.Button {
-                id: icon
-
-                enabled: false
-                opacity: 1
-                padding: 0
-                display: Controls.AbstractButton.IconOnly
-                icon.source: "qrc:/icons/MdiSquareRounded.svg"
-                icon.width: Theme.iconXs
-                icon.height: Theme.iconXs
-                icon.color: Theme.categoryColor(root.category)
-                background: null
-                Layout.preferredWidth: Theme.iconXs
-                Layout.preferredHeight: Theme.iconXs
-                Layout.alignment: Qt.AlignVCenter
-            }
-
-            Text {
-                text: root.displayName
-                color: Theme.colorText
-                font.pixelSize: Theme.textSize
-                elide: Text.ElideRight
-                verticalAlignment: Text.AlignVCenter
+            Rectangle {
                 Layout.fillWidth: true
-                Layout.minimumWidth: root.nameColumnMinWidth
-            }
-
-            RowLayout {
-                Layout.preferredWidth: root.progressColumnWidth
-                Layout.minimumWidth: root.progressColumnWidth
-                Layout.maximumWidth: root.progressColumnWidth
-                spacing: Theme.spacingSm
+                implicitHeight: 10
+                radius: height / 2
+                border.width: 1
+                border.color: Theme.colorBorder
+                color: Theme.colorSurface
 
                 Rectangle {
-                    Layout.fillWidth: true
-                    implicitHeight: 10
+                    width: parent.width * root.percent
+                    height: parent.height
                     radius: height / 2
-                    border.width: 1
-                    border.color: Theme.colorBorder
-                    color: Theme.colorSurface
-
-                    Rectangle {
-                        width: parent.width * root.percent
-                        height: parent.height
-                        radius: height / 2
-                        color: root.isError ? Theme.colorDanger : Theme.categoryColor(root.category)
-                    }
-                }
-
-                Text {
-                    text: qsTr("%1%").arg(Math.round(root.percent * 100))
-                    color: Theme.colorTextMuted
-                    font.pixelSize: Theme.textSize
-                    verticalAlignment: Text.AlignVCenter
-                    Layout.preferredWidth: percentMetrics.advanceWidth("100%")
-                    Layout.minimumWidth: percentMetrics.advanceWidth("100%")
-                    Layout.maximumWidth: percentMetrics.advanceWidth("100%")
-                }
-
-                FontMetrics {
-                    id: percentMetrics
-                    font.pixelSize: Theme.textSize
+                    color: root.isError ? Theme.colorDanger : Theme.categoryColor(root.category)
                 }
             }
 
             Text {
-                text: root.speedText
-                color: Theme.colorText
+                text: qsTr("%1%").arg(Math.round(root.percent * 100))
+                color: Theme.colorTextMuted
                 font.pixelSize: Theme.textSize
-                elide: Text.ElideRight
                 verticalAlignment: Text.AlignVCenter
-                Layout.preferredWidth: root.speedColumnWidth
-                Layout.minimumWidth: root.speedColumnWidth
-                Layout.maximumWidth: root.speedColumnWidth
+                Layout.preferredWidth: percentMetrics.advanceWidth("100%")
+                Layout.minimumWidth: percentMetrics.advanceWidth("100%")
+                Layout.maximumWidth: percentMetrics.advanceWidth("100%")
             }
 
-            Text {
-                text: root.sizeText
-                color: Theme.colorText
+            FontMetrics {
+                id: percentMetrics
                 font.pixelSize: Theme.textSize
-                elide: Text.ElideRight
-                verticalAlignment: Text.AlignVCenter
-                Layout.preferredWidth: root.sizeColumnWidth
-                Layout.minimumWidth: root.sizeColumnWidth
-                Layout.maximumWidth: root.sizeColumnWidth
-            }
-
-            DownloadStatus {
-                status: root.status
-                totalLength: root.totalLength
-                completedLength: root.completedLength
-                downloadSpeed: root.downloadSpeed
-                Layout.preferredWidth: root.etaColumnWidth
-                Layout.minimumWidth: root.etaColumnWidth
-                Layout.maximumWidth: root.etaColumnWidth
-                Layout.fillHeight: true
             }
         }
 
-        Item {
-            Layout.fillWidth: true
-            Layout.preferredHeight: root.detailHeight
-            Layout.minimumHeight: 0
-            clip: true
+        Text {
+            text: root.speedText
+            color: Theme.colorText
+            font.pixelSize: Theme.textSize
+            elide: Text.ElideRight
+            verticalAlignment: Text.AlignVCenter
+            Layout.preferredWidth: root.speedColumnWidth
+            Layout.minimumWidth: root.speedColumnWidth
+            Layout.maximumWidth: root.speedColumnWidth
+        }
 
-            DownloadItemDetail {
-                id: detail
-                anchors.top: parent.top
-                anchors.left: parent.left
-                anchors.right: parent.right
-                gid: root.gid
-                status: root.status
-                resolved: root.resolved
-                files: root.files
-                totalLength: root.totalLength
-                completedLength: root.completedLength
-                errorMessage: root.errorMessage
-                onRemoveRequested: function (gid) {
-                    root.removeRequested(gid);
-                }
-                opacity: root.expanded ? 1 : 0
-                transform: Translate {
-                    id: detailSlide
-                    y: root.expanded ? 0 : -detail.implicitHeight
-                    Behavior on y {
-                        NumberAnimation {
-                            duration: 250
-                            easing.type: Easing.OutCubic
-                        }
-                    }
-                }
-                Behavior on opacity {
+        Text {
+            text: root.sizeText
+            color: Theme.colorText
+            font.pixelSize: Theme.textSize
+            elide: Text.ElideRight
+            verticalAlignment: Text.AlignVCenter
+            Layout.preferredWidth: root.sizeColumnWidth
+            Layout.minimumWidth: root.sizeColumnWidth
+            Layout.maximumWidth: root.sizeColumnWidth
+        }
+
+        DownloadStatus {
+            status: root.status
+            totalLength: root.totalLength
+            completedLength: root.completedLength
+            downloadSpeed: root.downloadSpeed
+            Layout.preferredWidth: root.etaColumnWidth
+            Layout.minimumWidth: root.etaColumnWidth
+            Layout.maximumWidth: root.etaColumnWidth
+            Layout.fillHeight: true
+        }
+    }
+
+    Item {
+        anchors.top: row.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: root.detailHeight
+        clip: true
+
+        DownloadItemDetail {
+            id: detail
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            gid: root.gid
+            status: root.status
+            resolved: root.resolved
+            files: root.files
+            totalLength: root.totalLength
+            completedLength: root.completedLength
+            errorMessage: root.errorMessage
+            onRemoveRequested: function (gid) {
+                root.removeRequested(gid);
+            }
+            opacity: root.expanded ? 1 : 0
+            transform: Translate {
+                id: detailSlide
+                y: root.expanded ? 0 : -detail.implicitHeight
+                Behavior on y {
                     NumberAnimation {
                         duration: 250
                         easing.type: Easing.OutCubic
                     }
+                }
+            }
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: 250
+                    easing.type: Easing.OutCubic
                 }
             }
         }

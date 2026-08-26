@@ -68,7 +68,6 @@ Rectangle {
         anchors.leftMargin: Theme.spacingLg
         anchors.rightMargin: Theme.spacingLg
         anchors.topMargin: Theme.spacingMd
-        anchors.bottomMargin: Theme.spacingLg
         spacing: Theme.spacingMd
 
         ResolverUri {

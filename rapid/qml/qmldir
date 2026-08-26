@@ -1,2 +1,3 @@
 singleton Theme 1.0 Theme.qml
 singleton Navigation 1.0 Navigation.qml
+singleton Notifier 1.0 Notifier.qml

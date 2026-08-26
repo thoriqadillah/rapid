@@ -149,7 +149,7 @@ class DownloadStore:
     def __init__(self, db: Database) -> None:
         self._session_factory = db.session_factory
 
-    def all(self) -> dict[str, Download]:
+    def all(self) -> list[Download]:
         with self._session_factory() as session:
             rows = (
                 session.execute(
@@ -162,7 +162,7 @@ class DownloadStore:
                 .scalars()
                 .all()
             )
-            return {row.gid: _toDownloadModel(row) for row in rows}
+            return [_toDownloadModel(row) for row in rows]
 
     def get(self, gid: str) -> Download | None:
         with self._session_factory() as session:

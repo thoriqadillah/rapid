@@ -58,6 +58,8 @@ class DownloadService(QAbstractListModel):
     downloadAdded = Signal(str)
     downloadChanged = Signal(str)
     downloadRemoved = Signal(str)
+    downloadCompleted = Signal(str)  # gid
+    downloadFailed = Signal(str, str)  # gid, errorMessage
     errorOccurred = Signal(str)
     resolved = Signal(list, dict)  # resolvedUris, errors
     countsChanged = Signal()  # sidebar badges
@@ -78,7 +80,7 @@ class DownloadService(QAbstractListModel):
         self._downloader = downloader
         self._resolver = resolver
         self._pool = ThreadPoolExecutor(max_workers=2)
-        self._downloads: list[Download] = list(self._store.all().values())
+        self._downloads: list[Download] = self._store.all()
         self._notified.connect(self._notify)
         self._timer = QTimer(self)
         self._timer.setInterval(settings.pollIntervalMs)
@@ -139,6 +141,27 @@ class DownloadService(QAbstractListModel):
                 counts[download.category] = counts.get(download.category, 0) + 1
         return counts
 
+    @Slot(str, result=str)
+    def downloadName(self, gid: str) -> str:
+        """Return a human-readable name for the download identified by *gid*."""
+        row = self._row_of(gid)
+        if row is None:
+            return gid
+
+        download = self._downloads[row]
+        if download.resolved:
+            name = download.resolved.title or download.resolved.filename
+            if name:
+                return name
+
+        if download.files:
+            path = download.files[0].path or ""
+            name = path.rsplit("/", 1)[-1] if "/" in path else path
+            if name:
+                return name
+
+        return gid
+
     @Slot(str)
     def resolve(self, url: str) -> None:
         """Resolve a URL in a background thread; result arrives via `resolved`."""
@@ -150,8 +173,11 @@ class DownloadService(QAbstractListModel):
             return
 
         try:
-            uris = [r.asDict() for r in self._resolver.resolve(url)]
-            uris.extend([r.asDict() for r in self._pluginManager.resolve(url)])
+            uris = (
+                [r.asDict() for r in self._pluginManager.resolve(url)] or
+                [r.asDict() for r in self._resolver.resolve(url)]
+            )
+
             self.resolved.emit(uris, {})
         except Exception as exc:
             self.resolved.emit([], {"url": str(exc)})
@@ -308,6 +334,11 @@ class DownloadService(QAbstractListModel):
             self._replace(row, download)
             if download.category != previous.category:
                 self.countsChanged.emit()
+            if previous.status != download.status:
+                if download.status == "complete":
+                    self.downloadCompleted.emit(download.gid)
+                elif download.status == "error":
+                    self.downloadFailed.emit(download.gid, download.errorMessage or "")
         self.downloadChanged.emit(download.gid)
 
     def _error(self, message: str) -> None:

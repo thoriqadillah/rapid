@@ -9,7 +9,7 @@ import json
 import logging
 import shutil
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 import websocket
 from dataclasses import replace
 from pathlib import Path
@@ -159,6 +159,9 @@ class Aria2Downloader(Downloader, Resolver):
         self._process: subprocess.Popen[bytes] | None = None
         self._listening: set[tuple[str, NotifyCallback, ErrorCallback]] = set()
         self._globalNotifyCallback = onGlobalNotify
+
+        self._poolResolver = ThreadPoolExecutor(max_workers=2)
+        self._pendingResolveFutures: list[Future[Any]] = []
 
         self._ws: websocket.WebSocket | None = None
         self._wsThread: Thread | None = None
@@ -498,6 +501,17 @@ class Aria2Downloader(Downloader, Resolver):
 
         return status
 
+    def _doRequest(self, uri: str, options: dict[str, Any]):
+        for f in self._pendingResolveFutures:
+            f.cancel()
+
+        gid = self._poolResolver.submit(self._rpc.call, "aria2.addUri", [[uri], options])
+        headers = self._poolResolver.submit(self._probeHeader, uri, options)
+
+        self._pendingResolveFutures = [gid, headers]
+
+        return [gid.result(), headers.result()]
+
     def resolve(self, uri: str, options: dict[str, Any] = {}) -> list[ResolvedUrl]:
         options = {
             **options,
@@ -505,21 +519,8 @@ class Aria2Downloader(Downloader, Resolver):
             "use-head": "true",
         }
 
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            gid_fut = pool.submit(
-                self._rpc.call,
-                "aria2.addUri",
-                [
-                    [uri],
-                    options,
-                ],
-            )
-            headers_fut = pool.submit(self._probeHeader, uri, options)
-
-            gid = gid_fut.result()
-            headers = headers_fut.result()
-
         try:
+            [gid, headers] = self._doRequest(uri, options)
             status = self._pollStatus(gid)
 
             files = status.get("files", [])
