@@ -47,6 +47,7 @@ Rectangle {
             easing.type: Easing.OutCubic
         }
     }
+
     onExpandedChanged: root.detailHeight = root.expanded ? detail.implicitHeight : 0
 
     readonly property bool rowHovered: root.expanded ? rowMouse.containsMouse && rowMouse.mouseY <= row.implicitHeight : rowMouse.containsMouse
@@ -95,6 +96,19 @@ Rectangle {
             return "—";
         const done = Number(root.completedLength) || 0;
         return DownloadService.formatSize(done) + " / " + DownloadService.formatSize(total);
+    }
+
+    readonly property string estText: {
+        const total = Number(root.totalLength) || 0
+        const done = Number(root.completedLength) || 0
+        const speed = Number(root.downloadSpeed) || 0
+        const remaining = total - done
+        if (remaining <= 0 || speed <= 0) return "—"
+        const secs = remaining / speed
+        if (secs < 60) return qsTr("%1s").arg(Math.ceil(secs))
+        const mins = Math.floor(secs / 60)
+        if (mins < 60) return qsTr("%1m").arg(mins)
+        return qsTr("%1h %2m").arg(Math.floor(mins / 60)).arg(mins % 60)
     }
 
     MouseArea {
@@ -226,15 +240,15 @@ Rectangle {
             Layout.maximumWidth: root.sizeColumnWidth
         }
 
-        DownloadStatus {
-            status: root.status
-            totalLength: root.totalLength
-            completedLength: root.completedLength
-            downloadSpeed: root.downloadSpeed
-            Layout.preferredWidth: root.etaColumnWidth
-            Layout.minimumWidth: root.etaColumnWidth
-            Layout.maximumWidth: root.etaColumnWidth
-            Layout.fillHeight: true
+        Text {
+            text: root.estText
+            color: Theme.colorText
+            font.pixelSize: Theme.textSize
+            elide: Text.ElideRight
+            verticalAlignment: Text.AlignVCenter
+            Layout.preferredWidth: root.sizeColumnWidth
+            Layout.minimumWidth: root.sizeColumnWidth
+            Layout.maximumWidth: root.sizeColumnWidth
         }
     }
 
@@ -252,6 +266,7 @@ Rectangle {
             anchors.right: parent.right
             gid: root.gid
             status: root.status
+            category: root.category
             resolved: root.resolved
             files: root.files
             totalLength: root.totalLength

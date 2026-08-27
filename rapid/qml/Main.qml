@@ -77,14 +77,13 @@ ApplicationWindow {
 
     Connections {
         target: Notifier
-        property int margin: 70
-        property int gap: 70
+        property int spacing: 70
         property var activePopups: []
 
         function reposition() {
-            const base = window.height - margin
+            const base = window.height - spacing
             for (let i = 0; i < activePopups.length; i++)
-                activePopups[i].y = base - i * gap
+                activePopups[i].y = base - i * spacing
         }
 
         function onNotificationRequested(type, title, message) {
@@ -98,7 +97,7 @@ ApplicationWindow {
                 title: title,
                 message: message,
                 typeColor: colors[type] || Theme.colorInfo,
-                y: window.height - margin - activePopups.length * gap
+                y: window.height - spacing - activePopups.length * spacing
             })
 
             activePopups.push(popup)

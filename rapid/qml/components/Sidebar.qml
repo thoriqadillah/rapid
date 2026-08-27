@@ -18,7 +18,7 @@ Rectangle {
 
     default property alias content: contentColumn.data
 
-    color: Theme.colorBase
+    color: Theme.colorSurface
     implicitWidth: 200
     width: open ? implicitWidth : 0
     clip: true

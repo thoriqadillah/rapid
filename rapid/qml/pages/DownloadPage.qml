@@ -71,7 +71,7 @@ Download.DownloadLayout {
             Rectangle {
                 Layout.fillWidth: true
                 implicitHeight: headerRow.implicitHeight + Theme.spacingSm * 2
-                color: Theme.colorBase
+                color: Theme.colorSurface
                 radius: Theme.radiusMd
                 Rectangle {
                     anchors.left: parent.left

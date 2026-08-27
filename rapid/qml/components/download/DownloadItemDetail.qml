@@ -12,6 +12,7 @@ Rectangle {
     // Role values from DownloadService (a QAbstractListModel), forwarded by the parent item.
     required property var gid
     required property var status
+    required property var category
     required property var resolved
     required property var files
     required property var totalLength
@@ -72,13 +73,13 @@ Rectangle {
 
         ResolverUri {
             modelData: root.resolved
-            category: root.resolved.category
+            category: root.category
             readonly: true
         }
 
         DownloadSpeedSample {
             gid: root.gid
-            category: root.resolved.category
+            category: root.category
             Layout.topMargin: Theme.spacingSm
             Layout.bottomMargin: Theme.spacingSm
         }
@@ -106,7 +107,7 @@ Rectangle {
                     width: parent.width * root.percent
                     height: parent.height
                     radius: height / 2
-                    color: Theme.categoryColor(root.resolved.category)
+                    color: Theme.categoryColor(root.category)
                 }
             }
 
@@ -201,7 +202,7 @@ Rectangle {
             spacing: Theme.spacingSm
 
             RButton {
-                variant: root.canResume ? RButton.PrimaryVariant : RButton.WarningVariant
+                variant: RButton.SecondaryVariant
                 text: root.canResume ? qsTr("Resume") : qsTr("Pause")
                 enabled: root.canPause || root.canResume
                 iconSource: root.canResume ? "qrc:/icons/MdiLightPlay.svg" : "qrc:/icons/MdiLightPause.svg"

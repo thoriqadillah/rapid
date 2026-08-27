@@ -2,45 +2,44 @@ pragma Singleton
 import QtQuick
 
 QtObject {
-    readonly property SystemPalette palette: SystemPalette {}
 
-    // Colors — driven by the OS palette so light/dark just works
-    readonly property color colorBackground: palette.base
-    readonly property color colorBase: palette.window
-    readonly property color colorBorder: palette.mid
+    readonly property color colorBackground: "#1e1f29"
+    readonly property color colorSurface: "#282A36"
+    readonly property color colorBorder: Qt.darker("#44475A", 1.1)
 
-    readonly property color colorPrimary: palette.highlight
-    readonly property color colorPrimaryHover: Qt.darker(palette.highlight, 1.1)
-    readonly property color colorAccent: "#1971c2"
-    readonly property color colorAccentHover: Qt.darker(palette.accent, 1.1)
-    readonly property color colorDanger: "#e03131"
+    readonly property color colorPrimary: "#BD93F9"
+    readonly property color colorPrimaryHover: Qt.darker(Theme.colorPrimary, 1.1)
+    readonly property color colorAccent: "#FF79C6"
+    readonly property color colorAccentHover: Qt.darker(Theme.colorAccent, 1.1)
+    readonly property color colorDanger: "#FF5555"
     readonly property color colorDangerHover: Qt.darker(Theme.colorDanger, 1.1)
-    readonly property color colorSuccess: "#2f9e44"
-    readonly property color colorWarning: "#f08c00"
+    readonly property color colorSuccess: "#50FA7B"
+    readonly property color colorSuccessHover: Qt.darker(Theme.colorSuccess, 1.1)
+    readonly property color colorWarning: "#FFB86C"
     readonly property color colorWarningHover: Qt.darker(Theme.colorWarning, 1.1)
-    readonly property color colorInfo: "#1971c2"
+    readonly property color colorInfo: "#8BE9FD"
+    readonly property color colorInfoHover: Qt.darker(Theme.colorInfo, 1.1)
 
-    readonly property color colorSurface: palette.button
 
     // button colors
     readonly property color colorButtonBase: Theme.colorSurface
-    readonly property color colorButtonBaseHover: Qt.lighter(palette.button, 1.5)
+    readonly property color colorButtonBaseHover: Qt.lighter(Theme.colorButtonBase, 1.1)
 
     // text colors
-    readonly property color colorText: palette.text
-    readonly property color colorTextInverted: palette.highlightedText
-    readonly property color colorTextMuted: Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.6)
+    readonly property color colorText: "#F8F8F2"
+    readonly property color colorTextInverted: "#F8F8F2"
+    readonly property color colorTextMuted: Qt.rgba(Theme.colorText.r, Theme.colorText.g, Theme.colorText.b, 0.6)
 
     // input colors
     readonly property color colorInputBackground: Theme.colorSurface
 
-    readonly property color colorCategoryAudio: "#4fb783"
-    readonly property color colorCategoryApplication: "#f0b429"
-    readonly property color colorCategoryCompressed: "#bd4b4b"
-    readonly property color colorCategoryDocument: "#5b9bd5"
-    readonly property color colorCategoryImage: "#b98bd6"
-    readonly property color colorCategoryVideo: "#ee7b57"
-    readonly property color colorCategoryUnknown: "#ffffff"
+    readonly property color colorCategoryAudio: "#50FA7B"
+    readonly property color colorCategoryApplication: "#F1FA8C"
+    readonly property color colorCategoryCompressed: "#FF5555"
+    readonly property color colorCategoryDocument: "#8BE9FD"
+    readonly property color colorCategoryImage: "#BD93F9"
+    readonly property color colorCategoryVideo: "#FFB86C"
+    readonly property color colorCategoryUnknown: "#F8F8F2"
 
     function categoryColor(category: string): color {
         switch (category) {

@@ -21,7 +21,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: Theme.radiusSm
-        color: item.selected || mouseArea.containsMouse ? Qt.lighter(Theme.colorBase, 1.4) : "transparent"
+        color: item.selected || mouseArea.containsMouse ? Qt.lighter(Theme.colorSurface, 1.4) : "transparent"
     }
 
     RowLayout {
