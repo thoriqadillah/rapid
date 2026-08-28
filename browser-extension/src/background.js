@@ -27,20 +27,31 @@ function removeExpiredEntries(entries) {
     }
 }
 
+function cookiesFromHeader(value) {
+    const cookies = {};
+    for (const pair of String(value || "").split(";")) {
+        const index = pair.indexOf("=");
+        if (index > 0) cookies[pair.slice(0, index).trim()] = pair.slice(index + 1).trim();
+    }
+    return cookies;
+}
+
 function rememberHeaders(details) {
     if (!details.url || details.url.startsWith(RAPID_URL)) return;
     const headers = {};
+    const cookies = {};
     for (const header of details.requestHeaders || []) {
-        if (!header.name || blockedHeaders.has(header.name.toLowerCase())) {
+        if (!header.name) continue;
+        const name = header.name.toLowerCase();
+        if (name === "cookie") {
+            Object.assign(cookies, cookiesFromHeader(header.value));
             continue;
         }
-
-        if (typeof header.value === "string") {
-            headers[header.name] = header.value;
-        }
+        if (blockedHeaders.has(name)) continue;
+        if (typeof header.value === "string") headers[header.name] = header.value;
     }
 
-    requestHeadersByUrl.set(details.url, { headers, timestamp: Date.now() });
+    requestHeadersByUrl.set(details.url, { headers, cookies, timestamp: Date.now() });
     removeExpiredEntries(requestHeadersByUrl);
 }
 
@@ -117,10 +128,9 @@ try {
 }
 
 async function cookiesFor(url) {
-    const cookies = await callChrome(
-        chrome.cookies.getAll.bind(chrome.cookies),
-        { url },
-    ).catch(() => []);
+    const cookies = await callChrome(chrome.cookies.getAll.bind(chrome.cookies), { url })
+        .catch(() => []);
+
     const result = {};
     for (const cookie of cookies || []) result[cookie.name] = cookie.value;
     return result;
@@ -188,21 +198,6 @@ function categoryFor(mimeType, filename, url) {
     return "unknown";
 }
 
-async function latestDownload(item) {
-    let current = item;
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-        const matches = await callChrome(
-            chrome.downloads.search.bind(chrome.downloads),
-            { id: item.id },
-        ).catch(() => []);
-
-        if (matches && matches[0]) current = { ...current, ...matches[0] };
-        if (current.finalUrl && (current.mime || current.filename)) break;
-        await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-    return current;
-}
-
 async function activeTab() {
     const tabs = await callChrome(chrome.tabs.query.bind(chrome.tabs), {
         active: true,
@@ -240,7 +235,10 @@ async function requestFor(candidate, tab) {
         browserResolved: candidate.browserResolved === true,
         source: candidate.source || "browser-extension",
         headers: cached ? cached.headers : {},
-        cookies: await cookiesFor(url),
+        cookies:
+            cached && Object.keys(cached.cookies).length
+                ? cached.cookies
+                : await cookiesFor(url),
     };
 }
 
@@ -354,32 +352,33 @@ chrome.downloads.onCreated.addListener(async (item) => {
         { interceptDownloads: true },
     );
     if (!settings.interceptDownloads) return;
+    if (!(await rapidHealth().catch(() => false))) return;
 
-    await callChrome(
-        chrome.downloads.pause.bind(chrome.downloads),
-        item.id,
-    ).catch(() => undefined);
+    await callChrome(chrome.downloads.pause.bind(chrome.downloads), item.id)
+        .catch(() => undefined);
+
+    await callChrome(chrome.downloads.erase.bind(chrome.downloads), { id: item.id })
+        .catch(() => undefined);
 
     try {
-        const current = await latestDownload(item);
-        const url = current.finalUrl || current.url;
-        const response = responseMetadataFor(url, current.url, item.url);
-        const browserFilename = current.filename
-            ? current.filename.split(/[\\/]/).pop()
+        const url = item.finalUrl || item.url;
+        const response = responseMetadataFor(url, item.url);
+        const browserFilename = item.filename
+            ? item.filename.split(/[\\/]/).pop()
             : "";
         const filename = response.filename || browserFilename || filenameFromUrl(url);
-        const mimeType = response.mimeType || current.mime || "";
+        const mimeType = response.mimeType || item.mime || "";
         const size =
             Number.isInteger(response.size) && response.size >= 0
                 ? response.size
-                : Number.isInteger(current.totalBytes) && current.totalBytes >= 0
-                  ? current.totalBytes
+                : Number.isInteger(item.totalBytes) && item.totalBytes >= 0
+                  ? item.totalBytes
                   : undefined;
 
         await sendToRapid({
             url,
-            pageUrl: current.referrer || "",
-            referer: current.referrer || "",
+            pageUrl: item.referrer || "",
+            referer: item.referrer || "",
             filename,
             mimeType,
             size,
@@ -387,20 +386,7 @@ chrome.downloads.onCreated.addListener(async (item) => {
             browserResolved: true,
             source: "browser-download",
         });
-
-        await callChrome(
-            chrome.downloads.cancel.bind(chrome.downloads),
-            item.id,
-        ).catch(() => undefined);
-
-        await callChrome(chrome.downloads.erase.bind(chrome.downloads), {
-            id: item.id,
-        }).catch(() => undefined);
     } catch (error) {
         console.error(error);
-        await callChrome(
-            chrome.downloads.resume.bind(chrome.downloads),
-            item.id,
-        ).catch(() => undefined);
     }
 });
