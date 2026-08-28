@@ -8,6 +8,7 @@ Controls.Popup {
     property string title: ""
     property string message: ""
     property color typeColor: Theme.colorInfo
+    property bool positionAnimationEnabled: false
 
     signal dismissed
 
@@ -19,6 +20,8 @@ Controls.Popup {
     bottomPadding: Theme.spacingSm
 
     Behavior on y {
+        enabled: root.positionAnimationEnabled
+
         NumberAnimation {
             duration: 200
             easing.type: Easing.OutCubic
@@ -114,7 +117,7 @@ Controls.Popup {
 
             Text {
                 text: root.message
-                color: Theme.colorTextMuted
+                color: Theme.colorText
                 font.pixelSize: Theme.textSize
                 wrapMode: Text.WordWrap
                 width: parent.width

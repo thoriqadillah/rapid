@@ -4,11 +4,20 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QTimer, QUrl, QCoreApplication
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QIcon
 from PySide6.QtQml import QQmlApplicationEngine, QQmlComponent, QQmlContext
+from PySide6.QtWidgets import QApplication
 
 from rapid.qml.icons import icons_rc  # noqa: F401  registers qrc resources on import
-from rapid.backend import Aria2Downloader, ClipboardService, Database, DownloadFilterProxy, DownloadService, DownloadStore
+from rapid.backend import (
+    Aria2Downloader,
+    ClipboardService,
+    Database,
+    DownloadFilterProxy,
+    DownloadService,
+    DownloadStore,
+    NotificationService,
+)
 from rapid.backend.setting import Settings
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -25,13 +34,11 @@ def downloader_service(engine: QQmlApplicationEngine, settings: Settings) -> Dow
     return service
 
 
-def clipboard_service(context: QQmlContext) -> ClipboardService:
-    return ClipboardService()
-
-
-def main() -> int:
+def _run() -> int:
     QCoreApplication.setApplicationName("rapid")
-    app = QGuiApplication(sys.argv)
+    app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
+    app.setWindowIcon(QIcon(":/icons/rapid.svg"))
     settings = Settings.default(BASE_DIR)
 
     signal.signal(signal.SIGINT, lambda *_: app.quit())
@@ -43,13 +50,17 @@ def main() -> int:
     signal_pump.start(1000)
 
     engine = QQmlApplicationEngine()
+    notifications = NotificationService(engine)
+    notifications.quitRequested.connect(app.quit)
+    engine.rootContext().setContextProperty("NotificationService", notifications)
     downloader = downloader_service(engine, settings)
 
     dialogContext = QQmlContext(engine.rootContext(), engine)
     dialogComponent = QQmlComponent(
         engine, QUrl.fromLocalFile(str(BASE_DIR / "qml" / "components" / "download" / "DownloadDialog.qml"))
     )
-    clipboard = clipboard_service(dialogContext)
+
+    clipboard = ClipboardService()
     engine.rootContext().setContextProperty("Clipboard", clipboard)
     downloadDialog = dialogComponent.create(dialogContext)
     if downloadDialog is None:
@@ -66,10 +77,18 @@ def main() -> int:
     downloader.start()
     exit_code = app.exec()
     downloader.close()
+    notifications.close()
 
     del engine  # tear down QML before app to avoid shutdown warnings
     return exit_code
 
 
+def main() -> None:
+    # PySide can crash in Shiboken's interpreter-finalization GC after native
+    # tray/QML objects have existed. Services are closed by _run first; bypass
+    # Python finalization for both the console entry point and module execution.
+    os._exit(_run())
+
+
 if __name__ == "__main__":
-    os._exit(main())
+    main()

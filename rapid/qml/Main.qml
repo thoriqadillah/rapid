@@ -2,6 +2,8 @@ import QtQuick
 import QtQuick.Controls
 import "pages"
 
+// NotificationService is a Python-registered context property, invisible to qmllint.
+// qmllint disable unqualified
 ApplicationWindow {
     id: window
 
@@ -16,6 +18,17 @@ ApplicationWindow {
     readonly property bool expanded: width >= Theme.breakpointLg
 
     property alias dialogOverlay: overlay
+
+    function bringToForeground() {
+        window.showNormal()
+        window.raise()
+        window.requestActivate()
+    }
+
+    onClosing: function (closeEvent) {
+        closeEvent.accepted = false
+        window.hide()
+    }
 
     StackView {
         id: router
@@ -76,14 +89,25 @@ ApplicationWindow {
     }
 
     Connections {
-        target: Notifier
-        property int spacing: 70
+        target: NotificationService
+        property int popupGap: Theme.spacingSm
         property var activePopups: []
 
+        function onOpenRequested() {
+            window.bringToForeground()
+        }
+
+        function onNewDownloadRequested() {
+            DownloadDialog.openFor(null)
+        }
+
         function reposition() {
-            const base = window.height - spacing
-            for (let i = 0; i < activePopups.length; i++)
-                activePopups[i].y = base - i * spacing
+            let nextBottom = window.height - Theme.spacingPageBottom
+            for (let i = 0; i < activePopups.length; i++) {
+                const popup = activePopups[i]
+                popup.y = nextBottom - popup.height
+                nextBottom -= popup.height + popupGap
+            }
         }
 
         function onNotificationRequested(type, title, message) {
@@ -96,11 +120,12 @@ ApplicationWindow {
             const popup = notificationComponent.createObject(window, {
                 title: title,
                 message: message,
-                typeColor: colors[type] || Theme.colorInfo,
-                y: window.height - spacing - activePopups.length * spacing
+                typeColor: colors[type] || Theme.colorInfo
             })
 
             activePopups.push(popup)
+            reposition()
+            popup.positionAnimationEnabled = true
             popup.dismissed.connect(function () {
                 activePopups = activePopups.filter(function (p) { return p !== popup })
                 popup.destroy()

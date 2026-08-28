@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls as Controls
+import QtQuick.Effects
 import QtQuick.Layouts
 import "../components/download" as Download
 import ".."
@@ -44,11 +45,11 @@ Download.DownloadLayout {
     Connections {
         target: DownloadService
         function onDownloadCompleted(gid) {
-            Notifier.success(qsTr("Download complete"), DownloadService.downloadName(gid));
+            NotificationService.success(qsTr("Download complete"), DownloadService.downloadName(gid), true);
         }
 
         function onDownloadFailed(gid, errorMessage) {
-            Notifier.error(qsTr("Download failed"), errorMessage || DownloadService.downloadName(gid));
+            NotificationService.error(qsTr("Download failed"), errorMessage || DownloadService.downloadName(gid), true);
         }
     }
 
@@ -63,6 +64,20 @@ Download.DownloadLayout {
         border.width: 2
         border.color: Theme.colorSurface
         clip: true
+        layer.enabled: true
+        layer.effect: MultiEffect {
+            maskEnabled: true
+            maskSource: tableMask
+        }
+
+        Rectangle {
+            id: tableMask
+            anchors.fill: parent
+            radius: parent.radius
+            color: "white"
+            visible: false
+            layer.enabled: true
+        }
 
         ColumnLayout {
             anchors.fill: parent

@@ -34,7 +34,9 @@ Window {
     function openFor(newOwner) {
         root.owner = newOwner ?? null;
         root.setOverlay(true);
-        root.show();
+        root.showNormal();
+        root.raise();
+        root.requestActivate();
         root.opened();
     }
 

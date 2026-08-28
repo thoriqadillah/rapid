@@ -4,7 +4,7 @@ project_dir = .
 input_file = main.py
 exec_directory = ./dist
 project_file = 
-icon = /home/thoriqadillah/workspace/rapid/.venv/lib/python3.13/site-packages/PySide6/scripts/deploy_lib/pyside_icon.jpg
+icon = qml/icons/rapid.svg
 
 [python]
 python_path = /home/thoriqadillah/workspace/rapid/.venv/bin/python3

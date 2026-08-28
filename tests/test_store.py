@@ -22,7 +22,7 @@ def _download(gid: str, **fields) -> Download:
 
 
 def test_empty_store(tmp_path: Path) -> None:
-    assert _store(tmp_path).all() == {}
+    assert _store(tmp_path).all() == []
 
 
 def test_upsert_and_get(tmp_path: Path) -> None:
@@ -131,14 +131,14 @@ def test_persists_across_instances(tmp_path: Path) -> None:
     db = Database(path=path)
     DownloadStore(db).upsert(_download("abc", status="active"))
     reloaded = DownloadStore(db)
-    assert reloaded.all() == {"abc": Download(gid="abc", status="active")}
+    assert reloaded.all() == [Download(gid="abc", status="active")]
 
 
 def test_remove(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.upsert(_download("abc", status="active"))
     store.remove("abc")
-    assert store.all() == {}
+    assert len(store.all()) == 0
 
 
 def test_clear(tmp_path: Path) -> None:
@@ -146,7 +146,7 @@ def test_clear(tmp_path: Path) -> None:
     store.upsert(_download("a"))
     store.upsert(_download("b"))
     store.clear()
-    assert store.all() == {}
+    assert len(store.all()) == 0
 
 
 def test_speed_samples_roundtrip(tmp_path: Path) -> None:

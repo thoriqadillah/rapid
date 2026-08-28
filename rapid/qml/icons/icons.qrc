@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/icons">
+        <file>rapid.svg</file>
         <file>MdiLightBook.svg</file>
         <file>MdiLightClock.svg</file>
         <file>MdiLightConsole.svg</file>

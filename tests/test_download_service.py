@@ -179,8 +179,10 @@ def test_model_exposes_downloads(settings: Settings) -> None:
     assert service.data(service.index(2), role("gid")) is None
 
     service.stop("g2")
-    assert service.rowCount() == 1
-    assert service.data(service.index(0), role("gid")) == "g1"
+    assert service.rowCount() == 2
+    assert service.data(service.index(0), role("gid")) == "g2"
+    assert service.data(service.index(0), role("status")) == "removed"
+    assert service.data(service.index(1), role("gid")) == "g1"
 
 
 def test_poll_propagates_status_and_speed_samples(settings: Settings) -> None:
@@ -323,7 +325,9 @@ def test_remove_stops_but_keeps_in_store(settings: Settings) -> None:
     service.stop("g1")
 
     assert fake.removed == ["g1"]
-    assert "g1" in store.all()
+    stored = store.get("g1")
+    assert stored is not None
+    assert stored.status == "removed"
     assert removed == []
 
 
@@ -332,7 +336,7 @@ def test_purge_deletes_from_store(settings: Settings) -> None:
     service.download(_await_resolve(service, "http://example.com/a.bin")[0])
     service.delete("g1")
     assert fake.purged == ["g1"]
-    assert store.all() == {}
+    assert store.all() == []
 
 
 def test_resolve_returns_uris_and_errors_tuple(settings: Settings) -> None:

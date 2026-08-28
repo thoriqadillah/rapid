@@ -239,7 +239,7 @@ class DownloadService(QAbstractListModel):
 
     @Slot(str)
     def stop(self, gid: str) -> None:
-        """Stop the download and drop it from the list; it stays in the store until purged."""
+        """Stop the download and retain its removed state until it is purged."""
         d = self._downloader.remove(gid)
         self._downloader.unlisten(gid)
         self._notify(d)

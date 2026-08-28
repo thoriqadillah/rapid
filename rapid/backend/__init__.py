@@ -12,6 +12,7 @@ from .download import (
     ResolvedUrl,
 )
 from .plugin import PluginManager, PluginSpec
+from .notification import NotificationService
 
 __all__ = [
     "Aria2Downloader",
@@ -25,6 +26,7 @@ __all__ = [
     "SpeedSample",
     "PluginManager",
     "PluginSpec",
+    "NotificationService",
     "ResolvedUrl",
     "Database",
 ]
