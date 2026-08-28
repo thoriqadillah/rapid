@@ -1,4 +1,5 @@
 from __future__ import annotations
+import mimetypes
 import shutil
 import subprocess
 import time
@@ -165,23 +166,113 @@ class DownloadService(QAbstractListModel):
     @Slot(str)
     def resolve(self, url: str) -> None:
         """Resolve a URL in a background thread; result arrives via `resolved`."""
-        self._pool.submit(self._doResolve, url)
+        self._pool.submit(self._doResolve, url, None)
 
-    def _doResolve(self, url: str) -> None:
+    @Slot(dict)
+    def resolveRequest(self, request: dict[str, Any]) -> None:
+        """Resolve a browser request while preserving its HTTP context."""
+        url = request.get("url")
+        self._pool.submit(self._doResolve, url if isinstance(url, str) else "", request)
+
+    def _doResolve(self, url: str, options: dict[str, Any] | None) -> None:
         if not url.strip():
             self.resolved.emit([], {"url": "URL is required"})
             return
 
         try:
-            uris = (
-                [r.asDict() for r in self._pluginManager.resolve(url)] or
-                [r.asDict() for r in self._resolver.resolve(url)]
+            if options and options.get("browserResolved") is True:
+                resolved = self._browserResolvedUrl(url, options)
+                self.resolved.emit([resolved.asDict()], {})
+                return
+
+            pluginUris = self._pluginManager.resolve(url, options)
+            fallbackUris = [] if pluginUris else (
+                self._resolver.resolve(url, options) if options else self._resolver.resolve(url)
             )
+            resolvedUris = pluginUris or fallbackUris
+            uris = [self._withRequestContext(r, options).asDict() for r in resolvedUris]
 
             self.resolved.emit(uris, {})
         except Exception as exc:
             self.resolved.emit([], {"url": str(exc)})
             return
+
+    @staticmethod
+    def _browserResolvedUrl(url: str, options: dict[str, Any]) -> ResolvedUrl:
+        headersValue = options.get("headers")
+        cookiesValue = options.get("cookies")
+        headers = (
+            {key: value for key, value in headersValue.items() if isinstance(key, str) and isinstance(value, str)}
+            if isinstance(headersValue, dict)
+            else None
+        )
+        cookies = (
+            {key: value for key, value in cookiesValue.items() if isinstance(key, str) and isinstance(value, str)}
+            if isinstance(cookiesValue, dict)
+            else None
+        )
+        filenameValue = options.get("filename")
+        filename = filenameValue if isinstance(filenameValue, str) and filenameValue else None
+        originalFilename = filename
+        mimeValue = options.get("mimeType")
+        mimeType = (
+            mimeValue
+            if isinstance(mimeValue, str) and mimeValue
+            else mimetypes.guess_type(filename or urlparse(url).path, strict=False)[0]
+        )
+        if filename and mimeType:
+            suffix = Path(filename).suffix
+            if not (suffix and suffix[1:].isalnum()):
+                filename += mimetypes.guess_extension(mimeType.split(";", 1)[0]) or ""
+
+        categoryValue = options.get("category")
+        category = categoryValue if isinstance(categoryValue, str) and categoryValue else "unknown"
+        if category == "unknown" and mimeType:
+            prefix = mimeType.split("/", 1)[0]
+            category = prefix if prefix in {"audio", "video", "image"} else "unknown"
+        sizeValue = options.get("size")
+        size = sizeValue if isinstance(sizeValue, int) and not isinstance(sizeValue, bool) and sizeValue >= 0 else None
+        refererValue = options.get("referer") or options.get("pageUrl")
+        titleValue = options.get("title")
+        title = titleValue if isinstance(titleValue, str) and titleValue else filename
+        if title == originalFilename:
+            title = filename
+
+        return ResolvedUrl(
+            url=url,
+            title=title,
+            filename=filename,
+            mimeType=mimeType,
+            size=size,
+            category=category,
+            headers=headers,
+            cookies=cookies,
+            referer=refererValue if isinstance(refererValue, str) else None,
+            resolverName="Browser",
+        )
+
+    @staticmethod
+    def _withRequestContext(
+        resolved: ResolvedUrl,
+        options: dict[str, Any] | None,
+    ) -> ResolvedUrl:
+        if not options:
+            return resolved
+        headers = options.get("headers")
+        cookies = options.get("cookies")
+        referer = options.get("referer") or options.get("pageUrl")
+        filename = options.get("filename")
+        title = options.get("title")
+        mimeType = options.get("mimeType")
+        return replace(
+            resolved,
+            headers=resolved.headers if resolved.headers is not None else headers if isinstance(headers, dict) else None,
+            cookies=resolved.cookies if resolved.cookies is not None else cookies if isinstance(cookies, dict) else None,
+            referer=resolved.referer if resolved.referer is not None else referer if isinstance(referer, str) else None,
+            filename=resolved.filename or (filename if isinstance(filename, str) else None),
+            title=resolved.title or (title if isinstance(title, str) else None),
+            mimeType=resolved.mimeType or (mimeType if isinstance(mimeType, str) else None),
+        )
 
     @Slot(list)
     def download(self, resolvedUri: list[dict[str, Any]]) -> None:
@@ -248,10 +339,10 @@ class DownloadService(QAbstractListModel):
     def delete(self, gid: str) -> None:
         self._downloader.purge(gid)
         self._downloader.unlisten(gid)
+        self._deleteFromDisk(gid)
         self._store.remove(gid)
         self._remove(gid)
         self.downloadRemoved.emit(gid)
-        self._deleteFromDisk(gid)
 
     # --- internals ----------------------------------------------------------
 

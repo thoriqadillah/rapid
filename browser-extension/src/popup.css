@@ -1,0 +1,138 @@
+:root {
+    color-scheme: light dark;
+    font:
+        13px/1.4 system-ui,
+        sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    width: 380px;
+    margin: 0;
+    background: Canvas;
+    color: CanvasText;
+}
+
+header {
+    padding: 14px 16px;
+    border-bottom: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+h1,
+h2,
+p {
+    margin: 0;
+}
+
+h1 {
+    font-size: 18px;
+}
+
+h2 {
+    font-size: 14px;
+}
+
+#connection {
+    margin-top: 2px;
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+#connection.online {
+    color: #2e9b50;
+    opacity: 1;
+}
+
+#connection.offline {
+    color: #d34b4b;
+    opacity: 1;
+}
+
+.switch-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    font-size: 12px;
+}
+
+main {
+    padding: 14px 16px 16px;
+}
+
+.section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 9px;
+}
+
+button {
+    font: inherit;
+    cursor: pointer;
+}
+
+#refresh {
+    border: 0;
+    background: transparent;
+    color: LinkText;
+    padding: 2px;
+}
+
+#status {
+    padding: 18px 4px;
+    text-align: center;
+    opacity: 0.65;
+}
+
+ul {
+    display: grid;
+    gap: 8px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+    border-radius: 7px;
+    padding: 9px;
+}
+
+.video-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.video-url {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: 0.65;
+    font-size: 12px;
+}
+
+.download {
+    border: 0;
+    border-radius: 5px;
+    padding: 6px 9px;
+    background: AccentColor;
+    color: AccentColorText;
+}
+
+.download:disabled {
+    opacity: 0.55;
+    cursor: wait;
+}

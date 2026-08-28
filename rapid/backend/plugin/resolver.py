@@ -57,8 +57,12 @@ class ResolverPlugin(Resolver):
     def shouldResolve(self, uri: str) -> bool:
         return any(re.search(pattern, uri) for pattern in self._spec.match if pattern)
 
-    def resolve(self, uri: str) -> list[ResolvedUrl]:
-        result = self._call(protocol.RESOLVE, [uri])
+    def resolve(
+        self,
+        uri: str,
+        options: dict[str, Any] | None = None,
+    ) -> list[ResolvedUrl]:
+        result = self._call(protocol.RESOLVE, [uri, options or {}])
         if not isinstance(result, dict) or not isinstance(result.get("items"), list):
             raise PluginError("Resolve returned invalid result")
 

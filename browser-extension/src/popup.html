@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rapid</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Rapid</h1>
+      <p id="connection">Checking desktop app…</p>
+    </div>
+    <label class="switch-row">
+      <input id="intercept" type="checkbox">
+      Intercept downloads
+    </label>
+  </header>
+  <main>
+    <div class="section-title">
+      <h2>Videos on this page</h2>
+      <button id="refresh" type="button" title="Scan again">Refresh</button>
+    </div>
+    <div id="status">Scanning…</div>
+    <ul id="videos"></ul>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

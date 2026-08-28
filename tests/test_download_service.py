@@ -15,7 +15,7 @@ from rapid.backend.download.downloader import (
     NotifyCallback,
     Resolver,
 )
-from rapid.backend.download.models import Download, ResolvedUrl
+from rapid.backend.download.models import Download, DownloadFile, ResolvedUrl
 from rapid.backend.setting.models import Settings
 
 SAMPLE = Path(__file__).resolve().parent.parent / "rapid" / "plugins"
@@ -36,6 +36,7 @@ class FakeDownloader(Downloader, Resolver):
         self.started = False
         self.stopped = False
         self.added: list[str] = []
+        self.resolveRequests: list[str] = []
         self.removed: list[str] = []
         self.purged: list[str] = []
         self._statuses: dict[str, Download] = {}
@@ -53,7 +54,8 @@ class FakeDownloader(Downloader, Resolver):
     def validate(self, uri: str) -> dict[str, str]:
         return {} if uri.startswith("http") else {"url": "Enter a URL"}
 
-    def resolve(self, uri: str) -> list[ResolvedUrl]:
+    def resolve(self, uri: str, options: dict[str, object] | None = None) -> list[ResolvedUrl]:
+        self.resolveRequests.append(uri)
         return [ResolvedUrl(url=uri, title="x", category="unknown")]
 
     def download(self, uri: ResolvedUrl) -> Download:
@@ -140,6 +142,93 @@ def test_start_stops_downloader(settings: Settings) -> None:
     assert fake.started
     service.close()
     assert fake.stopped
+
+
+def test_browser_resolve_preserves_request_context(settings: Settings) -> None:
+    service, fake, _ = _service(settings)
+    app = QCoreApplication.instance()
+    done: dict = {}
+    service.resolved.connect(lambda uris, errors: done.update(uris=uris, errors=errors))
+
+    service.resolveRequest({
+        "url": "http://example.com/video.mp4",
+        "headers": {"Authorization": "Bearer token"},
+        "cookies": {"session": "secret"},
+        "pageUrl": "http://example.com/watch",
+        "filename": "browser-name.mp4",
+    })
+    while "uris" not in done and app:
+        app.processEvents()
+
+    assert done["errors"] == {}
+    assert fake.resolveRequests == ["http://example.com/video.mp4"]
+    assert done["uris"][0]["headers"] == {"Authorization": "Bearer token"}
+    assert done["uris"][0]["cookies"] == {"session": "secret"}
+    assert done["uris"][0]["referer"] == "http://example.com/watch"
+    assert done["uris"][0]["filename"] == "browser-name.mp4"
+
+
+def test_browser_preresolved_request_skips_resolvers(settings: Settings) -> None:
+    service, fake, _ = _service(settings)
+    app = QCoreApplication.instance()
+    done: dict = {}
+    service.resolved.connect(lambda uris, errors: done.update(uris=uris, errors=errors))
+
+    service.resolveRequest({
+        "url": "http://example.com/video.mp4",
+        "browserResolved": True,
+        "headers": {"Authorization": "Bearer token"},
+        "cookies": {"session": "secret"},
+        "pageUrl": "http://example.com/watch",
+        "filename": "video.mp4",
+        "mimeType": "video/mp4",
+        "size": 2048,
+        "category": "video",
+    })
+    while "uris" not in done and app:
+        app.processEvents()
+
+    assert done["errors"] == {}
+    assert fake.resolveRequests == []
+    assert done["uris"] == [ResolvedUrl(
+        url="http://example.com/video.mp4",
+        title="video.mp4",
+        filename="video.mp4",
+        mimeType="video/mp4",
+        size=2048,
+        category="video",
+        headers={"Authorization": "Bearer token"},
+        cookies={"session": "secret"},
+        referer="http://example.com/watch",
+        resolverName="Browser",
+    ).asDict()]
+
+
+def test_browser_preresolved_request_adds_extension_from_mime_type() -> None:
+    resolved = DownloadService._browserResolvedUrl(
+        "https://cdn.example/files/38c75fdae0d476387e3c530120a713ab",
+        {
+            "browserResolved": True,
+            "filename": "38c75fdae0d476387e3c530120a713ab",
+            "title": "38c75fdae0d476387e3c530120a713ab",
+            "mimeType": "video/mp4",
+            "category": "unknown",
+        },
+    )
+
+    assert resolved.filename == "38c75fdae0d476387e3c530120a713ab.mp4"
+    assert resolved.title == "38c75fdae0d476387e3c530120a713ab.mp4"
+    assert resolved.category == "video"
+
+
+def test_browser_preresolved_request_infers_image_from_url() -> None:
+    resolved = DownloadService._browserResolvedUrl(
+        "https://example.com/assets/photo.webp?token=secret",
+        {"browserResolved": True, "category": "unknown"},
+    )
+
+    assert resolved.mimeType == "image/webp"
+    assert resolved.category == "image"
 
 
 def test_add_url_downloads_and_persists(settings: Settings) -> None:
@@ -331,12 +420,26 @@ def test_remove_stops_but_keeps_in_store(settings: Settings) -> None:
     assert removed == []
 
 
-def test_purge_deletes_from_store(settings: Settings) -> None:
+def test_purge_deletes_from_store_and_disk(settings: Settings) -> None:
     service, fake, store = _service(settings)
     service.download(_await_resolve(service, "http://example.com/a.bin")[0])
+
+    path = settings.downloadDir / "a.bin"
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"downloaded content")
+    service._notify(
+        Download(
+            gid="g1",
+            status="complete",
+            files=(DownloadFile(index=1, path=str(path)),),
+        )
+    )
+
     service.delete("g1")
+
     assert fake.purged == ["g1"]
     assert store.all() == []
+    assert not path.exists()
 
 
 def test_resolve_returns_uris_and_errors_tuple(settings: Settings) -> None:

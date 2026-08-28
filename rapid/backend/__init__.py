@@ -1,3 +1,4 @@
+from .browser_integration import BrowserIntegration
 from .database import Database
 from .clipboard import ClipboardService
 from .download import (
@@ -24,6 +25,7 @@ __all__ = [
     "DownloadFile",
     "FileUri",
     "SpeedSample",
+    "BrowserIntegration",
     "PluginManager",
     "PluginSpec",
     "NotificationService",

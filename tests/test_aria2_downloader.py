@@ -150,6 +150,29 @@ def test_resolve_dry_run_option_is_forced(monkeypatch: pytest.MonkeyPatch, setti
     assert options["use-head"] == "true"
 
 
+def test_resolve_forwards_browser_context_to_probe_and_aria2(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
+    dl = _downloader(monkeypatch, settings, FakeRpc("gid-1", {"gid": "gid-1", "status": "complete", "files": []}))
+
+    item = dl.resolve(
+        "http://x/video.mp4",
+        options={
+            "headers": {"Authorization": "Bearer token"},
+            "cookies": {"session": "secret"},
+            "pageUrl": "http://x/watch",
+        },
+    )[0]
+
+    _, params = cast(FakeRpc, dl._rpc).calls[0]
+    options = cast(dict[str, object], params[1])
+    headers = cast(list[str], options["header"])
+    assert "Authorization: Bearer token" in headers
+    assert "Cookie: session=secret" in headers
+    assert "Referer: http://x/watch" in headers
+    assert item.headers == {"Authorization": "Bearer token"}
+    assert item.cookies == {"session": "secret"}
+    assert item.referer == "http://x/watch"
+
+
 # --- download ------------------------------------------------------------
 
 def test_download_returns_status_without_listening(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:

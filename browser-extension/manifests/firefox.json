@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "Rapid Download Integration",
+  "version": "0.1.0",
+  "description": "Send browser downloads and videos to the Rapid desktop app.",
+  "permissions": [
+    "activeTab",
+    "cookies",
+    "downloads",
+    "scripting",
+    "storage",
+    "webRequest"
+  ],
+  "host_permissions": [
+    "<all_urls>",
+    "http://127.0.0.1:17654/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["detector.js"],
+      "all_frames": true,
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "icons": {
+    "16": "icons/rapid-16.png",
+    "32": "icons/rapid-32.png",
+    "48": "icons/rapid-48.png",
+    "128": "icons/rapid-128.png"
+  },
+  "action": {
+    "default_title": "Download with Rapid",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/rapid-16.png",
+      "32": "icons/rapid-32.png"
+    }
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "rapid-download-integration@rapid.local",
+      "strict_min_version": "121.0"
+    }
+  }
+}

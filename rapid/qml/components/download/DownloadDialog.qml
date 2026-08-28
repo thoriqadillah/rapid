@@ -14,6 +14,7 @@ RDialog {
     property string defaultDir: ""
     property var resolvedUris: []
     property var options: ({})
+    property var requestContext: ({})
     property var errors: ({})
     property var previousResolvedUri: []
     property bool isFetching: false
@@ -53,6 +54,8 @@ RDialog {
                 Layout.fillWidth: true
 
                 onTextChanged: {
+                    if (root.requestContext.url && root.requestContext.url !== links.text)
+                        root.requestContext = ({});
                     resolveTimer.restart();
                     root.errors = ({});
                     links.error = "";
@@ -163,11 +166,19 @@ RDialog {
         root.close();
     }
 
+    function openFromBrowser(request, newOwner) {
+        root.requestContext = request;
+        links.text = request.url ?? "";
+        root.openFor(newOwner);
+        resolveTimer.stop();
+    }
+
     function reset() {
         links.text = "";
         saveDir.text = root.defaultDir;
         root.resolvedUris = [];
         root.errors = ({});
+        root.requestContext = ({});
         root.previousResolvedUri = [];
         root.isFetching = false;
         resolveTimer.stop();
@@ -182,7 +193,10 @@ RDialog {
         if (links.text === "")
             return;
         root.isFetching = true;
-        DownloadService.resolve(links.text);
+        if (root.requestContext.url)
+            DownloadService.resolveRequest(Object.assign({}, root.requestContext, {url: links.text}));
+        else
+            DownloadService.resolve(links.text);
     }
 
     function startTransition(newUris) {

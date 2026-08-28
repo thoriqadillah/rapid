@@ -231,7 +231,7 @@ class Aria2Downloader(Downloader, Resolver):
     def _probeHeader(url: str, options: dict[str, Any] = {}) -> dict[str, str] | None:
         try:
             with urlopen(Request(url, method="HEAD", headers=options.get("headers", {})), timeout=5) as resp:
-                return resp.headers
+                return {key.lower(): value for key, value in resp.headers.items()}
         except (HTTPError, URLError, OSError):
             # The HEAD probe is best-effort metadata; a failure just means
             # we fall back to aria2's file info and MIME guessing.
@@ -487,7 +487,10 @@ class Aria2Downloader(Downloader, Resolver):
             "completedLength",
             "files",
         ]
-        status = self._rpc.call("aria2.tellStatus", [gid, fields])
+        response = self._rpc.call("aria2.tellStatus", [gid, fields])
+        if not isinstance(response, dict):
+            raise Aria2Error(f"aria2 returned no status for {gid}")
+        status: dict[str, Any] = response
 
         # Dry-run resolution is asynchronous: aria2 fills in length
         # only after the HEAD request completes. Poll briefly for it.
@@ -497,30 +500,64 @@ class Aria2Downloader(Downloader, Resolver):
             and time.time() < deadline
         ):
             time.sleep(0.1)
-            status = self._rpc.call("aria2.tellStatus", [gid, fields])
+            response = self._rpc.call("aria2.tellStatus", [gid, fields])
+            if not isinstance(response, dict):
+                raise Aria2Error(f"aria2 returned no status for {gid}")
+            status = response
 
         return status
 
-    def _doRequest(self, uri: str, options: dict[str, Any]):
+    def _doRequest(
+        self,
+        uri: str,
+        options: dict[str, Any],
+        requestHeaders: dict[str, str],
+    ) -> list[Any]:
         for f in self._pendingResolveFutures:
             f.cancel()
 
         gid = self._poolResolver.submit(self._rpc.call, "aria2.addUri", [[uri], options])
-        headers = self._poolResolver.submit(self._probeHeader, uri, options)
+        headers = self._poolResolver.submit(
+            self._probeHeader,
+            uri,
+            {"headers": requestHeaders},
+        )
 
         self._pendingResolveFutures = [gid, headers]
 
         return [gid.result(), headers.result()]
 
-    def resolve(self, uri: str, options: dict[str, Any] = {}) -> list[ResolvedUrl]:
-        options = {
-            **options,
-            "dry-run": "true",
-            "use-head": "true",
-        }
+    def resolve(
+        self,
+        uri: str,
+        options: dict[str, Any] | None = None,
+    ) -> list[ResolvedUrl]:
+        context = options or {}
+        rawHeaders = context.get("headers")
+        rawCookies = context.get("cookies")
+        headers = dict(rawHeaders) if isinstance(rawHeaders, dict) else {}
+        cookies = dict(rawCookies) if isinstance(rawCookies, dict) else {}
+        referer = context.get("referer") or context.get("pageUrl")
+        requestContext = ResolvedUrl(
+            url=uri,
+            headers=headers,
+            cookies=cookies,
+            referer=referer if isinstance(referer, str) else None,
+        )
+        requestHeaders = headers.copy()
+        if requestContext.referer:
+            requestHeaders["Referer"] = requestContext.referer
+        if cookies:
+            requestHeaders["Cookie"] = "; ".join(f"{key}={value}" for key, value in cookies.items())
+
+        contextKeys = {"headers", "cookies", "referer", "pageUrl", "title", "filename", "mimeType", "source"}
+        ariaOptions = {key: value for key, value in context.items() if key not in contextKeys}
+        ariaOptions.update(self._aria2Options(requestContext))
+        ariaOptions.update({"dry-run": "true", "use-head": "true"})
+
+        [gid, responseHeaders] = self._doRequest(uri, ariaOptions, requestHeaders)
 
         try:
-            [gid, headers] = self._doRequest(uri, options)
             status = self._pollStatus(gid)
 
             files = status.get("files", [])
@@ -536,8 +573,17 @@ class Aria2Downloader(Downloader, Resolver):
                 uri,
             )
 
-            mimeType = headers.get("Content-Type") if headers else mimetypes.guess_type(filename or "", strict=False)[0]
-            size = self._parseInt(headers.get("Content-Length", 0) if headers else fileSize)
+            mimeType = (
+                responseHeaders.get("content-type") or responseHeaders.get("Content-Type")
+                if responseHeaders
+                else mimetypes.guess_type(filename or "", strict=False)[0]
+            )
+            contentLength = (
+                responseHeaders.get("content-length") or responseHeaders.get("Content-Length", 0)
+                if responseHeaders
+                else fileSize
+            )
+            size = self._parseInt(contentLength)
 
             if mimeType and filename:
                 suffix = Path(filename).suffix
@@ -551,13 +597,15 @@ class Aria2Downloader(Downloader, Resolver):
                 mimeType=mimeType,
                 size=size,
                 category=self._getCategory(mimeType, filename),
-                headers=options.get("headers", {}),
-                cookies=options.get("cookies", {}),
+                headers=headers,
+                cookies=cookies,
+                referer=requestContext.referer,
                 resolverName="Rapid",
             )]
 
         finally:
-            self._onResolved(gid)
+            if gid is not None:
+                self._onResolved(gid)
 
     def getStatus(self, id: str) -> Download:
         result = self._rpc.call("aria2.tellStatus", [id, STATUS_KEYS])

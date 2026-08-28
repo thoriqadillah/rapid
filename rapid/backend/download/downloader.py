@@ -75,6 +75,10 @@ class Resolver(ABC):
         pass
 
     @abstractmethod
-    def resolve(self, uri: str) -> list[ResolvedUrl]:
-        """Resolve a URI into one or more downloadable resources."""
+    def resolve(
+        self,
+        uri: str,
+        options: dict[str, object] | None = None,
+    ) -> list[ResolvedUrl]:
+        """Resolve a URI with optional browser request context."""
         pass

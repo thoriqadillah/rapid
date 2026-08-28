@@ -2,6 +2,7 @@ from __future__ import annotations
 from rapid.backend.plugin.transport import TransportError
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -98,11 +99,27 @@ class PluginManager(QObject):
     def resolverNames(self) -> list[str]:
         return [spec.name for spec in self._plugins.values()]
 
-    def resolve(self, uri: str) -> list[ResolvedUrl]:
+    def resolve(
+        self,
+        uri: str,
+        options: dict[str, Any] | None = None,
+    ) -> list[ResolvedUrl]:
+        context = options or {}
+        headers = context.get("headers")
+        cookies = context.get("cookies")
+        referer = context.get("referer") or context.get("pageUrl")
         results: list[ResolvedUrl] = []
         for plugin in self._plugins.values():
             resolver = ResolverPlugin(spec=plugin)
-            if resolver.shouldResolve(uri):
-                results.extend(resolver.resolve(uri))
+            if not resolver.shouldResolve(uri):
+                continue
+
+            for resolved in resolver.resolve(uri, context):
+                results.append(replace(
+                    resolved,
+                    headers=resolved.headers if resolved.headers is not None else headers if isinstance(headers, dict) else None,
+                    cookies=resolved.cookies if resolved.cookies is not None else cookies if isinstance(cookies, dict) else None,
+                    referer=resolved.referer if resolved.referer is not None else referer if isinstance(referer, str) else None,
+                ))
 
         return results

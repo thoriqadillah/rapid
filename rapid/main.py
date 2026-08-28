@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QApplication
 from rapid.qml.icons import icons_rc  # noqa: F401  registers qrc resources on import
 from rapid.backend import (
     Aria2Downloader,
+    BrowserIntegration,
     ClipboardService,
     Database,
     DownloadFilterProxy,
@@ -55,6 +56,12 @@ def _run() -> int:
     engine.rootContext().setContextProperty("NotificationService", notifications)
     downloader = downloader_service(engine, settings)
 
+    browserIntegration = BrowserIntegration(parent=engine)
+    browserIntegration.errorOccurred.connect(
+        lambda message: notifications.error("Browser integration", message, True)
+    )
+    engine.rootContext().setContextProperty("BrowserIntegration", browserIntegration)
+
     dialogContext = QQmlContext(engine.rootContext(), engine)
     dialogComponent = QQmlComponent(
         engine, QUrl.fromLocalFile(str(BASE_DIR / "qml" / "components" / "download" / "DownloadDialog.qml"))
@@ -75,7 +82,9 @@ def _run() -> int:
         return 1
 
     downloader.start()
+    browserIntegration.start()
     exit_code = app.exec()
+    browserIntegration.close()
     downloader.close()
     notifications.close()
 

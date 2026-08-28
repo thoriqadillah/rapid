@@ -39,6 +39,20 @@ def test_resolve_supported_url() -> None:
     assert all(r.url.startswith("https://example.com/video/") for r in results)
 
 
+def test_resolve_inherits_browser_request_context() -> None:
+    result = _manager().resolve(
+        "https://youtu.be/dQw4w9WgXcQ",
+        {
+            "headers": {"Authorization": "Bearer token"},
+            "cookies": {"session": "secret"},
+            "pageUrl": "https://youtu.be/dQw4w9WgXcQ",
+        },
+    )[0]
+    assert result.headers == {"Authorization": "Bearer token"}
+    assert result.cookies == {"session": "secret"}
+    assert result.referer == "https://youtu.be/dQw4w9WgXcQ"
+
+
 def test_resolve_unsupported_url_returns_empty() -> None:
     assert _manager().resolve("https://example.com/") == []
 

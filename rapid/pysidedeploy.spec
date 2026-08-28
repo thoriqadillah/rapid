@@ -4,7 +4,7 @@ project_dir = .
 input_file = main.py
 exec_directory = ./dist
 project_file = 
-icon = qml/icons/rapid.svg
+icon = ./rapid/qml/icons/rapid.svg
 
 [python]
 python_path = /home/thoriqadillah/workspace/rapid/.venv/bin/python3

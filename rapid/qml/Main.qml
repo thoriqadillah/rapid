@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import "pages"
 
-// NotificationService is a Python-registered context property, invisible to qmllint.
+// NotificationService and BrowserIntegration are Python-registered context properties.
 // qmllint disable unqualified
 ApplicationWindow {
     id: window
@@ -86,6 +86,15 @@ ApplicationWindow {
         // Swallow all keys so focus can't reach the dimmed controls.
         Keys.onPressed: function (event) { event.accepted = true }
         Keys.onReleased: function (event) { event.accepted = true }
+    }
+
+    Connections {
+        target: BrowserIntegration
+
+        function onDownloadRequested(request) {
+            window.bringToForeground()
+            DownloadDialog.openFromBrowser(request, window)
+        }
     }
 
     Connections {
