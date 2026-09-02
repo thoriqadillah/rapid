@@ -182,6 +182,13 @@ class DownloadService(QAbstractListModel):
         try:
             if options and options.get("browserResolved") is True:
                 resolved = self._browserResolvedUrl(url, options)
+                if resolved.filename:
+                    dest = (
+                        Path(resolved.dir)
+                        if resolved.dir
+                        else Path(self._settings.downloadDir)
+                    )
+                    resolved = replace(resolved, filename=self._uniqueName(dest, resolved.filename))
                 self.resolved.emit([resolved.asDict()], {})
                 return
 
@@ -189,8 +196,14 @@ class DownloadService(QAbstractListModel):
             fallbackUris = [] if pluginUris else (
                 self._resolver.resolve(url, options) if options else self._resolver.resolve(url)
             )
+            dest = Path(self._settings.downloadDir)
             resolvedUris = pluginUris or fallbackUris
-            uris = [self._withRequestContext(r, options).asDict() for r in resolvedUris]
+            uris = []
+            for r in resolvedUris:
+                r = self._withRequestContext(r, options)
+                if r.filename:
+                    r = replace(r, filename=self._uniqueName(dest, r.filename))
+                uris.append(r.asDict())
 
             self.resolved.emit(uris, {})
         except Exception as exc:
@@ -214,6 +227,13 @@ class DownloadService(QAbstractListModel):
         filenameValue = options.get("filename")
         filename = filenameValue if isinstance(filenameValue, str) and filenameValue else None
         originalFilename = filename
+        savePath = options.get("savePath")
+        destDir = None
+        if isinstance(savePath, str) and savePath:
+            saveFile = Path(savePath)
+            destDir = str(saveFile.parent)
+            if not filename:
+                filename = saveFile.name
         mimeValue = options.get("mimeType")
         mimeType = (
             mimeValue
@@ -242,6 +262,7 @@ class DownloadService(QAbstractListModel):
             url=url,
             title=title,
             filename=filename,
+            dir=destDir,
             mimeType=mimeType,
             size=size,
             category=category,
@@ -250,6 +271,18 @@ class DownloadService(QAbstractListModel):
             referer=refererValue if isinstance(refererValue, str) else None,
             resolverName="Browser",
         )
+
+    def _uniqueName(self, dest: Path, filename: str) -> str:
+        target = dest / filename
+        if not target.exists():
+            return filename
+        stem, ext = Path(filename).stem, Path(filename).suffix
+        n = 1
+        while True:
+            candidate = f"{stem} ({n}){ext}" if n > 1 else f"{stem} (1){ext}"
+            if not (dest / candidate).exists():
+                return candidate
+            n += 1
 
     @staticmethod
     def _withRequestContext(

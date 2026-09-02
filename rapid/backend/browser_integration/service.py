@@ -49,7 +49,7 @@ def normalizeBrowserRequest(value: Any) -> dict[str, Any]:
         "headers": _stringMap(value.get("headers"), blocked=_BLOCKED_HEADERS),
         "cookies": _stringMap(value.get("cookies")),
     }
-    for key in ("referer", "pageUrl", "title", "filename", "mimeType", "category", "source"):
+    for key in ("referer", "pageUrl", "title", "filename", "mimeType", "category", "source", "savePath"):
         item = value.get(key)
         if isinstance(item, str):
             request[key] = item

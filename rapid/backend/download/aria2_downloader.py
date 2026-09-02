@@ -625,6 +625,9 @@ class Aria2Downloader(Downloader, Resolver):
         if resolved.filename:
             options["out"] = resolved.filename
 
+        if resolved.dir:
+            options["dir"] = resolved.dir
+
         if resolved.referer:
             headers["Referer"] = resolved.referer
 

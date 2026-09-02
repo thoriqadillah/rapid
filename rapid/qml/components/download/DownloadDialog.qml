@@ -162,7 +162,9 @@ RDialog {
     }
 
     function submit() {
-        DownloadService.download(resolvedUris);
+        const dir = saveDir.text;
+        if (dir) root.resolvedUris = root.resolvedUris.map(uri => Object.assign({}, uri, { dir }));
+        DownloadService.download(root.resolvedUris);
         root.close();
     }
 
@@ -216,6 +218,12 @@ RDialog {
             root.isFetching = false;
             links.error = errors.url ?? "";
             root.startTransition(uris);
+            for (const uri of uris) {
+                if (uri && uri.dir) {
+                    saveDir.text = uri.dir;
+                    break;
+                }
+            }
         }
     }
 

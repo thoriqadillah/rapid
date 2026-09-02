@@ -186,6 +186,7 @@ class ResolvedUrl:
     # User-facing information.
     title: str | None = None
     filename: str | None = None
+    dir: str | None = None
 
     # Resource metadata.
     mimeType: str | None = None
@@ -209,6 +210,7 @@ class ResolvedUrl:
             url=str(data["url"]),
             title=data.get("title"),
             filename=data.get("filename"),
+            dir=data.get("dir"),
             mimeType=data.get("mimeType"),
             size=data.get("size"),
             category=data.get("category", "unknown"),
