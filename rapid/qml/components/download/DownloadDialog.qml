@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls as Controls
 import QtQuick.Layouts
+import QtQuick.Window
 import "../.."
 import "../../ui"
 
@@ -21,6 +22,10 @@ RDialog {
     property bool isEditing: false
 
     minimumWidth: 480
+    maxHeight: {
+        const avail = Screen.availableHeight > 0 ? Screen.availableHeight : 700;
+        return Math.max(Theme.touchTarget * 6, Math.round(avail * 0.9));
+    }
     title: qsTr("New download")
 
     onOpened: root.resolve()
@@ -29,9 +34,14 @@ RDialog {
     Controls.ScrollView {
         id: scroll
         Layout.fillWidth: true
+        Layout.fillHeight: true
         clip: true
-        Controls.ScrollBar.horizontal.policy: Controls.ScrollBar.AlwaysOff
-        Controls.ScrollBar.vertical.policy: Controls.ScrollBar.AsNeeded
+        Controls.ScrollBar.horizontal: Controls.ScrollBar { policy: Controls.ScrollBar.AlwaysOff }
+        Controls.ScrollBar.vertical: Controls.ScrollBar {
+            id: vbar
+            policy: Controls.ScrollBar.AsNeeded
+        }
+        Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
 
         ColumnLayout {
             id: form
@@ -119,11 +129,11 @@ RDialog {
                         Connections {
                             target: uriBlock
                             function onExitingChanged() {
-                                if (uriBlock.exiting)
-                                    exit();
+                                if (uriBlock.exiting) uriRepeater.itemAt(index)?.exit();
                                 uriBlock.exiting = false;
                             }
                         }
+
                     }
                 }
             }
@@ -146,6 +156,12 @@ RDialog {
                     }
                 }
             }
+
+            AdvancedOptions {
+                id: advanced
+                implicitWidth: scroll.availableWidth
+                Layout.fillWidth: true
+            }
         }
     }
 
@@ -161,18 +177,66 @@ RDialog {
             saveDir.text = dir;
     }
 
+    function headersDict() {
+        const headers = {};
+        for (const row of advanced.headers.values())
+            headers[row.key] = row.value;
+        return headers;
+    }
+
+    function cookiesDict() {
+        const cookies = {};
+        for (const row of advanced.cookies.values())
+            cookies[row.key] = row.value;
+        return cookies;
+    }
+
     function submit() {
         const dir = saveDir.text;
-        if (dir) root.resolvedUris = root.resolvedUris.map(uri => Object.assign({}, uri, { dir }));
+        const headers = root.headersDict();
+        const cookies = root.cookiesDict();
+        root.resolvedUris = root.resolvedUris.map(uri => {
+            const patch = {
+                headers: Object.assign({}, uri.headers || {}, headers),
+                cookies: Object.assign({}, uri.cookies || {}, cookies)
+            };
+            if (dir) patch.dir = dir;
+            return Object.assign({}, uri, patch);
+        });
         DownloadService.download(root.resolvedUris);
         root.close();
+    }
+
+    function dictToRows(dict) {
+        const rows = [];
+        for (const key of Object.keys(dict || {}))
+            rows.push({ key: key, value: dict[key] });
+        return rows;
     }
 
     function openFromBrowser(request, newOwner) {
         root.requestContext = request;
         links.text = request.url ?? "";
         root.openFor(newOwner);
+        root.setAdvancedFromContext(request);
         resolveTimer.stop();
+    }
+
+    function setAdvancedFromContext(context) {
+        const headers = context.headers;
+        const cookies = context.cookies;
+        advanced.headers.setRows(
+            headers && typeof headers === "object" && Object.keys(headers).length > 0
+                ? root.dictToRows(headers)
+                : []
+        );
+        advanced.headers.ensureRow();
+        advanced.cookies.setRows(
+            cookies && typeof cookies === "object" && Object.keys(cookies).length > 0
+                ? root.dictToRows(cookies)
+                : []
+        );
+        advanced.cookies.ensureRow();
     }
 
     function reset() {
@@ -183,6 +247,10 @@ RDialog {
         root.requestContext = ({});
         root.previousResolvedUri = [];
         root.isFetching = false;
+        advanced.headers.setRows([]);
+        advanced.headers.ensureRow();
+        advanced.cookies.setRows([]);
+        advanced.cookies.ensureRow();
         resolveTimer.stop();
         exitTimer.stop();
     }
@@ -195,10 +263,12 @@ RDialog {
         if (links.text === "")
             return;
         root.isFetching = true;
-        if (root.requestContext.url)
-            DownloadService.resolveRequest(Object.assign({}, root.requestContext, {url: links.text}));
-        else
-            DownloadService.resolve(links.text);
+        const options = Object.assign({}, root.requestContext, {
+            url: links.text,
+            headers: root.headersDict(),
+            cookies: root.cookiesDict()
+        });
+        DownloadService.resolveRequest(options);
     }
 
     function startTransition(newUris) {

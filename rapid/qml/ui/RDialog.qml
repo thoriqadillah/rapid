@@ -15,11 +15,14 @@ Window {
     property alias footer: footerArea.data
 
     property Window owner: null
+    property int maxHeight: 0
 
     signal opened
 
+    readonly property real intrinsicHeight: body.implicitHeight + footerArea.implicitHeight + Theme.spacingLg * 3
+
     minimumWidth: 500
-    height: body.implicitHeight + footerArea.implicitHeight + Theme.spacingLg * 3
+    height: root.maxHeight > 0 ? Math.min(root.maxHeight, root.intrinsicHeight) : root.intrinsicHeight
     visible: false
     color: Theme.colorBackground
 
@@ -57,7 +60,9 @@ Window {
             top: parent.top
             left: parent.left
             right: parent.right
+            bottom: root.maxHeight > 0 ? footerArea.top : undefined
             margins: Theme.spacingSm
+            bottomMargin: Theme.spacingLg
         }
     }
 

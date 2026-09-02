@@ -355,7 +355,7 @@ chrome.downloads.onCreated.addListener(async (item) => {
     if (!settings.interceptDownloads) return;
     if (!(await rapidHealth().catch(() => false))) return;
 
-    await callChrome(chrome.downloads.pause.bind(chrome.downloads), item.id)
+    await callChrome(chrome.downloads.cancel.bind(chrome.downloads), item.id)
         .catch(() => undefined);
 
     await callChrome(chrome.downloads.erase.bind(chrome.downloads), { id: item.id })

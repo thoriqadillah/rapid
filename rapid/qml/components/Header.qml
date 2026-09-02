@@ -65,7 +65,7 @@ Rectangle {
             text: "New"
             variant: RButton.PrimaryVariant
             Layout.minimumHeight: Theme.touchTarget
-            iconSource: "qrc:/icons/MdiPlus.svg"
+            iconSource: "qrc:/icons/MdiLightPlus.svg"
             onClicked: root.addClicked()
         }
     }

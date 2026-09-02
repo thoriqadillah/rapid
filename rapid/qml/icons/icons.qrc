@@ -29,5 +29,7 @@
         <file>MdiLightStop.svg</file>
         <file>MdiLightLogout.svg</file>
         <file>MaterialSymbolsLightDeleteForeverOutlineSharp.svg</file>
+        <file>MdiLightChevronDown.svg</file>
+        <file>MdiLightPlus.svg</file>
     </qresource>
 </RCC>
