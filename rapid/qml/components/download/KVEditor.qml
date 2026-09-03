@@ -21,7 +21,10 @@ ColumnLayout {
     function setRows(newRows) {
         listModel.clear();
         for (const r of newRows || []) {
-            listModel.append({ key: r.key ?? "", value: r.value ?? "" });
+            listModel.append({
+                key: r.key ?? "",
+                value: r.value ?? ""
+            });
         }
 
         jsonError = "";
@@ -35,7 +38,10 @@ ColumnLayout {
             if (!parsed) return [];
             const result = [];
             for (const key of Object.keys(parsed)) {
-                result.push({ key: key, value: String(parsed[key]) });
+                result.push({
+                    key: key,
+                    value: String(parsed[key])
+                });
             }
             return result;
         }
@@ -44,7 +50,10 @@ ColumnLayout {
             const key = listModel.get(i).key.trim();
             const value = listModel.get(i).value.trim();
             if (key !== "") {
-                result.push({ key: key, value: value });
+                result.push({
+                    key: key,
+                    value: value
+                });
             }
         }
         return result;
@@ -52,12 +61,18 @@ ColumnLayout {
 
     function ensureRow() {
         if (listModel.count === 0) {
-            listModel.append({ key: "", value: "" });
+            listModel.append({
+                key: "",
+                value: ""
+            });
         }
     }
 
     function addRow() {
-        listModel.append({ key: "", value: "" });
+        listModel.append({
+            key: "",
+            value: ""
+        });
     }
 
     function clearRow(index) {
@@ -97,9 +112,7 @@ ColumnLayout {
     function syncToRows() {
         const parsed = parseJson();
         if (!parsed) return;
-        root.setRows(
-            Object.keys(parsed).map((key) => ({ key: key, value: String(parsed[key]) }))
-        );
+        root.setRows(Object.keys(parsed).map(key => ({ key: key, value: String(parsed[key]) })));
         root.ensureRow();
     }
 
@@ -124,6 +137,7 @@ ColumnLayout {
 
         RowLayout {
             Layout.alignment: Qt.AlignRight
+            spacing: Theme.spacingSm
 
             Controls.Label {
                 text: qsTr("JSON")
@@ -131,7 +145,7 @@ ColumnLayout {
                 font.pixelSize: Theme.textSizeSm
             }
 
-            Controls.Switch {
+            RSwitch {
                 checked: root.useJson
                 onToggled: {
                     if (checked) root.syncToJson();
@@ -221,8 +235,12 @@ ColumnLayout {
             anchors.fill: parent
             clip: true
             Component.onCompleted: contentItem.boundsBehavior = Flickable.StopAtBounds
-            Controls.ScrollBar.horizontal: Controls.ScrollBar { policy: Controls.ScrollBar.AlwaysOff }
-            Controls.ScrollBar.vertical: Controls.ScrollBar { policy: Controls.ScrollBar.AsNeeded }
+            Controls.ScrollBar.horizontal: Controls.ScrollBar {
+                policy: Controls.ScrollBar.AlwaysOff
+            }
+            Controls.ScrollBar.vertical: Controls.ScrollBar {
+                policy: Controls.ScrollBar.AsNeeded
+            }
 
             Controls.TextArea {
                 id: jsonArea
@@ -238,9 +256,7 @@ ColumnLayout {
                     radius: Theme.radiusSm
                     color: Theme.colorInputBackground
                     border.width: 1
-                    border.color: root.jsonError.length > 0
-                                 ? Theme.colorDanger
-                                 : (jsonArea.activeFocus ? Theme.colorPrimary : Theme.colorBorder)
+                    border.color: root.jsonError.length > 0 ? Theme.colorDanger : (jsonArea.activeFocus ? Theme.colorPrimary : Theme.colorBorder)
                 }
                 onTextChanged: root.jsonError = ""
             }

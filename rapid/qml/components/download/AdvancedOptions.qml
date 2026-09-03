@@ -8,10 +8,10 @@ import "../../ui"
 ColumnLayout {
     id: root
 
-    spacing: Theme.spacingMd
     property bool expanded: false
     property alias headers: headersEditor
     property alias cookies: cookiesEditor
+    spacing: 0
 
     RButton {
         Layout.fillWidth: true
@@ -24,21 +24,48 @@ ColumnLayout {
         onClicked: root.expanded = !root.expanded
     }
 
-    ColumnLayout {
+    Item {
+        id: advancedWrapper
+        Layout.topMargin: root.expanded ? Theme.spacingMd : 0
         Layout.fillWidth: true
-        visible: root.expanded
-        spacing: Theme.spacingMd
+        Layout.preferredHeight: root.expanded ? advancedContent.implicitHeight : 0
+        clip: true
 
-        KVEditor {
-            id: headersEditor
-            Layout.fillWidth: true
-            title: qsTr("Headers")
+        Behavior on Layout.preferredHeight {
+            NumberAnimation {
+                duration: 100
+            }
         }
 
-        KVEditor {
-            id: cookiesEditor
-            Layout.fillWidth: true
-            title: qsTr("Cookies")
+        ColumnLayout {
+            id: advancedContent
+            width: parent.width
+            opacity: root.expanded ? 1 : 0
+            y: root.expanded ? 0 : -root.implicitHeight
+            spacing: Theme.spacingMd
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: 100
+                }
+            }
+            Behavior on y {
+                NumberAnimation {
+                    duration: 100
+                }
+            }
+
+            KVEditor {
+                id: headersEditor
+                Layout.fillWidth: true
+                title: qsTr("Headers")
+            }
+
+            KVEditor {
+                id: cookiesEditor
+                Layout.fillWidth: true
+                title: qsTr("Cookies")
+            }
         }
     }
 }
