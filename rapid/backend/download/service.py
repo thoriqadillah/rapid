@@ -368,11 +368,12 @@ class DownloadService(QAbstractListModel):
         self._downloader.unlisten(gid)
         self._notify(d)
 
-    @Slot(str)
-    def delete(self, gid: str) -> None:
+    @Slot(str, bool)
+    def delete(self, gid: str, deleteFromDisk: bool = True) -> None:
         self._downloader.purge(gid)
         self._downloader.unlisten(gid)
-        self._deleteFromDisk(gid)
+        if deleteFromDisk:
+            self._deleteFromDisk(gid)
         self._store.remove(gid)
         self._remove(gid)
         self.downloadRemoved.emit(gid)

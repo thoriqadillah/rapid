@@ -11,7 +11,9 @@ Controls.Menu {
     property string status: ""
     property string fileDir: ""
     property var resolved: null
+    property string displayName: ""
 
+    signal deleteRequested(var gid)
 
     Controls.MenuItem {
         text: qsTr("Pause")
@@ -31,7 +33,7 @@ Controls.Menu {
     Controls.MenuItem {
         text: qsTr("Delete")
         enabled: root.status === "complete" || root.status === "error"
-        onTriggered: DownloadService.delete(root.gid)
+        onTriggered: root.deleteRequested(root.gid)
     }
 
     Controls.MenuSeparator {}

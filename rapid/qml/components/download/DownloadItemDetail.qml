@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls
 import "../.."
 import "../../ui"
 
@@ -19,16 +20,17 @@ Rectangle {
     required property var completedLength
     required property var errorMessage
 
-    signal removeRequested(var gid)
+    signal removeRequested(var gid, bool deleteFromDisk)
 
     color: "transparent"
     implicitHeight: content.implicitHeight + Theme.spacingMd + Theme.spacingLg
     Layout.fillWidth: true
 
     readonly property double percent: {
-        const total = Number(root.totalLength) || 0
-        if (!total) return 0
-        return Math.min(1, (Number(root.completedLength) || 0) / total)
+        const total = Number(root.totalLength) || 0;
+        if (!total)
+            return 0;
+        return Math.min(1, (Number(root.completedLength) || 0) / total);
     }
 
     readonly property string displayName: {
@@ -43,11 +45,12 @@ Rectangle {
     }
 
     readonly property string fileDir: {
-        const paths = root.files
-        const path = paths.length > 0 ? paths[0].path : ""
-        if (!path) return ""
-        const idx = path.lastIndexOf("/")
-        return idx > 0 ? path.slice(0, idx) : ""
+        const paths = root.files;
+        const path = paths.length > 0 ? paths[0].path : "";
+        if (!path)
+            return "";
+        const idx = path.lastIndexOf("/");
+        return idx > 0 ? path.slice(0, idx) : "";
     }
 
     readonly property bool canPause: root.status === "active" || root.status === "waiting"
@@ -55,10 +58,10 @@ Rectangle {
 
     readonly property string statusText: {
         switch (root.status) {
-            case "removed":
-                return "Stopped"
-            default:
-                return root.status.charAt(0).toUpperCase() + root.status.slice(1)
+        case "removed":
+            return "Stopped";
+        default:
+            return root.status.charAt(0).toUpperCase() + root.status.slice(1);
         }
     }
 
@@ -207,8 +210,10 @@ Rectangle {
                 enabled: root.canPause || root.canResume
                 iconSource: root.canResume ? "qrc:/icons/MdiLightPlay.svg" : "qrc:/icons/MdiLightPause.svg"
                 onClicked: {
-                    if (root.canResume) DownloadService.resume(root.gid)
-                    else DownloadService.pause(root.gid)
+                    if (root.canResume)
+                        DownloadService.resume(root.gid);
+                    else
+                        DownloadService.pause(root.gid);
                 }
             }
 
@@ -233,33 +238,11 @@ Rectangle {
         }
     }
 
-    RDialog {
+    DeleteConfirmationDialog {
         id: deleteConfirm
-        title: qsTr("Delete download")
-
-        Text {
-            text: qsTr("Remove %1 forever?").arg(root.displayName)
-            color: Theme.colorText
-            font.pixelSize: Theme.textSize
-            wrapMode: Text.WordWrap
-            Layout.fillWidth: true
-        }
-
-        footer: RowLayout {
-            spacing: Theme.spacingMd
-
-            RButton {
-                text: qsTr("Cancel")
-                onClicked: deleteConfirm.close()
-            }
-            RButton {
-                text: qsTr("Delete")
-                variant: RButton.DangerVariant
-                onClicked: {
-                    deleteConfirm.close();
-                    root.removeRequested(root.gid);
-                }
-            }
+        displayName: root.displayName
+        onDeleteConfirmed: function (deleteFromDisk) {
+            root.removeRequested(root.gid, deleteFromDisk);
         }
     }
 }

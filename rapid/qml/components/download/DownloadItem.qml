@@ -34,7 +34,7 @@ Rectangle {
 
     signal contextMenuRequested(var data)
     signal toggleExpanded
-    signal removeRequested(var gid)
+    signal removeRequested(var gid, bool deleteFromDisk)
 
     color: highlighted || root.expanded || (rowHovered && !menuOpen) ? Theme.colorSurface : (index % 2 !== 0 ? Qt.rgba(Theme.colorSurface.r, Theme.colorSurface.g, Theme.colorSurface.b, 0.25) : "transparent")
     clip: true
@@ -122,7 +122,8 @@ Rectangle {
                     gid: root.gid,
                     status: root.status,
                     fileDir: root.fileDir,
-                    resolved: root.resolved
+                    resolved: root.resolved,
+                    displayName: root.displayName
                 });
                 return;
             }
@@ -272,8 +273,8 @@ Rectangle {
             totalLength: root.totalLength
             completedLength: root.completedLength
             errorMessage: root.errorMessage
-            onRemoveRequested: function (gid) {
-                root.removeRequested(gid);
+            onRemoveRequested: function (gid, deleteFromDisk) {
+                root.removeRequested(gid, deleteFromDisk);
             }
             opacity: root.expanded ? 1 : 0
             transform: Translate {

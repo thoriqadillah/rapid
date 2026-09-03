@@ -186,12 +186,12 @@ Download.DownloadLayout {
                         highlighted: list.contextMenuGid === gid
                         expanded: list.expandedGid === gid
                         onToggleExpanded: list.expandedGid = list.expandedGid === gid ? "" : gid
-                        onRemoveRequested: function (gid) {
+                        onRemoveRequested: function (gid, deleteFromDisk) {
                             if (list.expandedGid === gid) {
                                 list.expandedGid = "";
-                                DownloadService.delete(gid);
+                                DownloadService.delete(gid, deleteFromDisk);
                             } else {
-                                DownloadService.delete(gid);
+                                DownloadService.delete(gid, deleteFromDisk);
                             }
                         }
                         onContextMenuRequested: function (data) {
@@ -206,6 +206,7 @@ Download.DownloadLayout {
                         itemMenu.status = data.status;
                         itemMenu.fileDir = data.fileDir;
                         itemMenu.resolved = data.resolved;
+                        itemMenu.displayName = data.displayName || "";
                         itemMenu.popup();
                     }
 
@@ -270,9 +271,22 @@ Download.DownloadLayout {
 
     Download.DownloadItemContextMenu {
         id: itemMenu
+        onDeleteRequested: function (gid) {
+            list.contextMenuOpen = false;
+            list.contextMenuGid = "";
+            deleteConfirm.openFor(root.Window.window);
+        }
         onClosed: {
             list.contextMenuOpen = false;
             list.contextMenuGid = "";
+        }
+    }
+
+    Download.DeleteConfirmationDialog {
+        id: deleteConfirm
+        displayName: itemMenu.displayName || ""
+        onDeleteConfirmed: function (deleteFromDisk) {
+            DownloadService.delete(itemMenu.gid, deleteFromDisk);
         }
     }
 }
