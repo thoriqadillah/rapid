@@ -274,6 +274,18 @@ def test_model_exposes_downloads(settings: Settings) -> None:
     assert service.data(service.index(1), role("gid")) == "g1"
 
 
+def test_active_downloads_lists_running_names(settings: Settings) -> None:
+    service, _, _ = _service(settings)
+    service.download(_await_resolve(service, "http://example.com/a.bin")[0])
+    service.download(_await_resolve(service, "http://example.com/b.bin")[0])
+    service.stop("g1")
+
+    assert service.activeDownloads() == ["x"]
+    assert service.activeCount == 1
+
+    service.close()
+
+
 def test_poll_propagates_status_and_speed_samples(settings: Settings) -> None:
     service, fake, store = _service(settings)
     service.start()
@@ -435,7 +447,7 @@ def test_purge_deletes_from_store_and_disk(settings: Settings) -> None:
         )
     )
 
-    service.delete("g1")
+    service.delete("g1", True)
 
     assert fake.purged == ["g1"]
     assert store.all() == []

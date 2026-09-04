@@ -147,6 +147,10 @@ class DownloadService(QAbstractListModel):
     def activeCount(self) -> int:
         return sum(1 for d in self._downloads if d.status == "active")
 
+    def activeDownloads(self) -> list[str]:
+        """Names of all downloads currently active, for the quit dialog."""
+        return [self.downloadName(d.gid) for d in self._downloads if d.status == "active"]
+
     @Slot(str, result=str)
     def downloadName(self, gid: str) -> str:
         """Return a human-readable name for the download identified by *gid*."""

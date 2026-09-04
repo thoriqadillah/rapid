@@ -52,7 +52,6 @@ def _run() -> int:
 
     engine = QQmlApplicationEngine()
     notifications = NotificationService(engine)
-    notifications.quitRequested.connect(app.quit)
     engine.rootContext().setContextProperty("NotificationService", notifications)
     downloader = downloader_service(engine, settings)
     downloader.activeCountChanged.connect(notifications.setBadge)
@@ -77,6 +76,27 @@ def _run() -> int:
     clipboard.setParent(downloadDialog)
     downloadDialog.setProperty("defaultDir", str(settings.downloadDir))
     engine.rootContext().setContextProperty("DownloadDialog", downloadDialog)
+
+    quitDialogComponent = QQmlComponent(
+        engine,
+        QUrl.fromLocalFile(str(BASE_DIR / "qml" / "components" / "download" / "QuitConfirmationDialog.qml")),
+    )
+
+    def requestQuit() -> None:
+        if not downloader.activeCount:
+            app.quit()
+            return
+
+        owner = engine.rootObjects()[0]
+        quitDialog = quitDialogComponent.create()
+        if quitDialog is None:
+            return
+
+        quitDialog.setProperty("activeNames", downloader.activeDownloads())
+        quitDialog.quitConfirmed.connect(app.quit)  # type: ignore
+        quitDialog.openFor(owner)  # type: ignore
+
+    notifications.quitRequested.connect(requestQuit)
 
     engine.load(QUrl.fromLocalFile(str(BASE_DIR / "qml" / "Main.qml")))
     if not engine.rootObjects():
