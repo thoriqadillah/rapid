@@ -64,6 +64,7 @@ class DownloadService(QAbstractListModel):
     errorOccurred = Signal(str)
     resolved = Signal(list, dict)  # resolvedUris, errors
     countsChanged = Signal()  # sidebar badges
+    activeCountChanged = Signal(int)
     _notified = Signal(object)  # internal: Download, always delivered on the main thread
 
 
@@ -141,6 +142,10 @@ class DownloadService(QAbstractListModel):
             if download.category:
                 counts[download.category] = counts.get(download.category, 0) + 1
         return counts
+
+    @Property(int, notify=cast(Callable[[int], None], activeCountChanged))
+    def activeCount(self) -> int:
+        return sum(1 for d in self._downloads if d.status == "active")
 
     @Slot(str, result=str)
     def downloadName(self, gid: str) -> str:
@@ -425,6 +430,7 @@ class DownloadService(QAbstractListModel):
         self._downloads.insert(0, download)
         self.endInsertRows()
         self.countsChanged.emit()
+        self.activeCountChanged.emit(self.activeCount)
 
     def _remove(self, gid: str) -> None:
         row = self._row_of(gid)
@@ -434,6 +440,7 @@ class DownloadService(QAbstractListModel):
         del self._downloads[row]
         self.endRemoveRows()
         self.countsChanged.emit()
+        self.activeCountChanged.emit(self.activeCount)
 
     def _notify(self, download: Download) -> None:
         row = self._row_of(download.gid)
@@ -460,6 +467,7 @@ class DownloadService(QAbstractListModel):
             if download.category != previous.category:
                 self.countsChanged.emit()
             if previous.status != download.status:
+                self.activeCountChanged.emit(self.activeCount)
                 if download.status == "complete":
                     self.downloadCompleted.emit(download.gid)
                 elif download.status == "error":

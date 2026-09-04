@@ -55,6 +55,7 @@ def _run() -> int:
     notifications.quitRequested.connect(app.quit)
     engine.rootContext().setContextProperty("NotificationService", notifications)
     downloader = downloader_service(engine, settings)
+    downloader.activeCountChanged.connect(notifications.setBadge)
 
     browserIntegration = BrowserIntegration(parent=engine)
     browserIntegration.errorOccurred.connect(

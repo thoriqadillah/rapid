@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, Signal, Slot
-from PySide6.QtGui import QIcon
+from PySide6.QtCore import QObject, Signal, Slot, QSize
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
 
@@ -64,6 +64,43 @@ class NotificationService(QObject):
         self._trayMenu.close()
         if self._ownsTrayMenu:
             self._trayMenu.deleteLater()
+
+    def setBadge(self, count: int) -> None:
+        """Overlay a count badge on the tray icon. 0 clears the badge."""
+        size = self._notificationIcon.actualSize(QSize(64, 64))
+        pixmap = QPixmap(size)
+        pixmap.fill(0)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self._notificationIcon.paint(painter, pixmap.rect())
+
+        if count > 0:
+            text = str(count) if count < 100 else "99+"
+            badgeSize = max(size.width() // 2, 10)
+            font = QFont()
+            font.setPixelSize(badgeSize * 3 // 4)
+            font.setBold(True)
+            painter.setFont(font)
+            metrics = painter.fontMetrics()
+            textRect = metrics.boundingRect(text)
+            bw = max(textRect.width() + 6, badgeSize)
+            bh = max(textRect.height() + 2, badgeSize)
+            painter.setPen(QColor("white"))
+            painter.setBrush(QColor("#e53935"))
+            painter.drawRoundedRect(
+                size.width() - bw, size.height() - bh, bw, bh, 4, 4
+            )
+            painter.drawText(
+                size.width() - bw,
+                size.height() - bh,
+                bw,
+                bh,
+                0x0084,  # AlignCenter
+                text,
+            )
+
+        painter.end()
+        self._trayIcon.setIcon(QIcon(pixmap))
 
     def _onTrayActivated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
         if reason in (
