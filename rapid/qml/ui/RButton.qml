@@ -8,12 +8,14 @@ Controls.Button {
     enum Variant {
         BaseVariant,
         PrimaryVariant,
+        InfoVariant,
         SecondaryVariant,
         GhostVariant,
         WarningVariant,
         DangerVariant
     }
 
+    property bool link: false
     property int variant: RButton.BaseVariant
     property bool outlined: false
     property url iconSource: ""
@@ -28,11 +30,15 @@ Controls.Button {
     property int cornerRadius: Theme.radiusSm
 
     readonly property color backgroundColor: {
+        if (root.link) return 'transparent'
+
         switch (root.variant) {
         case RButton.SecondaryVariant:
             return Theme.colorAccent
         case RButton.BaseVariant:
             return Theme.colorButtonBase
+        case RButton.InfoVariant:
+            return Theme.colorInfo
         case RButton.GhostVariant:
             return 'transparent'
         case RButton.WarningVariant:
@@ -54,12 +60,16 @@ Controls.Button {
             return Theme.colorPrimary
         case RButton.WarningVariant:
             return Theme.colorWarning
+        case RButton.InfoVariant:
+            return Theme.colorInfo
         default:
             return Theme.colorBorder
         }
     }
 
     readonly property color hoveredColor: {
+        if (root.link) return 'transparent'
+
         switch (root.variant) {
         case RButton.SecondaryVariant:
             return Theme.colorAccentHover
@@ -70,6 +80,8 @@ Controls.Button {
             return Theme.colorButtonBaseHover
         case RButton.WarningVariant:
             return Theme.colorWarningHover
+        case RButton.InfoVariant:
+            return Theme.colorInfoHover
         default:
             return Theme.colorPrimaryHover
         }
@@ -86,14 +98,16 @@ Controls.Button {
     }
 
     hoverEnabled: true
+    font.underline: root.link && root.hovered
 
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.NoButton
         cursorShape: Qt.PointingHandCursor
     }
-    horizontalPadding: root.text == "" && root.iconOnly ? Theme.spacingMd : Theme.spacingXl
-    verticalPadding: Theme.spacingXs
+
+    horizontalPadding: root.link ? 0 : root.text == "" && root.iconOnly ? Theme.spacingMd : Theme.spacingXl
+    verticalPadding: root.link ? 0 : Theme.spacingXs
     spacing: Theme.spacingXs
     implicitHeight: Math.max(
         Theme.touchTarget,

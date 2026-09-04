@@ -225,6 +225,10 @@ RDialog {
         resolveTimer.stop();
     }
 
+    function setUrl(url) {
+        links.text = url;
+    }
+
     function setAdvancedFromContext(context) {
         const headers = context.headers;
         const cookies = context.cookies;
