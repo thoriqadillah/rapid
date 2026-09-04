@@ -56,7 +56,7 @@ Rectangle {
             Layout.maximumWidth: root.preferredSearchWidth
             Layout.minimumWidth: 0
             Layout.minimumHeight: Theme.touchTarget
-            prefixIcon: "qrc:/icons/MdiMagnify.svg"
+            prefixIcon: "qrc:/icons/MdiLightMagnify.svg"
             placeholderText: "Search..."
         }
 

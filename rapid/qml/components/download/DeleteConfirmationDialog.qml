@@ -15,6 +15,20 @@ RDialog {
     signal deleteConfirmed(bool deleteFromDisk)
 
     title: qsTr("Delete download")
+    Shortcut {
+        sequence: "Return"
+        onActivated: {
+            root.close();
+            root.deleteConfirmed(deleteFromDiskSwitch.checked);
+        }
+    }
+    Shortcut {
+        sequence: "Enter"
+        onActivated: {
+            root.close();
+            root.deleteConfirmed(deleteFromDiskSwitch.checked);
+        }
+    }
 
     Text {
         text: qsTr("Remove %1 forever?").arg(root.displayName || qsTr("this download"))

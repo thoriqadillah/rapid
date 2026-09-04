@@ -31,6 +31,15 @@ RDialog {
     onOpened: root.resolve()
     onClosing: root.reset()
 
+    Shortcut {
+        sequence: "Return"
+        onActivated: if (downloadButton.enabled) root.submit()
+    }
+    Shortcut {
+        sequence: "Enter"
+        onActivated: if (downloadButton.enabled) root.submit()
+    }
+
     Controls.ScrollView {
         id: scroll
         Layout.fillWidth: true
@@ -70,14 +79,8 @@ RDialog {
                     root.errors = ({});
                     links.error = "";
 
-                    if (links.text === "")
-                        root.startTransition([]);
-                    else
-                        root.startTransition([
-                            {
-                                loading: true
-                            }
-                        ]);
+                    if (links.text === "") root.startTransition([]);
+                    else root.startTransition([{ loading: true }]);
                 }
 
                 RButton {

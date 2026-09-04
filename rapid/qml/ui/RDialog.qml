@@ -26,6 +26,11 @@ Window {
     visible: false
     color: Theme.colorBackground
 
+    Shortcut {
+        sequence: "Escape"
+        onActivated: root.close()
+    }
+
     // qmllint disable missing-property
     function setOverlay(show) {
         const overlay = root.owner ? root.owner.dialogOverlay : null;
