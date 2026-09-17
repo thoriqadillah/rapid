@@ -1,0 +1,34 @@
+<RCC>
+    <qresource prefix="/icons">
+        <file>rapid.svg</file>
+        <file>MdiLightBook.svg</file>
+        <file>MdiLightClock.svg</file>
+        <file>MdiLightConsole.svg</file>
+        <file>MdiLightContentPaste.svg</file>
+        <file>MdiLightDownload.svg</file>
+        <file>MdiLightFile.svg</file>
+        <file>MdiLightFilmstrip.svg</file>
+        <file>MdiLightFolder.svg</file>
+        <file>MdiLightHelpCircle.svg</file>
+        <file>MdiLightLoading.svg</file>
+        <file>MdiLightMenu.svg</file>
+        <file>MdiLightMusic.svg</file>
+        <file>MdiLightPicture.svg</file>
+        <file>MdiLightSettings.svg</file>
+        <file>MdiLightViewModule.svg</file>
+        <file>MdiLightMagnify.svg</file>
+        <file>MdiSquareRounded.svg</file>
+        <file>MdiLightPencil.svg</file>
+        <file>MdiLightCheck.svg</file>
+        <file>MaterialSymbolsLightCloseRounded.svg</file>
+        <file>MdiLightUndoVariant.svg</file>
+        <file>MdiLightFormatAlignBottom.svg</file>
+        <file>MdiLightPause.svg</file>
+        <file>MdiLightPlay.svg</file>
+        <file>MdiLightStop.svg</file>
+        <file>MdiLightLogout.svg</file>
+        <file>MaterialSymbolsLightDeleteForeverOutlineSharp.svg</file>
+        <file>MdiLightChevronDown.svg</file>
+        <file>MdiLightPlus.svg</file>
+    </qresource>
+</RCC>

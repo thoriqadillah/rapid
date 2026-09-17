@@ -1,31 +1,33 @@
 # rapid
 
-PySide6 + QML desktop app, statically typed (mypy strict).
+Go + Qt6 desktop app (Widgets), using the [miqt](https://github.com/mappu/miqt) bindings against system Qt.
 
 ## Prerequisites
 
-- [pyenv](https://github.com/pyenv/pyenv) (Python version pinned in `.python-version`)
-- [Poetry](https://python-poetry.org/)
+- Go toolchain
+- System Qt6 dev libraries (Fedora: `qt6-qtbase-devel`, Debian/Ubuntu: `qt6-base-dev`, Arch: `qt6-base`)
+- [go-task](https://taskfile.dev/) for task management
 
-```bash
-pyenv install -s   # installs the version from .python-version
-```
+The first `go build` compiles the miqt bindings and takes a while; subsequent builds are cached.
 
 ## Dev
 
 ```bash
-poetry install
-poetry run mypy
-poetry run dev
+task dev
 ```
 
-Runs the app (`rapid/main.py`, loads `rapid/qml/Main.qml`).
+Runs the app (`main.go`, shows an empty `QMainWindow`).
 
 ## Build
 
 ```bash
-poetry run mypy
-poetry run poe build
+task build
 ```
 
-Produces a standalone executable at `dist/rapid.bin` (Nuitka onefile build, config in `rapid/pysidedeploy.spec`).
+Produces a standalone executable at `dist/rapid`.
+
+## Test
+
+```bash
+task test
+```
