@@ -36,10 +36,10 @@ func NewRTextField() *RTextField {
 		selectByMouse: true,
 	}
 
-	w.label.SetStyleSheet(fmt.Sprintf("color: %s; font-size: %dpx; margin: 0; padding: 0;", theme.CssColor(theme.ColorText), theme.TextSize))
+	w.label.SetStyleSheet(fmt.Sprintf("color: %s; font-size: %dpx; margin: 0; padding: 0; background: transparent;", theme.CssColor(theme.ColorText), theme.TextSize))
 	w.label.SetFixedHeight(theme.TextSize)
 	w.label.SetAlignment(qt.AlignLeft | qt.AlignBottom)
-	w.errorLabel.SetStyleSheet(fmt.Sprintf("color: %s; font-size: %dpx;", theme.CssColor(theme.ColorDanger), theme.TextSizeSm))
+	w.errorLabel.SetStyleSheet(fmt.Sprintf("color: %s; font-size: %dpx; background: transparent;", theme.CssColor(theme.ColorDanger), theme.TextSizeSm))
 	w.errorLabel.SetAlignment(qt.AlignLeft | qt.AlignTop)
 	w.errorLabel.SetWordWrap(true)
 
@@ -119,6 +119,10 @@ func (w *RTextField) Text() string {
 
 func (w *RTextField) SetPlaceholder(text string) {
 	w.field.SetPlaceholderText(text)
+}
+
+func (w *RTextField) Placeholder() string {
+	return w.field.PlaceholderText()
 }
 
 func (w *RTextField) SetLabel(text string) {

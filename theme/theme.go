@@ -2,6 +2,7 @@ package theme
 
 import (
 	"fmt"
+	"rapid/lib"
 
 	qt "github.com/mappu/miqt/qt6"
 )
@@ -134,19 +135,19 @@ func CssColor(c *qt.QColor) string {
 	return c.Name()
 }
 
-func CategoryColor(category string) *qt.QColor {
+func CategoryColor(category lib.Category) *qt.QColor {
 	switch category {
-	case "audio":
+	case lib.Audio:
 		return ColorCategoryAudio
-	case "application":
+	case lib.Application:
 		return ColorCategoryApplication
-	case "compressed":
+	case lib.Compressed:
 		return ColorCategoryCompressed
-	case "document":
+	case lib.Document:
 		return ColorCategoryDocument
-	case "image":
+	case lib.Image:
 		return ColorCategoryImage
-	case "video":
+	case lib.Video:
 		return ColorCategoryVideo
 	default:
 		return ColorCategoryUnknown

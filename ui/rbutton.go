@@ -226,9 +226,6 @@ func (b *RButton) setStyleSheet() {
 		hoverFg = theme.ColorTextInverted
 	}
 
-	// CssColor drops alpha (QColor.Name is #RRGGBB), so the faded focus ring needs rgba().
-	focusRing := fmt.Sprintf("rgba(%d, %d, %d, 90)", fg.Red(), fg.Green(), fg.Blue())
-
 	b.SetStyleSheet(fmt.Sprintf(`
 		QPushButton {
 			background-color: %s;
@@ -241,7 +238,7 @@ func (b *RButton) setStyleSheet() {
 			outline: none;
 		}
 		QPushButton:focus {
-			border: 1px dotted %s;
+			border: %s;
 		}
 		QPushButton:hover {
 			background-color: %s;
@@ -259,7 +256,7 @@ func (b *RButton) setStyleSheet() {
 		paddingH,
 		theme.TouchTarget,
 		theme.TextSize,
-		focusRing,
+		border,
 		theme.CssColor(hoverBg),
 		theme.CssColor(hoverFg),
 		theme.CssColor(variantColor),
