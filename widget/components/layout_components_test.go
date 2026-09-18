@@ -1,11 +1,12 @@
-package ui
+package components
 
 import (
 	"strings"
 	"testing"
 
+	"rapid/widget/theme"
+
 	qt "github.com/mappu/miqt/qt6"
-	"rapid/theme"
 )
 
 func TestHeaderContract(t *testing.T) {
@@ -93,7 +94,7 @@ func TestSidebarItemPaintsStateBackground(t *testing.T) {
 	window.SetCentralWidget(item.QWidget)
 	window.Resize(200, 36)
 	window.Show()
-	processEvents()
+	qt.QCoreApplication_ProcessEvents()
 	selected := item.Grab().ToImage().PixelColor(100, 18)
 	want := theme.ColorSurface.LighterWithInt(140)
 	if selected.Name() != want.Name() {
@@ -102,7 +103,7 @@ func TestSidebarItemPaintsStateBackground(t *testing.T) {
 	item.SetSelected(false)
 	item.hovered = true
 	item.Update()
-	processEvents()
+	qt.QCoreApplication_ProcessEvents()
 	hovered := item.Grab().ToImage().PixelColor(100, 18)
 	if hovered.Name() != want.Name() {
 		t.Fatalf("painted hover pixel = %s, want %s", hovered.Name(), want.Name())
@@ -129,7 +130,7 @@ func TestSidebarAndLayoutComposition(t *testing.T) {
 	window.SetCentralWidget(layout.QWidget)
 	window.Resize(1024, 700)
 	window.Show()
-	processEvents()
+	qt.QCoreApplication_ProcessEvents()
 	if layout.SidebarWidget.Width() != SidebarWidth || section.Height() <= 0 || section.ItemWidgets()[0].Height() <= 0 {
 		t.Fatalf("unexpected geometry sidebar=%d section=%d item=%d", layout.SidebarWidget.Width(), section.Height(), section.ItemWidgets()[0].Height())
 	}

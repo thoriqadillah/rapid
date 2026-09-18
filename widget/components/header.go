@@ -1,9 +1,10 @@
-package ui
+package components
 
 import (
 	"fmt"
 
-	"rapid/theme"
+	"rapid/widget/theme"
+	"rapid/widget/ui"
 
 	qt "github.com/mappu/miqt/qt6"
 )
@@ -13,9 +14,9 @@ const defaultHeaderSearchWidth = 350
 // Header is the top row containing menu, search, and New actions.
 type Header struct {
 	*qt.QWidget
-	SearchField *RTextField
-	MenuButton  *RButton
-	AddButton   *RButton
+	SearchField *ui.RTextField
+	MenuButton  *ui.RButton
+	AddButton   *ui.RButton
 
 	preferredSearchWidth int
 	addCallbacks         []func()
@@ -35,7 +36,7 @@ func NewHeader() *Header {
 		theme.CssColor(theme.ColorBackground), theme.CssColor(theme.ColorBorder),
 	))
 
-	h.MenuButton = NewRButtonIcon("MdiLightMenu.svg", GhostVariant, false)
+	h.MenuButton = ui.NewRButtonIcon("MdiLightMenu.svg", ui.GhostVariant, false)
 	h.MenuButton.OnClicked(func() {
 		for _, fn := range h.menuCallbacks {
 			if fn != nil {
@@ -44,15 +45,15 @@ func NewHeader() *Header {
 		}
 	})
 
-	h.SearchField = NewRTextField()
+	h.SearchField = ui.NewRTextField()
 	h.SearchField.SetPlaceholder("Search...")
-	h.SearchField.SetPrefixIcon(IconPath("MdiLightMagnify.svg"))
+	h.SearchField.SetPrefixIcon(ui.IconPath("MdiLightMagnify.svg"))
 	h.SearchField.SetMinimumWidth(0)
 	h.SearchField.SetMaximumWidth(defaultHeaderSearchWidth)
 	h.SearchField.SetMinimumHeight(theme.TouchTarget)
 
-	h.AddButton = NewRButton("New", PrimaryVariant, false)
-	h.AddButton.SetIconSource(IconPath("MdiLightPlus.svg"))
+	h.AddButton = ui.NewRButton("New", ui.PrimaryVariant, false)
+	h.AddButton.SetIconSource(ui.IconPath("MdiLightPlus.svg"))
 	h.AddButton.SetMinimumHeight(theme.TouchTarget)
 	h.AddButton.OnClicked(func() {
 		for _, fn := range h.addCallbacks {

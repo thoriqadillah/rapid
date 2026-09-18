@@ -1,17 +1,18 @@
-package ui
+package components
 
 import (
 	"fmt"
 
-	"rapid/theme"
+	"rapid/widget/theme"
 
 	qt "github.com/mappu/miqt/qt6"
 )
 
-const SidebarWidth = 200
+const (
+	SidebarWidth        = 200
+	sidebarAnimDuration = 200
+)
 
-// Sidebar is the left navigation rail. Width changes are immediate; this is a
-// deliberate native-Qt deviation from QML's 200ms animation.
 type Sidebar struct {
 	*qt.QWidget
 	ContentLayout *qt.QVBoxLayout
@@ -50,14 +51,26 @@ func (s *Sidebar) CurrentDestination() string {
 }
 
 func (s *Sidebar) SetOpen(v bool) {
-	s.open = v
-	if v {
-		s.SetMinimumWidth(SidebarWidth)
-		s.SetMaximumWidth(SidebarWidth)
-	} else {
-		s.SetMinimumWidth(0)
-		s.SetMaximumWidth(0)
+	if s.open == v {
+		return
 	}
+	s.open = v
+	target := 0
+	if v {
+		target = SidebarWidth
+	}
+	s.animate("minimumWidth", target)
+	s.animate("maximumWidth", target)
+}
+
+func (s *Sidebar) animate(prop string, target int) {
+	anim := qt.NewQPropertyAnimation2(qt.UnsafeNewQObject(s.UnsafePointer()), []byte(prop))
+	anim.SetParent(qt.UnsafeNewQObject(s.UnsafePointer()))
+	anim.SetDuration(sidebarAnimDuration)
+	anim.SetStartValue(qt.NewQVariant4(s.Width()))
+	anim.SetEndValue(qt.NewQVariant4(target))
+	anim.SetEasingCurve(qt.NewQEasingCurve3(qt.QEasingCurve__InOutCubic))
+	anim.Start()
 }
 
 func (s *Sidebar) Open() bool {

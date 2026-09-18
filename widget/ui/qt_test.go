@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"rapid/theme"
+	"rapid/widget/theme"
 
 	qt "github.com/mappu/miqt/qt6"
 )
@@ -16,8 +16,4 @@ func TestMain(m *testing.M) {
 	qt.NewQApplication([]string{"rapid-ui-tests"})
 	theme.Init()
 	os.Exit(m.Run())
-}
-
-func processEvents() {
-	qt.QCoreApplication_ProcessEvents()
 }

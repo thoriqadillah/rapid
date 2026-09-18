@@ -133,7 +133,7 @@ Do not add an icon dependency or move the canonical assets.
 
 ### Theme workflow
 
-Use `rapid/theme`. Do not duplicate QML theme constants in each component.
+Use `rapid/widget/theme`. Do not duplicate QML theme constants in each component.
 The QML reference is `rapid/qml/Theme.qml`; the Go theme may be palette-derived
 rather than byte-for-byte equal. That is acceptable when documented and
 visually coherent. Preserve existing `theme.Spacing*`, `theme.TextSize*`,

@@ -28,8 +28,8 @@ go test ./...
 passes for:
 ```text
 rapid
-rapid/theme
-rapid/ui
+rapid/widget/theme
+rapid/widget/ui
 ```
 That only proves compilation. There are currently no UI
 behavior tests.

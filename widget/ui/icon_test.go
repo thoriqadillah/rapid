@@ -3,7 +3,7 @@ package ui
 import (
 	"testing"
 
-	"rapid/theme"
+	"rapid/widget/theme"
 )
 
 func TestEmbeddedIconResource(t *testing.T) {

@@ -43,7 +43,7 @@ func TestRDialogOpenForAndOverlay(t *testing.T) {
 	opened := 0
 	dialog.OnOpened(func() { opened++ })
 	dialog.OpenFor(owner)
-	processEvents()
+	qt.QCoreApplication_ProcessEvents()
 	if opened != 1 {
 		t.Fatalf("opened callbacks = %d, want 1", opened)
 	}
@@ -57,7 +57,7 @@ func TestRDialogOpenForAndOverlay(t *testing.T) {
 		t.Fatal("overlay does not cover owner geometry")
 	}
 	dialog.Hide()
-	processEvents()
+	qt.QCoreApplication_ProcessEvents()
 	if dialog.OverlayWidget().IsVisible() {
 		t.Fatal("hiding dialog did not clean up overlay")
 	}

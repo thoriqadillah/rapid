@@ -3,7 +3,7 @@ package ui
 import (
 	"fmt"
 
-	"rapid/theme"
+	"rapid/widget/theme"
 
 	qt "github.com/mappu/miqt/qt6"
 )

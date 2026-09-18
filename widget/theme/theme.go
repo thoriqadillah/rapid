@@ -67,7 +67,7 @@ func Init() {
 
 	ColorText = p.ColorWithCr(qt.QPalette__WindowText)
 	ColorTextInverted = p.ColorWithCr(qt.QPalette__HighlightedText)
-	ColorTextMuted = withAlpha(ColorText, 0x99) // 60% alpha
+	ColorTextMuted = WithAlpha(ColorText, 0x99) // 60% alpha
 
 	ColorButtonBase = p.ColorWithCr(qt.QPalette__Base)
 	ColorButtonBaseHover = ColorButtonBase.DarkerWithInt(110)
@@ -75,7 +75,7 @@ func Init() {
 	ColorInputBackground = ColorSurface
 }
 
-func withAlpha(c *qt.QColor, alpha int) *qt.QColor {
+func WithAlpha(c *qt.QColor, alpha int) *qt.QColor {
 	out := qt.NewQColor10(c)
 	out.SetAlpha(alpha)
 	return out

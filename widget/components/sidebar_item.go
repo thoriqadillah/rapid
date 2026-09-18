@@ -1,9 +1,10 @@
-package ui
+package components
 
 import (
 	"fmt"
 
-	"rapid/theme"
+	"rapid/widget/theme"
+	"rapid/widget/ui"
 
 	qt "github.com/mappu/miqt/qt6"
 )
@@ -198,7 +199,7 @@ func (i *SidebarItem) refreshIcon() {
 	if i.category {
 		size = theme.IconXs
 	}
-	pixmap := TintedPixmap(i.iconSource, color, size)
+	pixmap := ui.TintedPixmap(i.iconSource, color, size)
 	if pixmap == nil {
 		pixmap = qt.NewQPixmap2(0, 0)
 	}

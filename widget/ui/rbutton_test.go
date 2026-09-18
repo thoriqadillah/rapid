@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"rapid/theme"
+	"rapid/widget/theme"
 )
 
 func TestRButtonVariantsAndStyling(t *testing.T) {

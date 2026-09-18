@@ -5,8 +5,9 @@ import (
 	"os"
 
 	"rapid/lib"
-	"rapid/theme"
-	"rapid/ui"
+	"rapid/widget/components"
+	"rapid/widget/theme"
+	"rapid/widget/ui"
 
 	qt "github.com/mappu/miqt/qt6"
 )
@@ -23,20 +24,20 @@ func main() {
 		QMainWindow { color: %s; font-size: %dpx; }
 	`, theme.CssColor(theme.ColorText), theme.TextSize))
 
-	layout := ui.NewLayout()
+	layout := components.NewLayout()
 	win.SetCentralWidget(layout.QWidget)
 
-	downloads := ui.NewSidebarSection()
+	downloads := components.NewSidebarSection()
 	downloads.SetHeading("LIBRARY")
-	downloads.SetItems([]ui.SidebarItemData{
+	downloads.SetItems([]components.SidebarItemData{
 		{Destination: "all", Label: "All downloads", IconSource: ui.IconPath("MdiLightDownload.svg")},
 	})
 	layout.SidebarWidget.AddSection(downloads)
 
-	categories := ui.NewSidebarSection()
+	categories := components.NewSidebarSection()
 	categories.SetTopMargin(theme.SpacingMd)
 	categories.SetHeading("CATEGORIES")
-	categories.SetItems([]ui.SidebarItemData{
+	categories.SetItems([]components.SidebarItemData{
 		{Destination: lib.Audio.String(), Label: lib.Audio.Label(), IconSource: ui.IconPath("MdiSquareRounded.svg"), IconColor: theme.CategoryColor(lib.Audio), CategoryItem: true},
 		{Destination: lib.Application.String(), Label: lib.Application.Label(), IconSource: ui.IconPath("MdiSquareRounded.svg"), IconColor: theme.CategoryColor(lib.Application), CategoryItem: true},
 		{Destination: lib.Image.String(), Label: lib.Image.Label(), IconSource: ui.IconPath("MdiSquareRounded.svg"), IconColor: theme.CategoryColor(lib.Image), CategoryItem: true},
@@ -48,8 +49,8 @@ func main() {
 	layout.SidebarWidget.AddSection(categories)
 	layout.SidebarWidget.AddStretch()
 
-	settings := ui.NewSidebarSection()
-	settings.SetItems([]ui.SidebarItemData{
+	settings := components.NewSidebarSection()
+	settings.SetItems([]components.SidebarItemData{
 		{Destination: "settings", Label: "Setting", IconSource: ui.IconPath("MdiLightSettings.svg")},
 	})
 	layout.SidebarWidget.AddSection(settings)
@@ -61,7 +62,7 @@ func main() {
 	qt.QApplication_Exec()
 }
 
-func mainContent(win *qt.QMainWindow, layout *ui.Layout) {
+func mainContent(win *qt.QMainWindow, layout *components.Layout) {
 	content := qt.NewQWidget2()
 	contentLayout := qt.NewQVBoxLayout2()
 	contentLayout.SetContentsMargins(theme.SpacingXl, theme.SpacingXl, theme.SpacingXl, theme.SpacingXl)

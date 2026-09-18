@@ -150,7 +150,7 @@ runtime into the Go port.
 ### Deviation: theme palette
 
 The Go theme is palette-derived while the QML theme uses fixed color values.
-Components reuse `rapid/theme` rather than duplicating QML constants. Existing
+Components reuse `rapid/widget/theme` rather than duplicating QML constants. Existing
 project-wide `theme.TouchTarget` and compact button styling are preserved.
 
 ## Ownership and MIQT safety
