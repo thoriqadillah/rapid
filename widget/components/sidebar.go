@@ -103,8 +103,11 @@ func (s *Sidebar) AddSection(section *SidebarSection) {
 		return
 	}
 	s.sections = append(s.sections, section)
-	section.SetCurrentDestination(s.current)
-	section.OnActivated(s.Activate)
+	for _, item := range section.ItemWidgets() {
+		item.OnActivated(func() {
+			s.Activate(item.destination)
+		})
+	}
 	s.AddContentWidget(section.QWidget)
 }
 

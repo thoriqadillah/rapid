@@ -2,7 +2,6 @@ package ui
 
 import (
 	"testing"
-	"time"
 
 	"rapid/widget/theme"
 
@@ -24,8 +23,8 @@ func TestRSwitchStateAndColors(t *testing.T) {
 	if switchWidget.ActiveColor().Name() != active.Name() || switchWidget.InactiveColor().Name() != inactive.Name() {
 		t.Fatal("custom switch colors were not retained")
 	}
-	if switchWidget.timer == nil || switchWidget.timer.Interval() != 16 {
-		t.Fatal("switch animation timer was not configured")
+	if switchWidget.anim == nil || switchWidget.anim.Duration() != knobAnimDuration {
+		t.Fatal("switch animation was not configured")
 	}
 }
 
@@ -37,13 +36,14 @@ func TestRSwitchAnimationAndToggle(t *testing.T) {
 	if !toggled {
 		t.Fatal("checked transition did not emit toggled")
 	}
-	if switchWidget.animationAt.IsZero() {
-		t.Fatal("checked transition did not record animation start")
+	if got := switchWidget.anim.EndValue().ToDouble(); got != 1 {
+		t.Fatalf("animation end value = %v, want 1", got)
 	}
-	switchWidget.animationAt = time.Now().Add(-200 * time.Millisecond)
-	switchWidget.step()
-	if switchWidget.progress != 1 || switchWidget.timer.IsActive() {
-		t.Fatal("switch animation did not reach checked state")
+	if got := switchWidget.anim.StartValue().ToDouble(); got != 0 {
+		t.Fatalf("animation start value = %v, want current progress 0", got)
+	}
+	if switchWidget.anim.State() != qt.QAbstractAnimation__Running {
+		t.Fatal("switch animation did not start")
 	}
 	switchWidget.SetEnabled(false)
 	if switchWidget.IsEnabled() {

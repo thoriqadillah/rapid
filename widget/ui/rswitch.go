@@ -1,28 +1,25 @@
 package ui
 
 import (
-	"time"
-
 	"rapid/widget/theme"
 
 	qt "github.com/mappu/miqt/qt6"
 )
 
 const (
-	switchWidth  = 36
-	switchHeight = 20
-	knobSize     = 16
-	knobPad      = 2
+	switchWidth      = 36
+	switchHeight     = 20
+	knobSize         = 16
+	knobPad          = 2
+	knobAnimDuration = 120
 )
 
 type RSwitch struct {
 	*qt.QCheckBox
 	progress      float64 // 0..1, knob slide position
-	timer         *qt.QTimer
+	anim          *qt.QVariantAnimation
 	activeColor   *qt.QColor
 	inactiveColor *qt.QColor
-	animationFrom float64
-	animationAt   time.Time
 }
 
 func NewRSwitch(checked bool) *RSwitch {
@@ -30,7 +27,6 @@ func NewRSwitch(checked bool) *RSwitch {
 		QCheckBox:     qt.NewQCheckBox2(),
 		activeColor:   theme.ColorPrimary,
 		inactiveColor: theme.ColorBorder,
-		animationAt:   time.Now(),
 	}
 	s.SetFixedSize2(switchWidth, switchHeight)
 	s.SetCursor(qt.NewQCursor2(qt.PointingHandCursor))
@@ -40,23 +36,24 @@ func NewRSwitch(checked bool) *RSwitch {
 		s.progress = 1
 	}
 
-	// A small timer keeps the animation deterministic without depending on
-	// QVariant marshaling through MIQT. Progress is elapsed-time based, so the
-	// duration remains 120 ms even if a timer tick is delayed.
-	s.timer = qt.NewQTimer2(s.QObject)
-	s.timer.SetInterval(16)
-	s.timer.OnTimeout(s.step)
-
-	s.OnToggled(func(on bool) {
-		s.animationFrom = s.progress
-		s.animationAt = time.Now()
-		if !s.timer.IsActive() {
-			s.timer.Start2()
-		}
+	s.anim = qt.NewQVariantAnimation2(s.QObject)
+	s.anim.SetDuration(knobAnimDuration)
+	s.anim.SetEasingCurve(qt.NewQEasingCurve3(qt.QEasingCurve__InOutCubic))
+	s.anim.OnValueChanged(func(v *qt.QVariant) {
+		s.progress = v.ToDouble()
+		s.Update()
 	})
 
-	// QCheckBox without text only reacts to clicks inside its small contents
-	// rect; the whole pill is the switch, so toggle on any release.
+	s.OnToggled(func(on bool) {
+		s.anim.SetStartValue(qt.NewQVariant9(s.progress))
+		to := 0.0
+		if on {
+			to = 1
+		}
+		s.anim.SetEndValue(qt.NewQVariant9(to))
+		s.anim.Start()
+	})
+
 	s.OnMouseReleaseEvent(func(super func(*qt.QMouseEvent), e *qt.QMouseEvent) {
 		if s.IsEnabled() {
 			s.SetChecked(!s.IsChecked())
@@ -91,25 +88,6 @@ func (s *RSwitch) ActiveColor() *qt.QColor {
 
 func (s *RSwitch) InactiveColor() *qt.QColor {
 	return s.inactiveColor
-}
-
-func (s *RSwitch) step() {
-	target := 0.0
-	if s.IsChecked() {
-		target = 1
-	}
-	const duration = 120 * time.Millisecond
-	elapsed := time.Since(s.animationAt)
-	fraction := float64(elapsed) / float64(duration)
-	if fraction >= 1 {
-		s.progress = target
-		s.timer.Stop()
-	} else if fraction < 0 {
-		s.progress = s.animationFrom
-	} else {
-		s.progress = s.animationFrom + (target-s.animationFrom)*fraction
-	}
-	s.Update()
 }
 
 func (s *RSwitch) paint() {

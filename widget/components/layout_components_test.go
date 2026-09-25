@@ -75,12 +75,6 @@ func TestSidebarItemAndSectionContract(t *testing.T) {
 	if !section.HeadingVisible() || section.TopMargin() != 7 || len(items) != 2 || items[0].Selected() || !items[1].Selected() {
 		t.Fatal("section model/selection contract is wrong")
 	}
-	seen := ""
-	section.OnActivated(func(destination string) { seen = destination })
-	items[0].activate()
-	if seen != "one" {
-		t.Fatalf("section destination = %q", seen)
-	}
 	section.SetItems([]SidebarItemData{{Destination: "new", Label: "New"}})
 	if len(section.ItemWidgets()) != 1 || section.ItemWidgets()[0].Destination() != "new" {
 		t.Fatal("section replacement left stale items")

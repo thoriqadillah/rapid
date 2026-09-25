@@ -45,6 +45,7 @@ func (l *Layout) SetHeader(header *Header) {
 	if l.HeaderWidget != nil {
 		l.grid.RemoveWidget(l.HeaderWidget.QWidget)
 		l.HeaderWidget.Hide()
+		l.HeaderWidget.DeleteLater()
 	}
 	if header == nil {
 		header = NewHeader()
@@ -65,6 +66,7 @@ func (l *Layout) SetSidebar(sidebar *Sidebar) {
 	if l.SidebarWidget != nil {
 		l.grid.RemoveWidget(l.SidebarWidget.QWidget)
 		l.SidebarWidget.Hide()
+		l.SidebarWidget.DeleteLater()
 	}
 	if sidebar == nil {
 		sidebar = NewSidebar()

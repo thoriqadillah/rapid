@@ -151,5 +151,6 @@ func (d *RDialog) RefreshOverlay() {
 func (d *RDialog) cleanupOverlay() {
 	if d.overlay != nil {
 		d.overlay.Hide()
+		d.overlay.DeleteLater()
 	}
 }

@@ -14,6 +14,7 @@ type SidebarItemData struct {
 	IconSource   string
 	IconColor    *qt.QColor
 	CategoryItem bool
+	OnActivated  func()
 }
 
 // SidebarSection owns its item widgets and forwards item destinations.
@@ -27,7 +28,6 @@ type SidebarSection struct {
 	itemWidgets  []*SidebarItem
 	current      string
 	topMargin    int
-	callbacks    []func(string)
 }
 
 func NewSidebarSection() *SidebarSection {
@@ -64,7 +64,9 @@ func (s *SidebarSection) SetItems(items []SidebarItemData) {
 	for s.ItemsLayout.Count() > 1 {
 		item := s.ItemsLayout.TakeAt(s.ItemsLayout.Count() - 1)
 		if item != nil && item.Widget() != nil {
-			item.Widget().Hide()
+			widget := item.Widget()
+			widget.Hide()
+			widget.DeleteLater()
 		}
 	}
 	s.itemWidgets = s.itemWidgets[:0]
@@ -75,8 +77,7 @@ func (s *SidebarSection) SetItems(items []SidebarItemData) {
 		item.SetIconColor(data.IconColor)
 		item.SetCategoryItem(data.CategoryItem)
 		item.SetSelected(data.Destination == s.current)
-		destination := data.Destination
-		item.OnActivated(func() { s.emitActivated(destination) })
+		item.OnActivated(data.OnActivated)
 		s.ItemsLayout.AddWidget(item.QWidget)
 		s.itemWidgets = append(s.itemWidgets, item)
 	}
@@ -107,20 +108,6 @@ func (s *SidebarSection) SetTopMargin(v int) {
 
 func (s *SidebarSection) TopMargin() int {
 	return s.topMargin
-}
-
-func (s *SidebarSection) OnActivated(fn func(string)) {
-	if fn != nil {
-		s.callbacks = append(s.callbacks, fn)
-	}
-}
-
-func (s *SidebarSection) emitActivated(destination string) {
-	for _, fn := range s.callbacks {
-		if fn != nil {
-			fn(destination)
-		}
-	}
 }
 
 func (s *SidebarSection) Refresh() {
