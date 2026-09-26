@@ -30,5 +30,7 @@
         <file>MaterialSymbolsLightDeleteForeverOutlineSharp.svg</file>
         <file>MdiLightChevronDown.svg</file>
         <file>MdiLightPlus.svg</file>
+        <file>MdiLightArrowLeft.svg</file>
+        <file>MdiLightAccount.svg</file>
     </qresource>
 </RCC>

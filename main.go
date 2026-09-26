@@ -1,10 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
 	"rapid/service/notification"
+	"rapid/widget/app"
+	"rapid/widget/components/downloads"
 	"rapid/widget/theme"
 	"rapid/widget/views"
 
@@ -20,24 +21,16 @@ func main() {
 	win := qt.NewQMainWindow2()
 	win.SetWindowTitle("Rapid")
 	win.Resize(1024, 700)
-	// Close button hides to tray instead of quitting; use the tray "Quit" item.
 	win.OnCloseEvent(func(super func(event *qt.QCloseEvent), event *qt.QCloseEvent) {
 		super(event)
 		event.Ignore()
 		win.Hide()
 	})
-	win.SetStyleSheet(fmt.Sprintf(`
-		QMainWindow { color: %s; font-size: %dpx; }
-	`, theme.CssColor(theme.ColorText), theme.TextSize))
 
 	notifier := notification.NewService(notification.Options{
 		Host:       win.QWidget,
 		EnableTray: true,
 	})
-
-	downloadView := views.NewDownloadView(win, notifier)
-	win.SetCentralWidget(downloadView.Widget)
-
 	notifier.OnTrayActivated(func() {
 		if win.IsVisible() && win.IsActiveWindow() {
 			win.Hide()
@@ -47,6 +40,8 @@ func main() {
 		win.Raise()
 		win.ActivateWindow()
 	})
+
+	downloadDialog := downloads.NewDownloadDialog(win.QWidget)
 	notifier.SetTrayMenu([]notification.MenuItem{
 		{
 			Label: "Open",
@@ -58,7 +53,7 @@ func main() {
 		},
 		{
 			Label:    "New download",
-			Callback: downloadView.Add,
+			Callback: downloadDialog.Open,
 		},
 		{
 			Label: "Quit",
@@ -67,6 +62,20 @@ func main() {
 			},
 		},
 	})
+
+	stackView := qt.NewQStackedWidget2()
+	win.SetCentralWidget(stackView.QWidget)
+
+	navigation := app.NewNavigation(stackView)
+	navigation.RegisterAll(app.RouteMap{
+		app.RouteDownload: func(parent *qt.QWidget) *qt.QWidget {
+			return views.NewDownloadView(parent, notifier, navigation)
+		},
+		app.RouteSettings: func(parent *qt.QWidget) *qt.QWidget {
+			return views.NewSettingsView(parent, navigation)
+		},
+	})
+	navigation.Replace(app.RouteDownload)
 
 	win.Show()
 	qt.QApplication_Exec()

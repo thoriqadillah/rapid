@@ -3,6 +3,7 @@ package views
 import (
 	"fmt"
 	"rapid/service/notification"
+	"rapid/widget/app"
 	"rapid/widget/components/downloads"
 	"rapid/widget/theme"
 	"rapid/widget/ui"
@@ -10,13 +11,8 @@ import (
 	qt "github.com/mappu/miqt/qt6"
 )
 
-type View struct {
-	Widget *qt.QWidget
-	Add    func()
-}
-
-func NewDownloadView(win *qt.QMainWindow, notification *notification.Service) *View {
-	layout := downloads.NewLayout()
+func NewDownloadView(parent *qt.QWidget, notifier *notification.Service, navigation *app.Navigation) *qt.QWidget {
+	layout := downloads.NewLayout(navigation)
 
 	content := qt.NewQWidget2()
 	contentLayout := qt.NewQVBoxLayout2()
@@ -71,32 +67,17 @@ func NewDownloadView(win *qt.QMainWindow, notification *notification.Service) *V
 	field.SetPrefixIcon(ui.IconPath("MdiLightContentPaste.svg"))
 	panelLayout.AddWidget(field.QWidget)
 
-	openDialog := func() {
-		dialog := ui.NewRDialog(win.QWidget)
-		body := qt.NewQLabel3("Dialog body")
-		body.SetStyleSheet("color: " + theme.CssColor(theme.ColorText) + ";")
-		dialog.AddBodyWidget(body.QWidget)
-		cancel := ui.NewRButton("Cancel", ui.BaseVariant, false)
-		ok := ui.NewRButton("OK", ui.PrimaryVariant, false)
-		close := func() {
-			dialog.Hide()
-			dialog.DeleteLater()
-		}
-
-		cancel.OnClicked(close)
-		ok.OnClicked(close)
-		dialog.AddFooterWidget(cancel.QWidget)
-		dialog.AddFooterWidget(ok.QWidget)
-		dialog.OpenFor(win.QWidget)
-	}
+	downloadDialog := downloads.NewDownloadDialog(parent)
 
 	dialogButton := ui.NewRButton("Open dialog", ui.SecondaryVariant, false)
-	dialogButton.OnClicked(openDialog)
+	dialogButton.OnClicked(func() {
+		downloadDialog.Open()
+	})
 	panelLayout.AddWidget(dialogButton.QWidget)
 
 	notificationButton := ui.NewRButton("Open notification", ui.SecondaryVariant, false)
 	notificationButton.OnClicked(func() {
-		notification.Info("Hello", "World", true)
+		notifier.Info("Hello", "World", true)
 	})
 	panelLayout.AddWidget(notificationButton.QWidget)
 	contentLayout.AddStretch()
@@ -108,7 +89,9 @@ func NewDownloadView(win *qt.QMainWindow, notification *notification.Service) *V
 	layout.OnDestinationSelected(func(destination string) {
 		routeStatus.SetText("Selected: " + destination)
 	})
-	layout.OnAddClicked(openDialog)
+	layout.OnAddClicked(func() {
+		downloadDialog.Open()
+	})
 	layout.HeaderWidget.SearchField.OnTextChanged(func(text string) {
 		if text == "" {
 			routeStatus.SetText("Selected: " + layout.SidebarWidget.CurrentDestination())
@@ -117,8 +100,5 @@ func NewDownloadView(win *qt.QMainWindow, notification *notification.Service) *V
 		routeStatus.SetText("Search: " + text)
 	})
 
-	return &View{
-		Widget: layout.QWidget,
-		Add:    openDialog,
-	}
+	return layout.QWidget
 }

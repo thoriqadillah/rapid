@@ -62,18 +62,14 @@ func NewRDialog(owner *qt.QWidget) *RDialog {
 	return d
 }
 
-// OpenFor shows the dialog with an owner-sized modal overlay and emits the
+// Open shows the dialog with an owner-sized modal overlay and emits the
 // lightweight opened callbacks after the dialog has been raised and focused.
 //
 // MIQT only permits virtual event overrides on Go objects that directly own
 // the overridden Qt instance. The owner is supplied by the caller, so overlay
 // tracking deliberately happens at open time instead of installing resize or
 // close overrides on that arbitrary widget.
-func (d *RDialog) OpenFor(owner *qt.QWidget) {
-	if owner != nil && owner != d.owner {
-		d.owner = owner
-		d.SetParent2(owner, qt.Dialog)
-	}
+func (d *RDialog) Open() {
 	if d.owner != nil {
 		d.ensureOverlay()
 		d.RefreshOverlay()
@@ -140,8 +136,6 @@ func (d *RDialog) ensureOverlay() {
 	}
 }
 
-// RefreshOverlay resizes the modal overlay to the current owner geometry.
-// Call it after the owner is resized while the dialog is visible.
 func (d *RDialog) RefreshOverlay() {
 	if d.overlay != nil && d.owner != nil {
 		d.overlay.SetGeometryWithGeometry(d.owner.Rect())
@@ -152,5 +146,6 @@ func (d *RDialog) cleanupOverlay() {
 	if d.overlay != nil {
 		d.overlay.Hide()
 		d.overlay.DeleteLater()
+		d.overlay = nil
 	}
 }
