@@ -15,8 +15,13 @@ func NewDownloadDialog(parent *qt.QWidget) *ui.RDialog {
 	cancel := ui.NewRButton("Cancel", ui.BaseVariant, false)
 	ok := ui.NewRButton("OK", ui.PrimaryVariant, false)
 
-	cancel.OnClicked(dialog.Hide)
-	ok.OnClicked(dialog.Hide)
+	close := func() {
+		dialog.Hide()
+		dialog.DeleteLater()
+	}
+
+	cancel.OnClicked(close)
+	ok.OnClicked(close)
 	dialog.AddFooterWidget(cancel.QWidget)
 	dialog.AddFooterWidget(ok.QWidget)
 

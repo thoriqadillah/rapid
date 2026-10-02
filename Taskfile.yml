@@ -59,3 +59,7 @@ tasks:
   test:
     desc: Run tests
     cmd: go test ./...
+
+  seed:
+    desc: Seed demo downloads into the app database
+    cmd: go run ./cmd/seed

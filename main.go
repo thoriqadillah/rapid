@@ -2,8 +2,12 @@ package main
 
 import (
 	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
 
-	"rapid/service/notification"
+	"rapid/db"
+	"rapid/services/notification"
 	"rapid/widget/app"
 	"rapid/widget/components/downloads"
 	"rapid/widget/theme"
@@ -15,7 +19,14 @@ import (
 func main() {
 	qt.NewQApplication(os.Args)
 	qt.QGuiApplication_SetQuitOnLastWindowClosed(false)
-	qt.QCoreApplication_SetApplicationName("Rapid")
+	qt.QCoreApplication_SetApplicationName("rapid")
+	dataPath := qt.QStandardPaths_WritableLocation(qt.QStandardPaths__AppDataLocation)
+	os.MkdirAll(dataPath, 0o755)
+	if err := db.Open(filepath.Join(dataPath, "database.db")); err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
 	theme.Init()
 
 	win := qt.NewQMainWindow2()
@@ -31,6 +42,8 @@ func main() {
 		Host:       win.QWidget,
 		EnableTray: true,
 	})
+	defer notifier.Close()
+
 	notifier.OnTrayActivated(func() {
 		if win.IsVisible() && win.IsActiveWindow() {
 			win.Hide()
@@ -41,7 +54,6 @@ func main() {
 		win.ActivateWindow()
 	})
 
-	downloadDialog := downloads.NewDownloadDialog(win.QWidget)
 	notifier.SetTrayMenu([]notification.MenuItem{
 		{
 			Label: "Open",
@@ -52,8 +64,11 @@ func main() {
 			},
 		},
 		{
-			Label:    "New download",
-			Callback: downloadDialog.Open,
+			Label: "New download",
+			Callback: func() {
+				downloadDialog := downloads.NewDownloadDialog(win.QWidget)
+				downloadDialog.Open()
+			},
 		},
 		{
 			Label: "Quit",
@@ -78,5 +93,13 @@ func main() {
 	navigation.Replace(app.RouteDownload)
 
 	win.Show()
+
+	go func() {
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP, syscall.SIGABRT)
+		<-sig
+		qt.QCoreApplication_Quit()
+	}()
+
 	qt.QApplication_Exec()
 }

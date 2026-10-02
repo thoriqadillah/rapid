@@ -137,17 +137,17 @@ func CssColor(c *qt.QColor) string {
 
 func CategoryColor(category lib.Category) *qt.QColor {
 	switch category {
-	case lib.Audio:
+	case lib.CategoryAudio:
 		return ColorCategoryAudio
-	case lib.Application:
+	case lib.CategoryApplication:
 		return ColorCategoryApplication
-	case lib.Compressed:
+	case lib.CategoryCompressed:
 		return ColorCategoryCompressed
-	case lib.Document:
+	case lib.CategoryDocument:
 		return ColorCategoryDocument
-	case lib.Image:
+	case lib.CategoryImage:
 		return ColorCategoryImage
-	case lib.Video:
+	case lib.CategoryVideo:
 		return ColorCategoryVideo
 	default:
 		return ColorCategoryUnknown

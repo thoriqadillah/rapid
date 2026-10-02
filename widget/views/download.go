@@ -2,7 +2,7 @@ package views
 
 import (
 	"fmt"
-	"rapid/service/notification"
+	"rapid/services/notification"
 	"rapid/widget/app"
 	"rapid/widget/components/downloads"
 	"rapid/widget/theme"
@@ -10,6 +10,8 @@ import (
 
 	qt "github.com/mappu/miqt/qt6"
 )
+
+var selectedSidebarItem = downloads.DefaultSidebarItem
 
 func NewDownloadView(parent *qt.QWidget, notifier *notification.Service, navigation *app.Navigation) *qt.QWidget {
 	layout := downloads.NewLayout(navigation)
@@ -36,7 +38,7 @@ func NewDownloadView(parent *qt.QWidget, notifier *notification.Service, navigat
 	title.SetStyleSheet("font-size: 20px; color: " + theme.CssColor(theme.ColorText) + "; background: transparent;")
 	panelLayout.AddWidget(title.QWidget)
 
-	routeStatus := qt.NewQLabel3("Selected: download-1")
+	routeStatus := qt.NewQLabel3(fmt.Sprintf("Selected: %s", layout.SidebarWidget.CurrentDestination()))
 	routeStatus.SetStyleSheet("color: " + theme.CssColor(theme.ColorTextMuted) + "; background: transparent;")
 	panelLayout.AddWidget(routeStatus.QWidget)
 
@@ -67,10 +69,9 @@ func NewDownloadView(parent *qt.QWidget, notifier *notification.Service, navigat
 	field.SetPrefixIcon(ui.IconPath("MdiLightContentPaste.svg"))
 	panelLayout.AddWidget(field.QWidget)
 
-	downloadDialog := downloads.NewDownloadDialog(parent)
-
 	dialogButton := ui.NewRButton("Open dialog", ui.SecondaryVariant, false)
 	dialogButton.OnClicked(func() {
+		downloadDialog := downloads.NewDownloadDialog(parent)
 		downloadDialog.Open()
 	})
 	panelLayout.AddWidget(dialogButton.QWidget)
@@ -90,6 +91,7 @@ func NewDownloadView(parent *qt.QWidget, notifier *notification.Service, navigat
 		routeStatus.SetText("Selected: " + destination)
 	})
 	layout.OnAddClicked(func() {
+		downloadDialog := downloads.NewDownloadDialog(parent)
 		downloadDialog.Open()
 	})
 	layout.HeaderWidget.SearchField.OnTextChanged(func(text string) {

@@ -3,34 +3,60 @@ package lib
 type Category string
 
 const (
-	Audio       Category = "audio"
-	Application Category = "application"
-	Compressed  Category = "compressed"
-	Document    Category = "document"
-	Image       Category = "image"
-	Unknown     Category = "unknown"
-	Video       Category = "video"
+	CategoryAudio       Category = "audio"
+	CategoryApplication Category = "application"
+	CategoryCompressed  Category = "compressed"
+	CategoryDocument    Category = "document"
+	CategoryImage       Category = "image"
+	CategoryUnknown     Category = "unknown"
+	CategoryVideo       Category = "video"
 )
 
+func ToCategory(s string) Category {
+	switch s {
+	case "audio":
+		return CategoryAudio
+	case "application":
+		return CategoryApplication
+	case "compressed":
+		return CategoryCompressed
+	case "document":
+		return CategoryDocument
+	case "image":
+		return CategoryImage
+	case "unknown":
+		return CategoryUnknown
+	case "video":
+		return CategoryVideo
+	default:
+		return CategoryUnknown
+	}
+}
+
 func (c Category) String() string {
-	return string(c)
+	str := string(c)
+	if str == "" {
+		return "unknown"
+	}
+
+	return str
 }
 
 func (c Category) Label() string {
 	switch c {
-	case Audio:
+	case CategoryAudio:
 		return "Audio"
-	case Application:
+	case CategoryApplication:
 		return "Application"
-	case Compressed:
+	case CategoryCompressed:
 		return "Compressed"
-	case Document:
+	case CategoryDocument:
 		return "Document"
-	case Image:
+	case CategoryImage:
 		return "Image"
-	case Unknown:
+	case CategoryUnknown:
 		return "Unknown"
-	case Video:
+	case CategoryVideo:
 		return "Video"
 	default:
 		return "Unknown"

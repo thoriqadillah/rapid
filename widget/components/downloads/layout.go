@@ -8,12 +8,16 @@ import (
 	"rapid/widget/ui"
 )
 
+const (
+	DefaultSidebarItem = "all"
+)
+
 func NewLayout(navigation *app.Navigation) *components.Layout {
 	layout := components.NewLayout()
 	downloads := components.NewSidebarSection()
 	downloads.SetItems([]components.SidebarItemData{
 		{
-			Destination: "all",
+			Destination: DefaultSidebarItem,
 			Label:       "All downloads",
 			IconSource:  ui.IconPath("MdiLightDownload.svg"),
 		},
@@ -25,52 +29,52 @@ func NewLayout(navigation *app.Navigation) *components.Layout {
 	categories.SetHeading("CATEGORIES")
 	categories.SetItems([]components.SidebarItemData{
 		{
-			Destination:  lib.Audio.String(),
-			Label:        lib.Audio.Label(),
+			Destination:  lib.CategoryAudio.String(),
+			Label:        lib.CategoryAudio.Label(),
 			IconSource:   ui.IconPath("MdiSquareRounded.svg"),
-			IconColor:    theme.CategoryColor(lib.Audio),
+			IconColor:    theme.CategoryColor(lib.CategoryAudio),
 			CategoryItem: true,
 		},
 		{
-			Destination:  lib.Application.String(),
-			Label:        lib.Application.Label(),
+			Destination:  lib.CategoryApplication.String(),
+			Label:        lib.CategoryApplication.Label(),
 			IconSource:   ui.IconPath("MdiSquareRounded.svg"),
-			IconColor:    theme.CategoryColor(lib.Application),
+			IconColor:    theme.CategoryColor(lib.CategoryApplication),
 			CategoryItem: true,
 		},
 		{
-			Destination:  lib.Image.String(),
-			Label:        lib.Image.Label(),
+			Destination:  lib.CategoryImage.String(),
+			Label:        lib.CategoryImage.Label(),
 			IconSource:   ui.IconPath("MdiSquareRounded.svg"),
-			IconColor:    theme.CategoryColor(lib.Image),
+			IconColor:    theme.CategoryColor(lib.CategoryImage),
 			CategoryItem: true,
 		},
 		{
-			Destination:  lib.Compressed.String(),
-			Label:        lib.Compressed.Label(),
+			Destination:  lib.CategoryCompressed.String(),
+			Label:        lib.CategoryCompressed.Label(),
 			IconSource:   ui.IconPath("MdiSquareRounded.svg"),
-			IconColor:    theme.CategoryColor(lib.Compressed),
+			IconColor:    theme.CategoryColor(lib.CategoryCompressed),
 			CategoryItem: true,
 		},
 		{
-			Destination:  lib.Document.String(),
-			Label:        lib.Document.Label(),
+			Destination:  lib.CategoryDocument.String(),
+			Label:        lib.CategoryDocument.Label(),
 			IconSource:   ui.IconPath("MdiSquareRounded.svg"),
-			IconColor:    theme.CategoryColor(lib.Document),
+			IconColor:    theme.CategoryColor(lib.CategoryDocument),
 			CategoryItem: true,
 		},
 		{
-			Destination:  lib.Video.String(),
-			Label:        lib.Video.Label(),
+			Destination:  lib.CategoryVideo.String(),
+			Label:        lib.CategoryVideo.Label(),
 			IconSource:   ui.IconPath("MdiSquareRounded.svg"),
-			IconColor:    theme.CategoryColor(lib.Video),
+			IconColor:    theme.CategoryColor(lib.CategoryVideo),
 			CategoryItem: true,
 		},
 		{
-			Destination:  lib.Unknown.String(),
-			Label:        lib.Unknown.Label(),
+			Destination:  lib.CategoryUnknown.String(),
+			Label:        lib.CategoryUnknown.Label(),
 			IconSource:   ui.IconPath("MdiSquareRounded.svg"),
-			IconColor:    theme.CategoryColor(lib.Unknown),
+			IconColor:    theme.CategoryColor(lib.CategoryUnknown),
 			CategoryItem: true,
 		},
 	})
@@ -89,7 +93,7 @@ func NewLayout(navigation *app.Navigation) *components.Layout {
 		},
 	})
 	layout.SidebarWidget.AddSection(settings)
-	layout.SidebarWidget.SetCurrentDestination("all")
+	layout.SidebarWidget.SetCurrentDestination(DefaultSidebarItem)
 
 	return layout
 }
