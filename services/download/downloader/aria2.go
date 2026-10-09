@@ -3,6 +3,7 @@ package downloader
 import (
 	"context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"log"
 	"maps"
@@ -11,17 +12,17 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"rapid/lib"
 	"rapid/lib/errors"
+	"rapid/lib/helpers"
+	libmaps "rapid/lib/helpers/maps"
 	"rapid/services/download/api"
 	"rapid/services/download/rpc"
 	rpcapi "rapid/services/download/rpc/api"
 	"rapid/services/settings"
-	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/coder/websocket"
@@ -54,10 +55,6 @@ var WSEvents = map[string]bool{
 	"aria2.onDownloadError":    true,
 }
 
-// validSchemes preserves the loose Python substring semantics (do NOT "fix"
-// to scheme parsing; resolver tests depend on it).
-var validSchemes = []string{"http", "https", "ftp", "ftps"}
-
 // contextKeys are browser-context option keys that never reach aria2.
 var contextKeys = map[string]bool{
 	"headers":  true,
@@ -87,9 +84,10 @@ type Aria2Downloader struct {
 
 	mu            sync.Mutex
 	running       bool
-	process       *exec.Cmd
-	ownsDaemon    bool
+	dm            *daemon
+	adopted       bool
 	lastSpawn     time.Time
+	spawnMu       sync.Mutex
 	listening     map[string]listenerEntry
 	wsConn        *websocket.Conn
 	wsCancel      context.CancelFunc
@@ -98,11 +96,10 @@ type Aria2Downloader struct {
 	pendingGen    int
 }
 
-// NewAria2Downloader builds a downloader; rpc may be nil (uses Aria2RPC).
-func NewAria2Downloader(s settings.Settings, rpc rpc.Rpc, manageDaemon bool, onGlobalNotify GlobalNotifyCallback) *Aria2Downloader {
+func NewAria2Downloader(s settings.Settings, client rpc.Rpc, manageDaemon bool, onGlobalNotify GlobalNotifyCallback) *Aria2Downloader {
 	return &Aria2Downloader{
 		settings:     s,
-		rpc:          rpc,
+		rpc:          client,
 		manageDaemon: manageDaemon,
 		globalNotify: onGlobalNotify,
 		resolverSem:  make(chan struct{}, 2),
@@ -111,14 +108,18 @@ func NewAria2Downloader(s settings.Settings, rpc rpc.Rpc, manageDaemon bool, onG
 }
 
 func (d *Aria2Downloader) spawnDaemon(ctx context.Context) error {
+	d.spawnMu.Lock()
+	defer d.spawnMu.Unlock()
+
 	program, err := exec.LookPath("aria2c")
 	if err != nil || program == "" {
 		return errors.NewAria2Error("aria2c binary not found")
 	}
+
 	d.mu.Lock()
-	alive := isAlive(d.process)
+	dm := d.dm
 	d.mu.Unlock()
-	if alive {
+	if dm.alive() {
 		return nil
 	}
 
@@ -126,7 +127,8 @@ func (d *Aria2Downloader) spawnDaemon(ctx context.Context) error {
 	// previous crashed run) instead of spawning a second one.
 	if _, err := d.rpc.Call(ctx, "aria2.getVersion", nil); err == nil {
 		d.mu.Lock()
-		d.ownsDaemon = false
+		d.dm = nil
+		d.adopted = true
 		d.mu.Unlock()
 		return nil
 	}
@@ -137,49 +139,44 @@ func (d *Aria2Downloader) spawnDaemon(ctx context.Context) error {
 		fmt.Sprintf("--dir=%s", d.settings.DownloadDir),
 		fmt.Sprintf("--save-session=%s", d.settings.Aria2SessionFile),
 		fmt.Sprintf("--input-file=%s", d.settings.Aria2SessionFile),
+		fmt.Sprintf("--save-session-interval=%d", max(d.settings.Aria2SaveSessionInterval, 1)),
 	}
 	if d.settings.Aria2Token != "" {
 		args = append(args, "--rpc-secret="+d.settings.Aria2Token)
 	}
-	cmd := exec.CommandContext(ctx, program, args...)
-	if err := cmd.Start(); err != nil {
+
+	started, err := startDaemon(program, args)
+	if err != nil {
 		return err
 	}
-	d.mu.Lock()
-	d.process = cmd
-	d.mu.Unlock()
 
-	tick := time.NewTicker(100 * time.Millisecond)
-	defer tick.Stop()
 	deadline := time.Now().Add(5 * time.Second)
-
-	for {
+	ready := false
+	for time.Now().Before(deadline) {
+		if !started.alive() {
+			break
+		}
+		if _, err := d.rpc.Call(ctx, "aria2.getVersion", nil); err == nil {
+			ready = true
+			break
+		}
 		select {
 		case <-ctx.Done():
+			started.stop(0)
 			return ctx.Err()
-		case <-tick.C:
-			if _, err := d.rpc.Call(ctx, "aria2.getVersion", nil); err == nil {
-				d.mu.Lock()
-				d.ownsDaemon = true
-				d.mu.Unlock()
-				return nil
-			}
-
-			if !isAlive(cmd) {
-				d.mu.Lock()
-				d.process = nil
-				d.mu.Unlock()
-				return errors.NewAria2Error("aria2 exited during startup")
-			}
-
-			if time.Now().After(deadline) {
-				d.mu.Lock()
-				d.process = nil
-				d.mu.Unlock()
-				return errors.NewAria2Error("aria2 did not become ready on port " + strconv.Itoa(d.settings.Aria2Port))
-			}
+		case <-time.After(100 * time.Millisecond):
 		}
 	}
+	if !ready {
+		started.stop(0)
+		return errors.NewAria2Error("aria2 did not become ready on port " + strconv.Itoa(d.settings.Aria2Port))
+	}
+
+	d.mu.Lock()
+	d.dm = started
+	d.adopted = false
+	d.mu.Unlock()
+	return nil
 }
 
 func (d *Aria2Downloader) ensureDaemon(ctx context.Context) {
@@ -187,27 +184,25 @@ func (d *Aria2Downloader) ensureDaemon(ctx context.Context) {
 		return
 	}
 	d.mu.Lock()
-	owns := d.ownsDaemon
-	alive := isAlive(d.process)
+	owns := d.dm != nil && !d.adopted
+	alive := d.dm.alive()
 	since := time.Since(d.lastSpawn)
-	if owns && !alive && since >= 5*time.Second {
+	should := owns && !alive && since >= 5*time.Second
+	if should {
 		d.lastSpawn = time.Now()
 	}
-	should := owns && !alive && since >= 5*time.Second
 	d.mu.Unlock()
 	if !should {
 		return
 	}
 
-	d.spawnDaemon(ctx)
+	if err := d.spawnDaemon(ctx); err != nil {
+		log.Printf("aria2: respawn failed: %v", err)
+	}
 }
 
 func (d *Aria2Downloader) wsURL() string {
-	u := fmt.Sprintf("ws://%s:%d/jsonrpc", d.settings.Aria2Host, d.settings.Aria2Port)
-	if d.settings.Aria2Token != "" {
-		u += "?token=" + d.settings.Aria2Token
-	}
-	return u
+	return fmt.Sprintf("ws://%s:%d/jsonrpc", d.settings.Aria2Host, d.settings.Aria2Port)
 }
 
 func (d *Aria2Downloader) wsRun(ctx context.Context) {
@@ -246,21 +241,6 @@ func (d *Aria2Downloader) wsRun(ctx context.Context) {
 			return
 		case <-time.After(time.Second):
 		}
-	}
-}
-
-func (d *Aria2Downloader) killWait(proc *exec.Cmd) error {
-	_ = proc.Process.Kill()
-	waitDone := make(chan error, 1)
-	go func() {
-		waitDone <- proc.Wait()
-	}()
-
-	select {
-	case <-waitDone:
-		return nil
-	case <-time.After(2 * time.Second):
-		return <-waitDone
 	}
 }
 
@@ -332,8 +312,9 @@ func (d *Aria2Downloader) Stop() error {
 	d.wsCancel = nil
 	d.wsConn = nil
 	d.wsDone = nil
-	proc := d.process
-	owns := d.ownsDaemon
+	dm := d.dm
+	d.dm = nil
+	d.adopted = false
 	d.mu.Unlock()
 
 	if cancel != nil {
@@ -345,37 +326,13 @@ func (d *Aria2Downloader) Stop() error {
 	if done != nil {
 		<-done
 	}
-	if proc == nil || !owns {
-		return nil
-	}
-	d.mu.Lock()
-	d.process = nil
-	d.mu.Unlock()
-	if err := proc.Process.Signal(syscall.SIGTERM); err != nil {
-		return d.killWait(proc)
-	}
-
-	waitDone := make(chan error, 1)
-	go func() {
-		waitDone <- proc.Wait()
-	}()
-
-	select {
-	case <-waitDone:
-		return nil
-	case <-time.After(2 * time.Second):
-		return d.killWait(proc)
-	}
+	// The daemon is ours to stop; Stop already released d.dm under the mutex.
+	dm.stop(2 * time.Second)
+	return nil
 }
 
-// ShouldResolve preserves the loose substring semantics.
 func (d *Aria2Downloader) ShouldResolve(uri string) bool {
-	for _, pat := range validSchemes {
-		if ok, _ := regexp.MatchString(pat, uri); ok {
-			return true
-		}
-	}
-	return false
+	return strings.Contains(uri, "http") || strings.Contains(uri, "ftp")
 }
 
 // finalURL picks the used uri, else the first, else the fallback.
@@ -394,6 +351,11 @@ func (d *Aria2Downloader) finalURL(file api.DownloadFile, fallback string) strin
 	return fallback
 }
 
+// probeClient bounds the best-effort HEAD probe. http.DefaultClient has no
+// timeout, so a server that accepts the connection but never answers would
+// otherwise hang the resolve goroutine.
+var probeClient = &http.Client{Timeout: 10 * time.Second}
+
 // probeHeader is a best-effort HEAD probe; any failure yields nil.
 func (d *Aria2Downloader) probeHeader(ctx context.Context, rawURL string, headers map[string]string) (map[string]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -405,7 +367,7 @@ func (d *Aria2Downloader) probeHeader(ctx context.Context, rawURL string, header
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := probeClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -463,8 +425,11 @@ func (d *Aria2Downloader) doRequest(ctx context.Context, uri string, options map
 		}
 
 		var res rpcapi.Aria2AddUriResponse
-		if err := json.Unmarshal(raw, &res); err != nil || res.Result == "" {
+		if err := json.Unmarshal(raw, &res); err != nil {
 			return err
+		}
+		if res.Result == "" {
+			return errors.NewAria2Error("aria2.addUri returned an empty gid")
 		}
 
 		gid = res.Result
@@ -472,11 +437,10 @@ func (d *Aria2Downloader) doRequest(ctx context.Context, uri string, options map
 	})
 
 	g.Go(func() error {
-		var err error
-		headers, err = d.probeHeader(gCtx, uri, requestHeaders)
-		if err != nil {
-			return err
-		}
+		// Best-effort: a server that rejects or times out HEAD must not abort the
+		// resolve (previously this returned an error into errgroup, which also
+		// cancelled the addUri call).
+		headers, _ = d.probeHeader(gCtx, uri, requestHeaders)
 		return nil
 	})
 
@@ -518,11 +482,10 @@ func (d *Aria2Downloader) Resolve(ctx context.Context, uri string, options map[s
 	if options == nil {
 		options = map[string]any{}
 	}
-	rawHeaders, _ := options["headers"].(map[string]string)
-	headers := maps.Clone(rawHeaders)
-
-	rawCookies, _ := options["cookies"].(map[string]string)
-	cookies := maps.Clone(rawCookies)
+	// StringMap never returns nil: with a nil map the Referer/Cookie writes
+	// below would panic (the bridge decodes headers as map[string]any).
+	headers := libmaps.StringMap(options["headers"])
+	cookies := libmaps.StringMap(options["cookies"])
 
 	referer := ""
 	if s, _ := options["referer"].(string); s != "" {
@@ -530,16 +493,12 @@ func (d *Aria2Downloader) Resolve(ctx context.Context, uri string, options map[s
 	} else if s, _ := options["pageUrl"].(string); s != "" {
 		referer = s
 	}
-	requestHeaders := maps.Clone(headers)
+	requestHeaders := libmaps.Clone(headers, 1)
 	if referer != "" {
 		requestHeaders["Referer"] = referer
 	}
 	if len(cookies) > 0 {
-		parts := make([]string, 0, len(cookies))
-		for k, v := range cookies {
-			parts = append(parts, k+"="+v)
-		}
-		requestHeaders["Cookie"] = strings.Join(parts, "; ")
+		requestHeaders["Cookie"] = cookiesLine(cookies)
 	}
 
 	ariaOptions := map[string]any{}
@@ -586,7 +545,7 @@ func (d *Aria2Downloader) Resolve(ctx context.Context, uri string, options map[s
 	var contentLength int64
 	if respHeaders != nil {
 		if cl := respHeaders["content-length"]; cl != "" {
-			contentLength = lib.StringToInt[int64](cl)
+			contentLength = helpers.StringToInt[int64](cl)
 		}
 	}
 	if contentLength == 0 {
@@ -594,8 +553,8 @@ func (d *Aria2Downloader) Resolve(ctx context.Context, uri string, options map[s
 	}
 	if mimeType != "" && filename != "" && filename != "." {
 		suffix := path.Ext(filename)
-		if suffix == "" || !lib.IsAlnum(suffix[1:]) {
-			if ext := lib.ExtensionForType(mimeType); ext != "" {
+		if suffix == "" || !isAlnum(suffix[1:]) {
+			if ext := helpers.ExtensionForType(mimeType); ext != "" {
 				filename += ext
 			}
 		}
@@ -615,17 +574,41 @@ func (d *Aria2Downloader) Resolve(ctx context.Context, uri string, options map[s
 	}}, nil
 }
 
-// onResolved halts the dry-run download, then retries removeDownloadResult 5x.
-func (d *Aria2Downloader) onResolved(ctx context.Context, gid string) {
+// IsAlnum reports whether s is non-empty ASCII alphanumeric.
+func isAlnum(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9') {
+			return false
+		}
+	}
+	return true
+}
+
+// onResolved halts the dry-run download, then retries removeDownloadResult.
+//
+// It runs with a context detached from the resolve: a newer Resolve cancels the
+// previous resolve's context by design, so the original ctx is usually already
+// cancelled when this defer runs — every RPC would fail and the dry-run GID
+// would stay behind in aria2 forever.
+func (d *Aria2Downloader) onResolved(parent context.Context, gid string) {
+	if gid == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), 2*time.Second)
+	defer cancel()
+
 	b, err := json.Marshal([]string{gid})
 	if err != nil {
 		return
 	}
-
 	_, _ = d.rpc.Call(ctx, "aria2.remove", b)
+
 	tick := time.NewTicker(100 * time.Millisecond)
 	defer tick.Stop()
-	timeout := time.After(time.Second)
+	deadline := time.After(2 * time.Second)
 
 	for {
 		select {
@@ -636,11 +619,10 @@ func (d *Aria2Downloader) onResolved(ctx context.Context, gid string) {
 			if err != nil {
 				return
 			}
-
 			if _, err := d.rpc.Call(ctx, "aria2.removeDownloadResult", b); err == nil {
 				return
 			}
-		case <-timeout:
+		case <-deadline:
 			log.Printf("failed to remove resolve GID %s", gid)
 			return
 		}
@@ -669,32 +651,44 @@ func (d *Aria2Downloader) GetStatus(ctx context.Context, id string) (api.Downloa
 
 func (d *Aria2Downloader) aria2Options(r api.ResolvedURL) map[string]any {
 	options := map[string]any{}
-	headers := maps.Clone(r.Headers)
+	headers := libmaps.Clone(r.Headers, 1)
+	if r.Referer != "" {
+		headers["Referer"] = r.Referer
+	}
+	if len(r.Cookies) > 0 {
+		headers["Cookie"] = cookiesLine(r.Cookies)
+	}
+	if len(headers) > 0 {
+		options["header"] = headerLines(headers)
+	}
 	if r.Filename != "" {
 		options["out"] = r.Filename
 	}
 	if r.Dir != "" {
 		options["dir"] = r.Dir
 	}
-	if r.Referer != "" {
-		headers["Referer"] = r.Referer
-	}
-	if len(headers) > 0 {
-		hs := make([]string, 0, len(headers))
-		for k, v := range headers {
-			hs = append(hs, k+": "+v)
-		}
-		options["header"] = hs
-	}
-	if len(r.Cookies) > 0 {
-		parts := make([]string, 0, len(r.Cookies))
-		for k, v := range r.Cookies {
-			parts = append(parts, k+"="+v)
-		}
-		hdrs, _ := options["header"].([]string)
-		options["header"] = append(hdrs, "Cookie: "+strings.Join(parts, "; "))
-	}
 	return options
+}
+
+// cookiesLine renders cookies as a single Cookie header value. Sorted so the
+// request is deterministic (tests, cache keys).
+func cookiesLine(cookies map[string]string) string {
+	keys := slices.Sorted(maps.Keys(cookies))
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, k+"="+cookies[k])
+	}
+	return strings.Join(parts, "; ")
+}
+
+// headerLines renders headers as "Name: value" lines, sorted for determinism.
+func headerLines(headers map[string]string) []string {
+	keys := slices.Sorted(maps.Keys(headers))
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, k+": "+headers[k])
+	}
+	return out
 }
 
 // Download starts a download and returns its initial state.
@@ -711,8 +705,11 @@ func (d *Aria2Downloader) Download(ctx context.Context, uri api.ResolvedURL) (ap
 	}
 
 	var res rpcapi.Aria2AddUriResponse
-	if err := json.Unmarshal(raw, &res); err != nil || res.Result == "" {
+	if err := json.Unmarshal(raw, &res); err != nil {
 		return api.Download{}, err
+	}
+	if res.Result == "" {
+		return api.Download{}, errors.NewAria2Error("aria2.addUri returned an empty gid")
 	}
 	return d.GetStatus(ctx, res.Result)
 }
@@ -751,21 +748,31 @@ func (d *Aria2Downloader) Remove(ctx context.Context, id string) (api.Download, 
 
 // Purge clears the result first (order differs from Remove — keep it).
 func (d *Aria2Downloader) Purge(ctx context.Context, id string) error {
-	d.removeAny(ctx, id, "aria2.removeDownloadResult", "aria2.remove")
+	if err := d.removeAny(ctx, id, "aria2.removeDownloadResult", "aria2.remove"); err != nil && !errors.IsAria2NotFound(err) {
+		return err
+	}
 	return nil
 }
 
-func (d *Aria2Downloader) removeAny(ctx context.Context, id string, methods ...string) {
+// removeAny tries each method in order and returns the joined error when all
+// of them fail (previously every error was swallowed and Purge always
+// reported success).
+func (d *Aria2Downloader) removeAny(ctx context.Context, id string, methods ...string) error {
+	var errs []error
 	for _, m := range methods {
 		b, err := json.Marshal([]any{id})
 		if err != nil {
+			errs = append(errs, err)
 			continue
 		}
 
-		if _, err := d.rpc.Call(ctx, m, b); err == nil {
-			return
+		if _, err := d.rpc.Call(ctx, m, b); err != nil {
+			errs = append(errs, err)
+			continue
 		}
+		return nil
 	}
+	return stderrors.Join(errs...)
 }
 
 // Listen registers callbacks (mutex-guarded, no I/O).
@@ -785,24 +792,101 @@ func (d *Aria2Downloader) Unlisten(id string) {
 	delete(d.listening, id)
 }
 
-func (d *Aria2Downloader) notify(ctx context.Context, gid string, e listenerEntry) {
-	status, err := d.GetStatus(ctx, gid)
-	if err != nil {
-		e.onError(err)
-		d.Unlisten(gid)
+// claim removes gid's listener if it is still registered, so exactly one
+// goroutine delivers the terminal notification even when a websocket push and
+// a poll race for the same completion.
+func (d *Aria2Downloader) claim(gid string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if _, ok := d.listening[gid]; !ok {
+		return false
+	}
+	delete(d.listening, gid)
+	return true
+}
+
+func (d *Aria2Downloader) deliver(gid string, status api.Download, e listenerEntry) {
+	if status.IsTerminal() && !d.claim(gid) {
 		return
 	}
-	e.onNotify(status)
-	if s := status.Status; s == "error" || s == "removed" || s == "complete" {
-		d.Unlisten(gid)
+	if e.onNotify != nil {
+		e.onNotify(status)
 	}
 }
 
-func (d *Aria2Downloader) Refresh(ctx context.Context, id ...string) {
-	for _, gid := range id {
-		if e, ok := d.listening[gid]; ok {
-			d.notify(ctx, gid, e)
+// notify fetches fresh status and delivers it. A transport failure is reported
+// through onError and keeps the listener: only aria2 saying the gid is gone
+// drops it.
+func (d *Aria2Downloader) notify(ctx context.Context, gid string, e listenerEntry) {
+	status, err := d.GetStatus(ctx, gid)
+	if err != nil {
+		if e.onError != nil {
+			e.onError(err)
 		}
+		if errors.IsAria2NotFound(err) {
+			d.Unlisten(gid)
+		}
+		return
+	}
+	d.deliver(gid, status, e)
+}
+
+// TellActive returns the status of every actively-transferring download keyed
+// by gid. aria2 omits paused and terminal downloads, so callers fall back to
+// per-gid tellStatus for the rest.
+func (d *Aria2Downloader) TellActive(ctx context.Context) (map[string]api.Download, error) {
+	b, err := json.Marshal([]any{StatusKeys})
+	if err != nil {
+		return nil, err
+	}
+	raw, err := d.rpc.Call(ctx, "aria2.tellActive", b)
+	if err != nil {
+		return nil, err
+	}
+	var res rpcapi.Aria2TellActiveResponse
+	if err := json.Unmarshal(raw, &res); err != nil {
+		return nil, err
+	}
+	out := make(map[string]api.Download, len(res.Result))
+	for _, s := range res.Result {
+		dl := s.ToDownload()
+		out[dl.GID] = dl
+	}
+	return out, nil
+}
+
+// Refresh polls listeners. With no ids it covers every registered listener:
+// one tellActive for the actively-transferring ones and a tellStatus each for
+// the rest. Previously the id-less call iterated an empty slice and never
+// polled anything, so paused listeners lagged until the next websocket event.
+func (d *Aria2Downloader) Refresh(ctx context.Context, id ...string) {
+	d.mu.Lock()
+	targets := make(map[string]listenerEntry, len(d.listening))
+	if len(id) == 0 {
+		maps.Copy(targets, d.listening)
+	} else {
+		for _, gid := range id {
+			if e, ok := d.listening[gid]; ok {
+				targets[gid] = e
+			}
+		}
+	}
+	d.mu.Unlock()
+
+	if len(id) == 0 {
+		// One tellActive covers every actively-transferring listener; only the
+		// remaining paused/terminal listeners need a tellStatus each.
+		if active, err := d.TellActive(ctx); err == nil {
+			for gid, e := range targets {
+				if status, ok := active[gid]; ok {
+					d.deliver(gid, status, e)
+					delete(targets, gid)
+				}
+			}
+		}
+	}
+	for gid, e := range targets {
+		d.notify(ctx, gid, e)
 	}
 
 	if len(id) > 0 {

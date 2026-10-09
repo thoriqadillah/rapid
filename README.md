@@ -16,7 +16,8 @@ The first `go build` compiles the miqt bindings and takes a while; subsequent bu
 task dev
 ```
 
-Runs the app (`main.go`, shows an empty `QMainWindow`).
+Runs the app (`main.go`): a download list backed by the local database plus a
+settings shell, with a system tray when the desktop provides one.
 
 ## Build
 
@@ -31,3 +32,6 @@ Produces a standalone executable at `dist/rapid`.
 ```bash
 task test
 ```
+
+Runs `go test ./...` with `QT_QPA_PLATFORM=offscreen` so the widget tests do
+not need a display.

@@ -4,7 +4,9 @@
 package errors
 
 import (
+	stdErrors "errors"
 	"fmt"
+	"strings"
 )
 
 // Aria2Error is a daemon/RPC failure.
@@ -77,6 +79,18 @@ func (e *JsonRpcError) Error() string {
 // NewJsonRpcError builds a JsonRpcError.
 func NewJsonRpcError(code int, message string) *JsonRpcError {
 	return &JsonRpcError{Code: code, Message: message}
+}
+
+func IsAria2NotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	var e *Aria2Error
+	if !stdErrors.As(err, &e) {
+		return false
+	}
+
+	return strings.Contains(e.Msg, "Invalid GID")
 }
 
 // BrowserRequestError is raised for unsafe or invalid extension requests.

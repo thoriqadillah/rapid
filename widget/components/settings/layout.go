@@ -31,7 +31,7 @@ func NewLayout(navigation *app.Navigation) *components.Layout {
 			Label:       "Back",
 			IconSource:  ui.IconPath("MdiLightArrowLeft.svg"),
 			OnActivated: func() {
-				navigation.Replace(app.RouteDownload)
+				navigation.Back()
 			},
 		},
 	})

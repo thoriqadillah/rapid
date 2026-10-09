@@ -24,17 +24,26 @@ tasks:
     dir: "{{.ROOT_DIR}}"
     cmd: |
       set -eu
-      if command -v rcc >/dev/null 2>&1; then
-        RCC="$(command -v rcc)"
-      elif [ -x ".venv/lib/python3.13/site-packages/PySide6/Qt/libexec/rcc" ]; then
+      # Prefer Qt's own rcc so building the Go app does not require Python.
+      RCC=""
+      for candidate in rcc rcc-qt6 /usr/lib/qt6/libexec/rcc /usr/lib64/qt6/libexec/rcc /usr/libexec/qt6/rcc; do
+        if command -v "$candidate" >/dev/null 2>&1; then
+          RCC="$(command -v "$candidate")"
+          break
+        fi
+      done
+      # Legacy fallback: rcc shipped inside a PySide6 virtualenv.
+      if [ -z "$RCC" ] && [ -x ".venv/lib/python3.13/site-packages/PySide6/Qt/libexec/rcc" ]; then
         RCC=".venv/lib/python3.13/site-packages/PySide6/Qt/libexec/rcc"
-      elif [ -x ".venv/Scripts/rcc.exe" ]; then
+      fi
+      if [ -z "$RCC" ] && [ -x ".venv/Scripts/rcc.exe" ]; then
         RCC=".venv/Scripts/rcc.exe"
-      else
+      fi
+      if [ -z "$RCC" ]; then
         echo "Qt rcc was not found." >&2
-        echo "Install the required binary with:" >&2
+        echo "Install Qt's resource compiler (Debian/Ubuntu: qt6-base-dev-tools; Fedora: qt6-qtbase-devel)," >&2
+        echo "or use the PySide6 fallback:" >&2
         echo "  python3 -m pip install \"PySide6>=6.8,<7.0\"" >&2
-        echo "Then rerun: task build:icon" >&2
         exit 1
       fi
 
@@ -58,7 +67,15 @@ tasks:
 
   test:
     desc: Run tests
+    env:
+      QT_QPA_PLATFORM: offscreen
     cmd: go test ./...
+
+  test:race:
+    desc: Run tests with the race detector
+    env:
+      QT_QPA_PLATFORM: offscreen
+    cmd: go test -race ./...
 
   seed:
     desc: Seed demo downloads into the app database

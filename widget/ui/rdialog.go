@@ -38,11 +38,13 @@ func NewRDialog(owner *qt.QWidget) *RDialog {
 	box.SetContentsMargins(theme.SpacingSm, theme.SpacingSm, theme.SpacingSm, theme.SpacingSm)
 	d.QDialog.SetLayout(box.QLayout)
 
-	esc := qt.NewQShortcut2(qt.NewQKeySequence2("Esc"), d.QDialog.QObject)
+	escKey := qt.NewQKeySequence2("Esc")
+	esc := qt.NewQShortcut2(escKey, d.QDialog.QObject)
+	escKey.Delete() // the shortcut copies the sequence
 	esc.OnActivated(d.Reject)
 
 	d.BodyLayout = qt.NewQVBoxLayout2()
-	d.BodyLayout.SetContentsMargins(0, 0, 0, 0)
+	d.BodyLayout.SetContentsMargins(0, 0, 0, theme.SpacingMd)
 	d.BodyLayout.SetSpacing(theme.SpacingMd)
 	box.AddLayout(d.BodyLayout.QLayout)
 

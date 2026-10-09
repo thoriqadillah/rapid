@@ -46,7 +46,9 @@ func NewRButton(text string, variant RButtonVariant, outlined bool) *RButton {
 	}
 	b.SetMinimumHeight(theme.TouchTarget)
 	b.setStyleSheet()
-	b.SetCursor(qt.NewQCursor2(qt.PointingHandCursor))
+	cursor := qt.NewQCursor2(qt.PointingHandCursor)
+	b.SetCursor(cursor)
+	cursor.Delete()
 	b.SetMouseTracking(true)
 	b.OnEnterEvent(func(super func(*qt.QEnterEvent), event *qt.QEnterEvent) {
 		super(event)
@@ -135,6 +137,11 @@ func (b *RButton) SetEnabled(enabled bool) {
 	b.refreshIcon()
 }
 
+func (b *RButton) SetDisabled(disabled bool) {
+	b.QPushButton.SetDisabled(disabled)
+	b.refreshIcon()
+}
+
 func (b *RButton) foregroundColor() *qt.QColor {
 	switch b.variant {
 	case PrimaryVariant, DangerVariant:
@@ -153,7 +160,9 @@ func (b *RButton) iconColor() *qt.QColor {
 
 func (b *RButton) refreshIcon() {
 	b.SetIcon(LoadIcon(b.iconSource, b.iconColor(), b.iconSize))
-	b.QPushButton.SetIconSize(qt.NewQSize2(b.iconSize, b.iconSize))
+	iconSize := qt.NewQSize2(b.iconSize, b.iconSize)
+	b.QPushButton.SetIconSize(iconSize)
+	iconSize.Delete()
 }
 
 func (b *RButton) setStyleSheet() {
@@ -205,7 +214,6 @@ func (b *RButton) setStyleSheet() {
 			QPushButton:disabled {
 				color: %s;
 				background-color: transparent;
-				opacity: 0.5;
 			}
 		`, theme.CssColor(fg),
 			theme.TouchTarget,
@@ -247,7 +255,6 @@ func (b *RButton) setStyleSheet() {
 		QPushButton:disabled {
 			background-color: %s;
 			color: %s;
-			opacity: 0.5;
 		}
 	`, theme.CssColor(bg),
 		theme.CssColor(fg),

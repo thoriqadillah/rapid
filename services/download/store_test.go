@@ -3,7 +3,6 @@ package download
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/uptrace/bun"
@@ -14,12 +13,10 @@ import (
 
 func testDB(t *testing.T) *bun.DB {
 	t.Helper()
-	bunDB, err := db.OpenMemory(t.Context())
+	err := db.OpenMemory(t.Context())
 	require.NoError(t, err)
-	t.Cleanup(func() {
-		bunDB.Close()
-	})
-	return bunDB
+	t.Cleanup(func() { db.Close() })
+	return db.DB()
 }
 
 func mustUpsert(t *testing.T, db bun.IDB, d api.Download) {
@@ -32,7 +29,7 @@ func TestStoreEmpty(t *testing.T) {
 	bunDB := testDB(t)
 	all, err := getAllDownloads(t.Context(), bunDB)
 	require.NoError(t, err)
-	assert.Empty(t, all)
+	require.Empty(t, all)
 }
 
 func TestStoreUpsertAndGet(t *testing.T) {
@@ -41,8 +38,8 @@ func TestStoreUpsertAndGet(t *testing.T) {
 	mustUpsert(t, bunDB, api.Download{GID: "abc", Status: "active"})
 	got, err := getDownload(ctx, bunDB, "abc")
 	require.NoError(t, err)
-	assert.Equal(t, "abc", got.GID)
-	assert.Equal(t, "active", got.Status)
+	require.Equal(t, "abc", got.GID)
+	require.Equal(t, "active", got.Status)
 }
 
 func TestStoreUpsertOverwritesScalars(t *testing.T) {
@@ -52,9 +49,9 @@ func TestStoreUpsertOverwritesScalars(t *testing.T) {
 	mustUpsert(t, bunDB, api.Download{GID: "abc", DownloadSpeed: 1024, Connections: 4})
 	got, err := getDownload(ctx, bunDB, "abc")
 	require.NoError(t, err)
-	assert.Empty(t, got.Status)
-	assert.Equal(t, int64(1024), got.DownloadSpeed)
-	assert.Equal(t, int64(4), got.Connections)
+	require.Empty(t, got.Status)
+	require.Equal(t, int64(1024), got.DownloadSpeed)
+	require.Equal(t, int64(4), got.Connections)
 }
 
 func TestStoreUpsertZeroSpeedIsKept(t *testing.T) {
@@ -64,7 +61,7 @@ func TestStoreUpsertZeroSpeedIsKept(t *testing.T) {
 	mustUpsert(t, bunDB, api.Download{GID: "abc", DownloadSpeed: 0})
 	got, err := getDownload(ctx, bunDB, "abc")
 	require.NoError(t, err)
-	assert.Equal(t, int64(0), got.DownloadSpeed)
+	require.Equal(t, int64(0), got.DownloadSpeed)
 }
 
 func TestStorePersistsCategory(t *testing.T) {
@@ -73,7 +70,7 @@ func TestStorePersistsCategory(t *testing.T) {
 	mustUpsert(t, bunDB, api.Download{GID: "abc", Category: "video"})
 	got, err := getDownload(ctx, bunDB, "abc")
 	require.NoError(t, err)
-	assert.Equal(t, "video", string(got.Category))
+	require.Equal(t, "video", string(got.Category))
 }
 
 func TestStorePersistsFilesAndUris(t *testing.T) {
@@ -93,17 +90,17 @@ func TestStorePersistsFilesAndUris(t *testing.T) {
 	got, err := getDownload(ctx, bunDB, "abc")
 	require.NoError(t, err)
 	require.Len(t, got.Files, 1)
-	assert.Equal(t, 1, got.Files[0].Index)
-	assert.Equal(t, "/dl/a.bin", got.Files[0].Path)
+	require.Equal(t, 1, got.Files[0].Index)
+	require.Equal(t, "/dl/a.bin", got.Files[0].Path)
 	require.Len(t, got.Files[0].URIs, 2)
-	assert.Equal(t, "http://x/a.bin", got.Files[0].URIs[1].URI)
+	require.Equal(t, "http://x/a.bin", got.Files[0].URIs[1].URI)
 }
 
 func TestStoreGetMissingReturnsZero(t *testing.T) {
 	bunDB := testDB(t)
 	got, err := getDownload(t.Context(), bunDB, "nope")
 	require.NoError(t, err)
-	assert.Empty(t, got.GID)
+	require.Empty(t, got.GID)
 }
 
 func TestStorePersistsResolvedURL(t *testing.T) {
@@ -120,11 +117,11 @@ func TestStorePersistsResolvedURL(t *testing.T) {
 	got, err := getDownload(ctx, bunDB, "abc")
 	require.NoError(t, err)
 	require.NotNil(t, got.Resolved)
-	assert.Equal(t, resolved.URL, got.Resolved.URL)
-	assert.Equal(t, "https://ref.example.com", got.Resolved.Headers["Referer"])
-	assert.Equal(t, "abc123", got.Resolved.Cookies["session"])
-	assert.Equal(t, "Rapid", got.Resolved.ResolverName)
-	assert.Equal(t, int64(1024), got.Resolved.Size)
+	require.Equal(t, resolved.URL, got.Resolved.URL)
+	require.Equal(t, "https://ref.example.com", got.Resolved.Headers["Referer"])
+	require.Equal(t, "abc123", got.Resolved.Cookies["session"])
+	require.Equal(t, "Rapid", got.Resolved.ResolverName)
+	require.Equal(t, int64(1024), got.Resolved.Size)
 }
 
 func TestStoreMissingResolvedIsNil(t *testing.T) {
@@ -133,7 +130,7 @@ func TestStoreMissingResolvedIsNil(t *testing.T) {
 	mustUpsert(t, bunDB, api.Download{GID: "abc", Status: "active"})
 	got, err := getDownload(ctx, bunDB, "abc")
 	require.NoError(t, err)
-	assert.Nil(t, got.Resolved)
+	require.Nil(t, got.Resolved)
 }
 
 func TestStoreAllNewestFirst(t *testing.T) {
@@ -144,8 +141,8 @@ func TestStoreAllNewestFirst(t *testing.T) {
 	all, err := getAllDownloads(ctx, bunDB)
 	require.NoError(t, err)
 	require.Len(t, all, 2)
-	assert.Equal(t, "g2", all[0].GID)
-	assert.Equal(t, "g1", all[1].GID)
+	require.Equal(t, "g2", all[0].GID)
+	require.Equal(t, "g1", all[1].GID)
 }
 
 func TestStoreRemove(t *testing.T) {
@@ -155,7 +152,7 @@ func TestStoreRemove(t *testing.T) {
 	require.NoError(t, removeDownload(ctx, bunDB, "abc"))
 	all, err := getAllDownloads(ctx, bunDB)
 	require.NoError(t, err)
-	assert.Empty(t, all)
+	require.Empty(t, all)
 }
 
 func TestStoreClear(t *testing.T) {
@@ -166,7 +163,7 @@ func TestStoreClear(t *testing.T) {
 	require.NoError(t, clearDownloads(ctx, bunDB))
 	all, err := getAllDownloads(ctx, bunDB)
 	require.NoError(t, err)
-	assert.Empty(t, all)
+	require.Empty(t, all)
 }
 
 func TestStoreSpeedRoundtrip(t *testing.T) {
@@ -178,7 +175,7 @@ func TestStoreSpeedRoundtrip(t *testing.T) {
 	}
 	hist, err := getSpeedHistory(ctx, bunDB, "abc", 60)
 	require.NoError(t, err)
-	assert.Equal(t, []api.SpeedSample{{TS: 1000, Speed: 500}, {TS: 2000, Speed: 700}, {TS: 3000, Speed: 900}}, hist)
+	require.Equal(t, []api.SpeedSample{{TS: 1000, Speed: 500}, {TS: 2000, Speed: 700}, {TS: 3000, Speed: 900}}, hist)
 }
 
 func TestStoreSpeedLimitAndOrder(t *testing.T) {
@@ -191,8 +188,8 @@ func TestStoreSpeedLimitAndOrder(t *testing.T) {
 	hist, err := getSpeedHistory(ctx, bunDB, "abc", 3)
 	require.NoError(t, err)
 	require.Len(t, hist, 3)
-	assert.Equal(t, int64(7), hist[0].TS)
-	assert.Equal(t, int64(9), hist[2].TS)
+	require.Equal(t, int64(7), hist[0].TS)
+	require.Equal(t, int64(9), hist[2].TS)
 }
 
 func TestStoreSpeedDuplicateIgnored(t *testing.T) {
@@ -203,7 +200,7 @@ func TestStoreSpeedDuplicateIgnored(t *testing.T) {
 	require.NoError(t, addSpeedSample(ctx, bunDB, "abc", 1000, 999))
 	hist, err := getSpeedHistory(ctx, bunDB, "abc", 60)
 	require.NoError(t, err)
-	assert.Equal(t, []api.SpeedSample{{TS: 1000, Speed: 500}}, hist)
+	require.Equal(t, []api.SpeedSample{{TS: 1000, Speed: 500}}, hist)
 }
 
 func TestStoreRemoveCascades(t *testing.T) {
@@ -217,10 +214,10 @@ func TestStoreRemoveCascades(t *testing.T) {
 	require.NoError(t, removeDownload(ctx, bunDB, "abc"))
 	hist, err := getSpeedHistory(ctx, bunDB, "abc", 60)
 	require.NoError(t, err)
-	assert.Empty(t, hist)
+	require.Empty(t, hist)
 	got, err := getDownload(ctx, bunDB, "abc")
 	require.NoError(t, err)
-	assert.Empty(t, got.GID)
+	require.Empty(t, got.GID)
 }
 
 func TestStoreFileOverwriteClearsUnsetFields(t *testing.T) {
@@ -238,15 +235,15 @@ func TestStoreFileOverwriteClearsUnsetFields(t *testing.T) {
 	})
 	got, err := getDownload(ctx, bunDB, "abc")
 	require.NoError(t, err)
-	assert.Empty(t, got.Files[0].Path)
-	assert.Equal(t, int64(60), got.Files[0].Length)
-	assert.Len(t, got.Files[0].URIs, 1)
+	require.Empty(t, got.Files[0].Path)
+	require.Equal(t, int64(60), got.Files[0].Length)
+	require.Len(t, got.Files[0].URIs, 1)
 	// Dropped index disappears.
 	mustUpsert(t, bunDB, api.Download{GID: "abc", Files: []api.DownloadFile{{Index: 1}}})
 	got, err = getDownload(ctx, bunDB, "abc")
 	require.NoError(t, err)
 	require.Len(t, got.Files, 1)
-	assert.Equal(t, 1, got.Files[0].Index)
+	require.Equal(t, 1, got.Files[0].Index)
 }
 
 func TestStoreUpsertReturnsFreshRow(t *testing.T) {
@@ -258,7 +255,7 @@ func TestStoreUpsertReturnsFreshRow(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, row.Files, 1)
-	assert.Len(t, row.Files[0].URIs, 1)
+	require.Len(t, row.Files[0].URIs, 1)
 }
 
 func TestUpdatedAtOwnedByTrigger(t *testing.T) {
@@ -276,7 +273,7 @@ func TestUpdatedAtOwnedByTrigger(t *testing.T) {
 	row := new(downloadRow)
 	require.NoError(t, bunDB.NewSelect().Model(row).
 		Where("download_row.gid = ?", "abc").Scan(ctx))
-	assert.False(t, row.UpdatedAt.IsZero())
-	assert.NotEqual(t, "2020-01-01", row.UpdatedAt.Format("2006-01-02"),
+	require.False(t, row.UpdatedAt.IsZero())
+	require.NotEqual(t, "2020-01-01", row.UpdatedAt.Format("2006-01-02"),
 		"trigger must have refreshed updated_at past the backdate")
 }

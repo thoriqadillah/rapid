@@ -1,9 +1,11 @@
 package clipboard
 
-import "regexp"
+import (
+	"regexp"
+	"strings"
+)
 
-// URLRegex matches the first http(s) URL in pasted text.
-var URLRegex = regexp.MustCompile(`https?://\S+`)
+var urlRegex = regexp.MustCompile(`(?i)\b(?:https?|ftps?)://[^\s<>"']+`)
 
 type Clipboard struct{}
 
@@ -12,5 +14,5 @@ func NewClipboard() *Clipboard {
 }
 
 func (c *Clipboard) ExtractURL(text string) string {
-	return URLRegex.FindString(text)
+	return strings.TrimRight(urlRegex.FindString(text), ".,;:!?)]}")
 }

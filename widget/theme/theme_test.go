@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	qt "github.com/mappu/miqt/qt6"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMain(m *testing.M) {
@@ -28,11 +29,7 @@ func TestInitMapsSystemPalette(t *testing.T) {
 		"button":     ColorButtonBase,
 		"input":      ColorInputBackground,
 	} {
-		if c == nil {
-			t.Fatalf("%s color not initialized from palette", name)
-		}
+		require.NotNil(t, c, "%s color not initialized from palette", name)
 	}
-	if ColorTextMuted.Alpha() != 0x99 {
-		t.Fatalf("muted alpha = %d, want %d", ColorTextMuted.Alpha(), 0x99)
-	}
+	require.Equal(t, 0x99, ColorTextMuted.Alpha(), "muted alpha")
 }

@@ -19,22 +19,27 @@ var migrationFS embed.FS
 
 var db *bun.DB
 
-// withFK ensures PRAGMA foreign_keys=ON on every pooled connection.
-// modernc sqlite (via sqliteshim) applies _pragma params per connection,
-// which covers pooled conns that a one-time Exec would miss.
-func withFK(dsn string) string {
+func withPragmas(dsn string) string {
 	if strings.Contains(dsn, "_pragma=") {
-		return dsn
+		return dsn // caller supplied its own pragmas
+	}
+	pragmas := []string{"foreign_keys(1)", "busy_timeout(5000)"}
+	if !strings.Contains(dsn, "mode=memory") {
+		pragmas = append(pragmas, "journal_mode(WAL)", "synchronous(NORMAL)")
 	}
 	sep := "?"
 	if strings.Contains(dsn, "?") {
 		sep = "&"
 	}
-	return dsn + sep + "_pragma=foreign_keys(1)"
+	for _, p := range pragmas {
+		dsn += sep + "_pragma=" + p
+		sep = "&"
+	}
+	return dsn
 }
 
 func openSQL(dsn string) (*sql.DB, error) {
-	sqldb, err := sql.Open(sqliteshim.ShimName, withFK(dsn))
+	sqldb, err := sql.Open(sqliteshim.ShimName, withPragmas(dsn))
 	if err != nil {
 		return nil, err
 	}
@@ -67,12 +72,10 @@ func Open(dsn string) error {
 
 var memSeq atomic.Uint64
 
-// OpenMemory returns a bun DB on a private in-memory sqlite instance with
-// migrations applied. Intended for tests; caller closes via db.Close().
-func OpenMemory(ctx context.Context) (*bun.DB, error) {
+func OpenMemory(ctx context.Context) error {
 	sqldb, err := openSQL(fmt.Sprintf("file:memdb_%d?mode=memory&cache=shared", memSeq.Add(1)))
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	sqldb.SetMaxIdleConns(1000)
@@ -80,9 +83,10 @@ func OpenMemory(ctx context.Context) (*bun.DB, error) {
 
 	if err := migrate(sqldb, ctx); err != nil {
 		sqldb.Close()
-		return nil, err
+		return err
 	}
-	return bun.NewDB(sqldb, sqlitedialect.New()), nil
+	db = bun.NewDB(sqldb, sqlitedialect.New())
+	return nil
 }
 
 func Close() error {

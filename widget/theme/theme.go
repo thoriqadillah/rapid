@@ -2,6 +2,8 @@ package theme
 
 import (
 	"fmt"
+	"sync"
+
 	"rapid/lib"
 
 	qt "github.com/mappu/miqt/qt6"
@@ -60,7 +62,7 @@ func Init() {
 
 	ColorBackground = p.ColorWithCr(qt.QPalette__Window)
 	ColorSurface = p.ColorWithCr(qt.QPalette__Base)
-	ColorBorder = p.ColorWithCr(qt.QPalette__Mid)
+	ColorBorder = ColorSurface.LighterWithInt(150)
 
 	ColorPrimary = p.ColorWithCr(qt.QPalette__Highlight)
 	ColorPrimaryHover = ColorPrimary.DarkerWithInt(110)
@@ -75,9 +77,48 @@ func Init() {
 	ColorInputBackground = ColorSurface
 }
 
+// withAlphaKey identifies one translucent variant of a base color.
+type withAlphaKey struct {
+	rgba  uint
+	alpha int
+}
+
+// withAlphaCache memoizes translucent variants. WithAlpha is called from
+// style-sheet builders and paint events, and MIQT never finalizes a
+// qt.NewQColor10 allocation, so the uncached version leaked one native QColor
+// per call (dozens per repaint). Colors are immutable here, so sharing one
+// pointer per variant is safe.
+var (
+	withAlphaMu    sync.RWMutex
+	withAlphaCache = map[withAlphaKey]*qt.QColor{}
+)
+
+// WithAlpha returns base with the given alpha. The result is cached and shared:
+// treat it as immutable and never Delete() it.
 func WithAlpha(c *qt.QColor, alpha int) *qt.QColor {
+	if c == nil {
+		return nil
+	}
+	key := withAlphaKey{rgba: c.Rgba(), alpha: alpha & 0xff}
+
+	withAlphaMu.RLock()
+	if out, ok := withAlphaCache[key]; ok {
+		withAlphaMu.RUnlock()
+		return out
+	}
+	withAlphaMu.RUnlock()
+
 	out := qt.NewQColor10(c)
 	out.SetAlpha(alpha)
+
+	withAlphaMu.Lock()
+	if existing, ok := withAlphaCache[key]; ok {
+		withAlphaMu.Unlock()
+		out.Delete()
+		return existing
+	}
+	withAlphaCache[key] = out
+	withAlphaMu.Unlock()
 	return out
 }
 

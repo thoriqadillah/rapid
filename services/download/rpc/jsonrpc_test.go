@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,7 +20,7 @@ func TestRPCMapsTransportFailure(t *testing.T) {
 	rpc := NewJSONRpc("127.0.0.1", 1, "") // closed port
 	_, err := rpc.Call(t.Context(), "aria2.getVersion", nil)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "cannot connect to aria2")
+	require.Contains(t, err.Error(), "cannot connect to aria2")
 }
 
 func TestRPCIncrementsID(t *testing.T) {
@@ -40,7 +39,7 @@ func TestRPCIncrementsID(t *testing.T) {
 	_, err = rpc.Call(t.Context(), "m", nil)
 	require.NoError(t, err)
 	require.Len(t, ids, 2)
-	assert.Equal(t, ids[0]+1, ids[1])
+	require.Equal(t, ids[0]+1, ids[1])
 }
 
 func TestRPCReturnsRawBody(t *testing.T) {
@@ -67,7 +66,7 @@ func TestRPCReturnsRawBody(t *testing.T) {
 		} `json:"result"`
 	}
 	require.NoError(t, json.Unmarshal(raw, &env))
-	assert.Equal(t, "1.0", env.Result.Version)
+	require.Equal(t, "1.0", env.Result.Version)
 }
 
 func spawnDaemon(t *testing.T, secret string) int {
@@ -109,7 +108,7 @@ func spawnDaemon(t *testing.T, secret string) int {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	t.Fatal("aria2 RPC port never opened")
+	require.FailNow(t, "aria2 RPC port never opened")
 	return 0
 }
 
@@ -120,7 +119,7 @@ func TestIntegrationGetVersion(t *testing.T) {
 	require.NoError(t, err)
 	var v api.Ari2VersionResponse
 	require.NoError(t, json.Unmarshal(raw, &v))
-	assert.NotEmpty(t, v.Result.Version)
+	require.NotEmpty(t, v.Result.Version)
 }
 
 func TestIntegrationTellStatusError(t *testing.T) {
@@ -130,7 +129,7 @@ func TestIntegrationTellStatusError(t *testing.T) {
 	require.NoError(t, err)
 	_, err = rpc.Call(t.Context(), "aria2.tellStatus", b)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "Invalid GID")
+	require.Contains(t, err.Error(), "Invalid GID")
 }
 
 func TestIntegrationTokenAuth(t *testing.T) {

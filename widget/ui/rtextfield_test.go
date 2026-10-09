@@ -1,8 +1,9 @@
 package ui
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"rapid/widget/theme"
 
@@ -12,35 +13,21 @@ import (
 func TestRTextFieldBasicStateAndLayout(t *testing.T) {
 	field := NewRTextField()
 	field.SetLabel("URL")
-	if field.label.IsHidden() || field.label.Text() != "URL" {
-		t.Fatal("label was not shown")
-	}
+	require.True(t, !field.label.IsHidden() && field.label.Text() == "URL", "label was not shown")
 	field.SetText("https://example.com")
-	if field.Text() != "https://example.com" {
-		t.Fatalf("text = %q", field.Text())
-	}
+	require.Equal(t, "https://example.com", field.Text(), "text")
 	field.SetPlaceholder("Paste URL")
-	if field.field.PlaceholderText() != "Paste URL" {
-		t.Fatal("placeholder was not applied")
-	}
+	require.Equal(t, "Paste URL", field.field.PlaceholderText(), "placeholder was not applied")
 	field.SetError("Invalid URL")
-	if field.Error() != "Invalid URL" || field.errorLabel.IsHidden() {
-		t.Fatal("error state was not shown")
-	}
-	if !strings.Contains(field.field.StyleSheet(), theme.CssColor(theme.ColorDanger)) {
-		t.Fatal("error stylesheet does not contain danger color")
-	}
+	require.True(t, field.Error() == "Invalid URL" && !field.errorLabel.IsHidden(), "error state was not shown")
+	require.Contains(t, field.field.StyleSheet(), theme.CssColor(theme.ColorDanger), "error stylesheet does not contain danger color")
 	field.SetError("")
-	if !field.errorLabel.IsHidden() {
-		t.Fatal("empty error should hide error label")
-	}
-	if field.FieldWidget() != field.field.QWidget || field.FieldLayout() == nil {
-		t.Fatal("field accessors are not wired to the underlying widgets")
-	}
+	require.True(t, field.errorLabel.IsHidden(), "empty error should hide error label")
+	require.True(t, field.FieldWidget() == field.field.QWidget && field.FieldLayout() != nil,
+		"field accessors are not wired to the underlying widgets")
 	proxy := field.FocusProxy()
-	if proxy == nil || proxy.UnsafePointer() != field.field.QWidget.UnsafePointer() {
-		t.Fatal("wrapper focus proxy is not the line edit")
-	}
+	require.True(t, proxy != nil && proxy.UnsafePointer() == field.field.QWidget.UnsafePointer(),
+		"wrapper focus proxy is not the line edit")
 }
 
 func TestRTextFieldIconsPreserveErrorAndSupportProperties(t *testing.T) {
@@ -48,61 +35,37 @@ func TestRTextFieldIconsPreserveErrorAndSupportProperties(t *testing.T) {
 	path := IconPath("MdiLightContentPaste.svg")
 	field.SetError("Invalid URL")
 	field.SetPrefixIcon(path)
-	if field.prefixPix == nil || field.Error() != "Invalid URL" {
-		t.Fatal("prefix icon was not loaded or error state was lost")
-	}
-	if !strings.Contains(field.field.StyleSheet(), theme.CssColor(theme.ColorDanger)) {
-		t.Fatal("adding an icon cleared the error border")
-	}
+	require.True(t, field.prefixPix != nil && field.Error() == "Invalid URL",
+		"prefix icon was not loaded or error state was lost")
+	require.Contains(t, field.field.StyleSheet(), theme.CssColor(theme.ColorDanger), "adding an icon cleared the error border")
 	field.SetSuffixIcon(path)
-	if field.suffixPix == nil {
-		t.Fatal("suffix icon was not loaded")
-	}
+	require.NotNil(t, field.suffixPix, "suffix icon was not loaded")
 	field.SetIconSize(theme.IconLg)
-	if field.prefixPix.Width() != theme.IconLg || field.suffixPix.Width() != theme.IconLg {
-		t.Fatal("icon size was not applied to both sides")
-	}
+	require.True(t, field.prefixPix.Width() == theme.IconLg && field.suffixPix.Width() == theme.IconLg,
+		"icon size was not applied to both sides")
 	customColor := qt.NewQColor6("#abcdef")
 	field.SetIconColor(customColor)
-	if field.IconColor().Name() != customColor.Name() {
-		t.Fatal("custom icon color was not retained")
-	}
+	require.Equal(t, customColor.Name(), field.IconColor().Name(), "custom icon color was not retained")
 	field.SetPrefixIcon("")
 	field.SetSuffixIcon("")
-	if field.prefixPix != nil || field.suffixPix != nil {
-		t.Fatal("empty icon sources should clear icons")
-	}
-	if !strings.Contains(field.field.StyleSheet(), theme.CssColor(theme.ColorDanger)) {
-		t.Fatal("clearing icons cleared the error border")
-	}
+	require.True(t, field.prefixPix == nil && field.suffixPix == nil, "empty icon sources should clear icons")
+	require.Contains(t, field.field.StyleSheet(), theme.CssColor(theme.ColorDanger), "clearing icons cleared the error border")
 }
 
 func TestRTextFieldInputContract(t *testing.T) {
 	field := NewRTextField()
 	field.SetPassword(true)
-	if field.EchoMode() != qt.QLineEdit__Password {
-		t.Fatal("password mode was not applied")
-	}
+	require.Equal(t, qt.QLineEdit__Password, field.EchoMode(), "password mode was not applied")
 	field.SetPassword(false)
-	if field.EchoMode() != qt.QLineEdit__Normal {
-		t.Fatal("normal echo mode was not restored")
-	}
+	require.Equal(t, qt.QLineEdit__Normal, field.EchoMode(), "normal echo mode was not restored")
 	field.SetReadOnly(true)
-	if !field.field.IsReadOnly() {
-		t.Fatal("read-only state was not applied")
-	}
+	require.True(t, field.field.IsReadOnly(), "read-only state was not applied")
 	field.SetMaxLength(12)
-	if field.field.MaxLength() != 12 {
-		t.Fatal("maximum length was not applied")
-	}
+	require.Equal(t, 12, field.field.MaxLength(), "maximum length was not applied")
 	field.SetSelectByMouse(false)
-	if field.SelectByMouse() {
-		t.Fatal("select-by-mouse state was not retained")
-	}
+	require.False(t, field.SelectByMouse(), "select-by-mouse state was not retained")
 	changed := ""
 	field.OnTextChanged(func(text string) { changed = text })
 	field.SetText("abc")
-	if changed != "abc" {
-		t.Fatalf("text changed callback value = %q", changed)
-	}
+	require.Equal(t, "abc", changed, "text changed callback value")
 }

@@ -1,27 +1,6 @@
-// Package lib holds small shared helpers. Check here before adding a new
-// dependency or duplicating logic elsewhere.
-package lib
+package helpers
 
-import (
-	"mime"
-	"strconv"
-	"strings"
-)
-
-func StringToInt[T int | int8 | int16 | int32 | int64](v string) T {
-	i, _ := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
-	return T(i)
-}
-
-func StringToBool(v string) bool {
-	b, _ := strconv.ParseBool(strings.TrimSpace(v))
-	return b
-}
-
-func StringToFloat(v string) float64 {
-	f, _ := strconv.ParseFloat(strings.TrimSpace(v), 64)
-	return f
-}
+import "mime"
 
 // canonicalExt prefers a stable extension for common types. The system mime
 // table order is platform-dependent (e.g. .f4v sorts before .mp4 for
@@ -45,8 +24,13 @@ var canonicalExt = map[string]string{
 	"application/x-tar":            ".tar",
 }
 
-// ExtensionForType returns the preferred extension for a MIME type.
+// ExtensionForType returns the preferred extension for a MIME type. MIME
+// parameters ("video/mp4; codecs=...") are stripped first, since the canonical
+// table and mime.ExtensionsByType both key on the bare type.
 func ExtensionForType(m string) string {
+	if base, _, err := mime.ParseMediaType(m); err == nil {
+		m = base
+	}
 	if e, ok := canonicalExt[m]; ok {
 		return e
 	}
@@ -54,17 +38,4 @@ func ExtensionForType(m string) string {
 		return exts[0]
 	}
 	return ""
-}
-
-// IsAlnum reports whether s is non-empty ASCII alphanumeric.
-func IsAlnum(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, r := range s {
-		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9') {
-			return false
-		}
-	}
-	return true
 }

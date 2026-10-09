@@ -5,8 +5,11 @@
 package settings
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
 
 	qt "github.com/mappu/miqt/qt6"
 )
@@ -54,11 +57,31 @@ func Default(baseDir string) Settings {
 		BaseDir:                  baseDir,
 		Aria2Host:                "127.0.0.1",
 		Aria2Port:                6800,
-		Aria2Token:               "",
+		Aria2Token:               loadOrCreateSecret(appData),
 		Aria2SessionFile:         sessionFile,
 		Aria2SaveSessionInterval: 1,
 		PollIntervalMs:           1000,
 	}
+}
+
+// loadOrCreateSecret returns a persisted aria2 RPC secret, creating a random
+// one on first run. Without a secret, any local web page can POST to the aria2
+// RPC endpoint (JSON top-level requests are CORS-preflight-free) and queue
+// downloads; the file is reused so a restart can adopt the same daemon.
+func loadOrCreateSecret(dir string) string {
+	path := filepath.Join(dir, "aria2.secret")
+	if b, err := os.ReadFile(path); err == nil {
+		if s := strings.TrimSpace(string(b)); len(s) >= 16 {
+			return s
+		}
+	}
+	raw := make([]byte, 16)
+	if _, err := rand.Read(raw); err != nil {
+		return ""
+	}
+	token := hex.EncodeToString(raw)
+	os.WriteFile(path, []byte(token), 0o600)
+	return token
 }
 
 func fallbackDownloadDir() string {

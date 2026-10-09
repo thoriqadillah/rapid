@@ -1,6 +1,7 @@
 package downloader
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -18,7 +19,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -62,7 +62,7 @@ func waitPort(t *testing.T, port int) {
 				return
 			}
 		case <-time.After(10 * time.Second):
-			t.Fatalf("port %d never opened", port)
+			require.FailNow(t, "port %d never opened", port)
 		}
 	}
 }
@@ -79,7 +79,7 @@ func waitUntil(t *testing.T, pred func() bool, timeout time.Duration) {
 				return
 			}
 		case <-time.After(timeout):
-			t.Fatal("condition not met before timeout")
+			require.FailNow(t, "condition not met before timeout")
 		}
 	}
 }
@@ -136,10 +136,10 @@ func TestIntegrationResolveReturnsMetadata(t *testing.T) {
 	items, err := dl.Resolve(t.Context(), base+"/clip.mp4", nil)
 	require.NoError(t, err)
 	require.Len(t, items, 1)
-	assert.Equal(t, "clip.mp4", items[0].Filename)
-	assert.Equal(t, int64(1024), items[0].Size)
-	assert.Equal(t, "video", items[0].Category.String())
-	assert.Equal(t, "video/mp4", items[0].MIMEType)
+	require.Equal(t, "clip.mp4", items[0].Filename)
+	require.Equal(t, int64(1024), items[0].Size)
+	require.Equal(t, "video", items[0].Category.String())
+	require.Equal(t, "video/mp4", items[0].MIMEType)
 }
 
 func TestIntegrationDownloadCompletes(t *testing.T) {
@@ -159,9 +159,9 @@ func TestIntegrationDownloadCompletes(t *testing.T) {
 
 	s, err := dl.GetStatus(t.Context(), d.GID)
 	require.NoError(t, err)
-	assert.Equal(t, 1.0, s.Progress())
+	require.Equal(t, 1.0, s.Progress())
 	_, err = os.Stat(filepath.Join(dl.settings.DownloadDir, "payload.bin"))
-	assert.NoError(t, err, "file must exist")
+	require.NoError(t, err, "file must exist")
 }
 
 func TestIntegrationRefreshPushesStatus(t *testing.T) {
@@ -193,7 +193,140 @@ func TestIntegrationRefreshPushesStatus(t *testing.T) {
 		return slices.Contains(statuses, "complete")
 	}, 30*time.Second)
 
-	assert.Len(t, statuses, 1)
+	// Refresh (not just the websocket push) must deliver status updates, and
+	// the terminal notification must arrive exactly once even when a websocket
+	// push and a poll race for the same completion.
+	completed := 0
+	mu.Lock()
+	for _, s := range statuses {
+		if s == "complete" {
+			completed++
+		}
+	}
+	mu.Unlock()
+	require.Equal(t, 1, completed, "terminal status must be delivered exactly once")
+}
+
+// fakeRPC answers the aria2 methods the downloader uses without a daemon.
+type fakeRPC struct {
+	mu        sync.Mutex
+	called    []string
+	addURIGID string
+}
+
+func (f *fakeRPC) Call(_ context.Context, method string, _ []byte) ([]byte, error) {
+	f.mu.Lock()
+	f.called = append(f.called, method)
+	f.mu.Unlock()
+	switch method {
+	case "aria2.tellActive":
+		return []byte(`{"jsonrpc":"2.0","id":1,"result":[{"gid":"g1","status":"active","totalLength":"100","completedLength":"50","downloadSpeed":"10"}]}`), nil
+	case "aria2.tellStatus":
+		return []byte(`{"jsonrpc":"2.0","id":1,"result":{"gid":"g2","status":"paused"}}`), nil
+	case "aria2.getGlobalStat":
+		return []byte(`{"jsonrpc":"2.0","id":1,"result":{}}`), nil
+	case "aria2.addUri":
+		return fmt.Appendf([]byte{}, `{"jsonrpc":"2.0","id":1,"result":%q}`, f.addURIGID), nil
+	case "aria2.remove", "aria2.removeDownloadResult":
+		return []byte(`{"jsonrpc":"2.0","id":1,"result":"ok"}`), nil
+	}
+	return nil, fmt.Errorf("unexpected method %s", method)
+}
+
+func (f *fakeRPC) methods() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.called...)
+}
+
+// TestRefreshWithoutIDsNotifiesAllListeners is the B01 regression: an id-less
+// Refresh must poll every registered listener (previously it iterated an empty
+// slice and only fetched the global stat).
+func TestRefreshWithoutIDsNotifiesAllListeners(t *testing.T) {
+	f := &fakeRPC{}
+	d := NewAria2Downloader(settings.Settings{}, f, false, nil)
+
+	var mu sync.Mutex
+	got := map[string]int{}
+	cb := func(s api.Download) {
+		mu.Lock()
+		got[s.GID]++
+		mu.Unlock()
+	}
+	d.Listen("g1", cb, func(error) {})
+	d.Listen("g2", cb, func(error) {})
+
+	d.Refresh(t.Context())
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Equal(t, 1, got["g1"], "active listener polled via tellActive")
+	require.Equal(t, 1, got["g2"], "paused listener polled via tellStatus")
+	require.Contains(t, f.methods(), "aria2.tellActive")
+}
+
+// TestRefreshNilCallbacksDoNotPanic: Listen accepts nil callbacks, so polling
+// must not invoke them unconditionally (B01).
+func TestRefreshNilCallbacksDoNotPanic(t *testing.T) {
+	f := &fakeRPC{}
+	d := NewAria2Downloader(settings.Settings{}, f, false, nil)
+	d.Listen("g1", nil, nil)
+	d.Listen("g2", nil, nil)
+
+	require.NotPanics(t, func() { d.Refresh(t.Context()) })
+}
+
+// TestDoRequestRejectsEmptyGID is the B03 regression: aria2 replying with an
+// empty gid must surface an error instead of a phantom download.
+func TestDoRequestRejectsEmptyGID(t *testing.T) {
+	d := NewAria2Downloader(settings.Settings{}, &fakeRPC{addURIGID: ""}, false, nil)
+
+	_, _, err := d.doRequest(t.Context(), "http://127.0.0.1:1/file.bin", map[string]any{}, nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "empty gid")
+}
+
+// TestOnResolvedCleansUpAfterCancelledContext is the B05 regression: a newer
+// Resolve cancels the previous resolve's context, so the dry-run cleanup must
+// run on a context detached from it or the dry-run gid leaks forever.
+func TestOnResolvedCleansUpAfterCancelledContext(t *testing.T) {
+	f := &fakeRPC{}
+	d := NewAria2Downloader(settings.Settings{}, f, false, nil)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel() // the resolve was superseded
+
+	d.onResolved(ctx, "drygid")
+
+	methods := f.methods()
+	require.Contains(t, methods, "aria2.remove")
+	require.Contains(t, methods, "aria2.removeDownloadResult")
+}
+
+// TestStopTerminatesOwnedDaemon is the B06 regression: Stop must actually end
+// the daemon we spawned (and free its port), not just drop the handle.
+func TestStopTerminatesOwnedDaemon(t *testing.T) {
+	if _, err := exec.LookPath("aria2c"); err != nil {
+		t.Skip("aria2c not installed")
+	}
+	dir := t.TempDir()
+	s := testSettings(dir)
+	s.Aria2Port = freePort(t)
+
+	dl := NewAria2Downloader(s, rpc.NewJSONRpc(s.Aria2Host, s.Aria2Port, s.Aria2Token), true, nil)
+	require.NoError(t, dl.Start(t.Context()))
+	waitPort(t, s.Aria2Port)
+
+	require.NoError(t, dl.Stop())
+
+	waitUntil(t, func() bool {
+		c, err := net.Dial("tcp", "127.0.0.1:"+strconv.Itoa(s.Aria2Port))
+		if err == nil {
+			_ = c.Close()
+			return false
+		}
+		return true
+	}, 10*time.Second)
 }
 
 // A WS notification without a usable gid must not take the process down
@@ -206,7 +339,7 @@ func TestOnWsMessageWithoutGidDoesNotPanic(t *testing.T) {
 		`{"method":"aria2.onDownloadComplete"}`,
 		`{"method":"aria2.onDownloadComplete","params":[42]}`,
 	} {
-		assert.NotPanics(t, func() {
+		require.NotPanics(t, func() {
 			dl.onWsMessage(t.Context(), []byte(msg))
 		}, "message: %s", msg)
 	}
@@ -216,7 +349,7 @@ func TestGetStatusSurfacesDaemonError(t *testing.T) {
 	dl := spawnReal(t, t.TempDir())
 	_, err := dl.GetStatus(t.Context(), "dead-gid")
 	require.Error(t, err, "daemon error reply must be a Go error")
-	assert.EqualError(t, err, "aria2 error code 1: Invalid GID dead-gid")
+	require.EqualError(t, err, "aria2 error code 1: Invalid GID dead-gid")
 }
 
 // serveThrottled serves payload capped at bytesPerSecond so downloads stay
@@ -324,10 +457,10 @@ func TestIntegrationStopRetainsRemoved(t *testing.T) {
 	// one instead purges the result, and GetStatus rightly errors).
 	stopped, err := dl.Remove(t.Context(), d.GID)
 	require.NoError(t, err)
-	assert.Equal(t, "removed", stopped.Status)
+	require.Equal(t, "removed", stopped.Status)
 	s, err := dl.GetStatus(t.Context(), d.GID)
 	require.NoError(t, err)
-	assert.Equal(t, "removed", s.Status, "removed state must be retained")
+	require.Equal(t, "removed", s.Status, "removed state must be retained")
 }
 
 func TestIntegrationPurgeForgetsGid(t *testing.T) {
@@ -392,5 +525,5 @@ func TestIntegrationGlobalStatNotify(t *testing.T) {
 		Result map[string]any `json:"result"`
 	}
 	require.NoError(t, json.Unmarshal(got, &env))
-	assert.Contains(t, env.Result, "numActive")
+	require.Contains(t, env.Result, "numActive")
 }

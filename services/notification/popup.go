@@ -71,16 +71,22 @@ func NewPopup(parent *qt.QWidget) *Popup {
 		kind:      KindInfo,
 		typeColor: theme.ColorInfo,
 	}
-	p.SetObjectName(*qt.NewQAnyStringView3("notificationPopup"))
+	popupName := qt.NewQAnyStringView3("notificationPopup")
+	p.SetObjectName(*popupName)
+	popupName.Delete()
 	p.SetFrameStyle(0)
 	p.SetFixedWidth(popupWidth)
 	p.SetSizePolicy2(qt.QSizePolicy__Fixed, qt.QSizePolicy__Preferred)
 	p.SetMouseTracking(true)
 	p.SetAttribute(qt.WA_StyledBackground)
-	p.SetCursor(qt.NewQCursor2(qt.PointingHandCursor))
+	cursor := qt.NewQCursor2(qt.PointingHandCursor)
+	p.SetCursor(cursor)
+	cursor.Delete()
 
 	p.accent = qt.NewQFrame3(p.QWidget, 0)
-	p.accent.SetObjectName(*qt.NewQAnyStringView3("notificationAccent"))
+	accentName := qt.NewQAnyStringView3("notificationAccent")
+	p.accent.SetObjectName(*accentName)
+	accentName.Delete()
 	p.accent.SetFixedWidth(accentWidth)
 	p.accent.SetSizePolicy2(qt.QSizePolicy__Fixed, qt.QSizePolicy__Expanding)
 	p.accent.SetAttribute(qt.WA_StyledBackground)
@@ -88,7 +94,9 @@ func NewPopup(parent *qt.QWidget) *Popup {
 	p.titleLabel = qt.NewQLabel3("")
 	p.titleLabel.SetTextFormat(qt.PlainText)
 	p.titleLabel.SetWordWrap(false)
-	p.titleLabel.SetObjectName(*qt.NewQAnyStringView3("notificationTitle"))
+	titleName := qt.NewQAnyStringView3("notificationTitle")
+	p.titleLabel.SetObjectName(*titleName)
+	titleName.Delete()
 	p.titleLabel.SetSizePolicy2(qt.QSizePolicy__Expanding, qt.QSizePolicy__Fixed)
 	p.titleLabel.SetAttribute(qt.WA_TransparentForMouseEvents)
 
@@ -104,7 +112,9 @@ func NewPopup(parent *qt.QWidget) *Popup {
 	// ponytail: exact up to a +/-2px wrap boundary at the fixed card width.
 	p.messageLabel.OnSizeHint(func(super func() *qt.QSize) *qt.QSize {
 		width := popupWidth - 2*popupBorderWidth - accentWidth - 2*theme.SpacingMd
-		return qt.NewQSize2(width, p.messageLabel.HeightForWidth(width))
+		size := qt.NewQSize2(width, p.messageLabel.HeightForWidth(width))
+		size.GoGC() // returned to Qt, which copies it
+		return size
 	})
 
 	column := qt.NewQVBoxLayout2()
@@ -217,9 +227,11 @@ func (p *Popup) MoveTo(target MoveTarget) {
 		return
 	}
 	to := qt.NewQPoint2(target.X, target.Y)
+	defer to.Delete()
 	if !p.positioned {
 		p.positioned = true
 		from := qt.NewQPoint2(target.X+target.Width+popupGap, target.Y)
+		defer from.Delete()
 		p.slideTo(from, to)
 		p.fadeTo(0, 1, popupEnterMS, qt.QEasingCurve__OutCubic, nil)
 		return
@@ -232,11 +244,18 @@ func (p *Popup) slideTo(from, to *qt.QPoint) {
 		p.posAnim.Stop()
 	}
 	p.posAnim = qt.NewQPropertyAnimation2(qt.UnsafeNewQObject(p.UnsafePointer()), []byte("pos"))
-	p.posAnim.SetParent(p.QObject)
+	p.posAnim.SetParent(p.QObject) // Qt owns the animation
 	p.posAnim.SetDuration(popupSlideMS)
-	p.posAnim.SetStartValue(qt.NewQVariant24(from))
-	p.posAnim.SetEndValue(qt.NewQVariant24(to))
-	p.posAnim.SetEasingCurve(qt.NewQEasingCurve3(qt.QEasingCurve__InOutCubic))
+	// The animation copies these values, so release the temporaries at once.
+	startValue := qt.NewQVariant24(from)
+	endValue := qt.NewQVariant24(to)
+	easingCurve := qt.NewQEasingCurve3(qt.QEasingCurve__InOutCubic)
+	p.posAnim.SetStartValue(startValue)
+	p.posAnim.SetEndValue(endValue)
+	p.posAnim.SetEasingCurve(easingCurve)
+	startValue.Delete()
+	endValue.Delete()
+	easingCurve.Delete()
 	p.posAnim.Start()
 }
 
@@ -245,11 +264,17 @@ func (p *Popup) fadeTo(from, to float64, duration int, easing qt.QEasingCurve__T
 		p.opacityAnim.Stop()
 	}
 	p.opacityAnim = qt.NewQPropertyAnimation2(qt.UnsafeNewQObject(p.effect.UnsafePointer()), []byte("opacity"))
-	p.opacityAnim.SetParent(p.QObject)
+	p.opacityAnim.SetParent(p.QObject) // Qt owns the animation
 	p.opacityAnim.SetDuration(duration)
-	p.opacityAnim.SetStartValue(qt.NewQVariant9(from))
-	p.opacityAnim.SetEndValue(qt.NewQVariant9(to))
-	p.opacityAnim.SetEasingCurve(qt.NewQEasingCurve3(easing))
+	startValue := qt.NewQVariant9(from)
+	endValue := qt.NewQVariant9(to)
+	easingCurve := qt.NewQEasingCurve3(easing)
+	p.opacityAnim.SetStartValue(startValue)
+	p.opacityAnim.SetEndValue(endValue)
+	p.opacityAnim.SetEasingCurve(easingCurve)
+	startValue.Delete()
+	endValue.Delete()
+	easingCurve.Delete()
 	if done != nil {
 		p.opacityAnim.OnFinished(done)
 	}
@@ -269,6 +294,7 @@ func (p *Popup) Close() {
 		pos := p.Pos()
 		to := qt.NewQPoint2(pos.X()+p.Width()+popupGap, pos.Y())
 		p.slideTo(pos, to)
+		to.Delete()
 		p.fadeTo(1, 0, popupFadeOutMS, qt.QEasingCurve__InCubic, p.finishClose)
 		return
 	}

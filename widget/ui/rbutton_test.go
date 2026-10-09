@@ -1,8 +1,9 @@
 package ui
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"rapid/widget/theme"
 )
@@ -14,35 +15,23 @@ func TestRButtonVariantsAndStyling(t *testing.T) {
 	}
 	for _, variant := range variants {
 		button := NewRButton("Action", variant, false)
-		if button.MinimumHeight() < theme.TouchTarget {
-			t.Errorf("variant %d minimum height %d < touch target", variant, button.MinimumHeight())
-		}
-		if button.StyleSheet() == "" {
-			t.Errorf("variant %d has no stylesheet", variant)
-		}
+		require.GreaterOrEqual(t, button.MinimumHeight(), theme.TouchTarget, "variant %d minimum height below touch target", variant)
+		require.NotEmpty(t, button.StyleSheet(), "variant %d has no stylesheet", variant)
 	}
 
 	base := NewRButton("Base", BaseVariant, false)
-	if !strings.Contains(base.StyleSheet(), "padding: 0 24px") {
-		t.Fatal("text button does not have QML-equivalent horizontal padding")
-	}
+	require.Contains(t, base.StyleSheet(), "padding: 0 24px", "text button does not have QML-equivalent horizontal padding")
 
 	ghost := NewRButton("Ghost", GhostVariant, false)
-	if !strings.Contains(ghost.StyleSheet(), "background-color: transparent") {
-		t.Fatal("ghost button is not transparent")
-	}
+	require.Contains(t, ghost.StyleSheet(), "background-color: transparent", "ghost button is not transparent")
 
 	link := NewRButton("Link", BaseVariant, false)
 	link.SetLink(true)
 
 	outlined := NewRButton("Outline", PrimaryVariant, true)
-	if !strings.Contains(outlined.StyleSheet(), "1px solid") {
-		t.Fatal("outlined button has no border")
-	}
+	require.Contains(t, outlined.StyleSheet(), "1px solid", "outlined button has no border")
 	outlined.SetCornerRadius(13)
-	if !strings.Contains(outlined.StyleSheet(), "border-radius: 13px") {
-		t.Fatal("custom corner radius was not applied")
-	}
+	require.Contains(t, outlined.StyleSheet(), "border-radius: 13px", "custom corner radius was not applied")
 }
 
 func TestRButtonIconAndInteractionContract(t *testing.T) {
@@ -50,40 +39,23 @@ func TestRButtonIconAndInteractionContract(t *testing.T) {
 	path := IconPath("MdiLightPlus.svg")
 	button.SetIconSource(path)
 	button.SetIconSize(theme.IconLg)
-	if got := button.QPushButton.IconSize().Width(); got != theme.IconLg {
-		t.Fatalf("icon width = %d, want %d", got, theme.IconLg)
-	}
-	if button.Icon().IsNull() {
-		t.Fatal("valid button icon is null")
-	}
+	require.Equal(t, theme.IconLg, button.QPushButton.IconSize().Width(), "icon width")
+	require.False(t, button.Icon().IsNull(), "valid button icon is null")
 	button.SetIconOnly(true)
-	if button.QPushButton.Text() != "" || button.Text() != "New" {
-		t.Fatal("icon-only mode did not hide visible text while preserving it")
-	}
-	if button.MinimumHeight() < theme.TouchTarget {
-		t.Fatal("icon-only button lost touch-target height")
-	}
+	require.True(t, button.QPushButton.Text() == "" && button.Text() == "New",
+		"icon-only mode did not hide visible text while preserving it")
+	require.GreaterOrEqual(t, button.MinimumHeight(), theme.TouchTarget, "icon-only button lost touch-target height")
 	button.SetIconOnly(false)
-	if button.QPushButton.Text() != "New" {
-		t.Fatal("turning off icon-only mode did not restore text")
-	}
+	require.Equal(t, "New", button.QPushButton.Text(), "turning off icon-only mode did not restore text")
 	button.SetTooltip("Create item")
-	if button.ToolTip() != "Create item" || button.ToolTipDuration() != 500 {
-		t.Fatal("tooltip contract was not applied")
-	}
+	require.True(t, button.ToolTip() == "Create item" && button.ToolTipDuration() == 500, "tooltip contract was not applied")
 
 	clicked := false
 	button.OnClicked(func() { clicked = true })
 	button.QPushButton.Click()
-	if !clicked {
-		t.Fatal("clicked callback did not run")
-	}
+	require.True(t, clicked, "clicked callback did not run")
 	button.SetEnabled(false)
-	if button.IsEnabled() {
-		t.Fatal("button should be disabled")
-	}
+	require.False(t, button.IsEnabled(), "button should be disabled")
 	button.SetTooltip("")
-	if button.ToolTipDuration() != -1 {
-		t.Fatal("empty tooltip should disable the tooltip delay")
-	}
+	require.Equal(t, -1, button.ToolTipDuration(), "empty tooltip should disable the tooltip delay")
 }

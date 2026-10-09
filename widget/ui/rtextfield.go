@@ -252,7 +252,7 @@ func (w *RTextField) reloadIcons() {
 // since QLineEdit scales action icons to an internal default we can't set.
 func (w *RTextField) drawSideIcons() {
 	p := qt.NewQPainter2(w.field.QPaintDevice)
-	defer p.End()
+	defer p.Delete()
 	fh := w.field.Height()
 	if w.prefixPix != nil {
 		p.DrawPixmap9(theme.SpacingMd, (fh-w.prefixPix.Height())/2, w.prefixPix)

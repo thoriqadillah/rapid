@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -42,18 +41,18 @@ func TestNormalizePreservesDownloadContext(t *testing.T) {
 			"session": "secret",
 		},
 	})
-	assert.Equal(t, "https://cdn.example/video.mp4", req.URL)
-	assert.Equal(t, "https://example/watch/1", req.PageURL)
-	assert.Equal(t, "https://example/watch/1", req.Referer)
-	assert.Equal(t, "Example video", req.Title)
-	assert.Equal(t, "Bearer token", req.Headers["Authorization"])
-	assert.Equal(t, "https://example", req.Headers["Origin"])
-	assert.NotContains(t, req.Headers, "Host", "Host must be stripped")
-	assert.NotContains(t, req.Headers, "Content-Length", "Content-Length must be stripped")
+	require.Equal(t, "https://cdn.example/video.mp4", req.URL)
+	require.Equal(t, "https://example/watch/1", req.PageURL)
+	require.Equal(t, "https://example/watch/1", req.Referer)
+	require.Equal(t, "Example video", req.Title)
+	require.Equal(t, "Bearer token", req.Headers["Authorization"])
+	require.Equal(t, "https://example", req.Headers["Origin"])
+	require.NotContains(t, req.Headers, "Host", "Host must be stripped")
+	require.NotContains(t, req.Headers, "Content-Length", "Content-Length must be stripped")
 	// Non-strings pass through the bridge untouched (JSON numbers decode as
 	// float64); the service drops them via strMapOf before aria2 sees them.
-	assert.Equal(t, float64(7), req.Headers["Count"])
-	assert.Equal(t, "secret", req.Cookies["session"])
+	require.Equal(t, float64(7), req.Headers["Count"])
+	require.Equal(t, "secret", req.Cookies["session"])
 }
 
 func TestNormalizeAcceptsPreresolvedMetadata(t *testing.T) {
@@ -64,10 +63,10 @@ func TestNormalizeAcceptsPreresolvedMetadata(t *testing.T) {
 		"category":        "video",
 		"bogus":           1,
 	})
-	assert.True(t, req.BrowserResolved)
+	require.True(t, req.BrowserResolved)
 	require.NotNil(t, req.Size)
-	assert.Equal(t, int64(2048), *req.Size)
-	assert.Equal(t, "video", req.Category)
+	require.Equal(t, int64(2048), *req.Size)
+	require.Equal(t, "video", req.Category)
 }
 
 func TestNormalizeRejectsNonDownloadable(t *testing.T) {
@@ -75,7 +74,7 @@ func TestNormalizeRejectsNonDownloadable(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"url": "blob:https://example/id"}`), &req))
 	err := req.Validate()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "downloadable")
+	require.Contains(t, err.Error(), "downloadable")
 
 	var garbage BrowserRequest
 	err = json.Unmarshal([]byte(`"nope"`), &garbage)
@@ -89,7 +88,7 @@ func TestNormalizeDropsNegativeSize(t *testing.T) {
 		"url":  "https://example.com/f",
 		"size": -1,
 	})
-	assert.Nil(t, req.Size)
+	require.Nil(t, req.Size)
 }
 
 func startTestBridge(t *testing.T) (*Bridge, string) {
@@ -116,9 +115,9 @@ func TestBridgePreflightAndDispatch(t *testing.T) {
 		pre.Header.Set("Access-Control-Request-Method", "POST")
 		resp, err := http.DefaultClient.Do(pre)
 		require.NoError(t, err)
-		_ = resp.Body.Close()
-		assert.Equal(t, 204, resp.StatusCode, "preflight")
-		assert.Equal(t, origin, resp.Header.Get("Access-Control-Allow-Origin"), "CORS echo")
+		resp.Body.Close()
+		require.Equal(t, 204, resp.StatusCode, "preflight")
+		require.Equal(t, origin, resp.Header.Get("Access-Control-Allow-Origin"), "CORS echo")
 
 		body, _ := json.Marshal(map[string]any{"url": "https://example.com/video.mp4"})
 		post, _ := http.NewRequest(http.MethodPost, base+"/downloads", bytes.NewReader(body))
@@ -127,10 +126,10 @@ func TestBridgePreflightAndDispatch(t *testing.T) {
 		post.Header.Set("X-Rapid-Extension", "1")
 		resp, err = http.DefaultClient.Do(post)
 		require.NoError(t, err)
-		_ = resp.Body.Close()
-		assert.Equal(t, 202, resp.StatusCode, "post")
+		resp.Body.Close()
+		require.Equal(t, 202, resp.StatusCode, "post")
 		require.Len(t, received, 1)
-		assert.Equal(t, "https://example.com/video.mp4", received[0].URL)
+		require.Equal(t, "https://example.com/video.mp4", received[0].URL)
 	}
 }
 
@@ -143,8 +142,8 @@ func TestBridgeRejectsUntrusted(t *testing.T) {
 	// No extension header.
 	resp, err := http.Post(base+"/downloads", "application/json", bytes.NewReader(body))
 	require.NoError(t, err)
-	_ = resp.Body.Close()
-	assert.Equal(t, 403, resp.StatusCode)
+	resp.Body.Close()
+	require.Equal(t, 403, resp.StatusCode)
 
 	// Bad origin preflight.
 	pre, _ := http.NewRequest(http.MethodOptions, base+"/downloads", nil)
@@ -152,8 +151,8 @@ func TestBridgeRejectsUntrusted(t *testing.T) {
 	pre.Header.Set("Access-Control-Request-Headers", "x-rapid-extension")
 	resp, err = http.DefaultClient.Do(pre)
 	require.NoError(t, err)
-	_ = resp.Body.Close()
-	assert.Equal(t, 403, resp.StatusCode)
+	resp.Body.Close()
+	require.Equal(t, 403, resp.StatusCode)
 
 	// Oversized body.
 	big := bytes.Repeat([]byte("a"), MaxBodyBytes+1)
@@ -163,9 +162,9 @@ func TestBridgeRejectsUntrusted(t *testing.T) {
 	req.ContentLength = int64(len(big))
 	resp, err = http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	_, _ = io.Copy(io.Discard, resp.Body)
-	_ = resp.Body.Close()
-	assert.Equal(t, 413, resp.StatusCode)
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	require.Equal(t, 413, resp.StatusCode)
 }
 
 func TestBridgeHealth(t *testing.T) {
@@ -174,21 +173,21 @@ func TestBridgeHealth(t *testing.T) {
 	req.Header.Set("X-Rapid-Extension", "1")
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	_ = resp.Body.Close()
-	assert.Equal(t, 200, resp.StatusCode)
+	resp.Body.Close()
+	require.Equal(t, 200, resp.StatusCode)
 	// Untrusted health -> 403 like every other trusted route (uniform trust
 	// mechanism; deliberate divergence from Python's hide-existence 404).
 	resp, err = http.Get(base + "/health")
 	require.NoError(t, err)
-	_ = resp.Body.Close()
-	assert.Equal(t, 403, resp.StatusCode)
+	resp.Body.Close()
+	require.Equal(t, 403, resp.StatusCode)
 }
 
 func TestBridgeStartRefusesCanceledCtx(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	b := NewBridge("127.0.0.1", 0)
-	assert.ErrorIs(t, b.Start(ctx), context.Canceled)
+	require.ErrorIs(t, b.Start(ctx), context.Canceled)
 }
 
 func TestBridgeErrorShape(t *testing.T) {
@@ -201,10 +200,10 @@ func TestBridgeErrorShape(t *testing.T) {
 	require.NoError(t, err)
 	var payload map[string]any
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&payload))
-	_ = resp.Body.Close()
-	assert.Equal(t, 400, resp.StatusCode)
-	assert.Equal(t, false, payload["ok"])
-	assert.NotEmpty(t, payload["error"])
+	resp.Body.Close()
+	require.Equal(t, 400, resp.StatusCode)
+	require.Equal(t, false, payload["ok"])
+	require.NotEmpty(t, payload["error"])
 
 	// Wrong method -> 405 in contract shape (Echo router, not the handler).
 	put, _ := http.NewRequest(http.MethodPut, base+"/downloads", nil)
@@ -213,9 +212,9 @@ func TestBridgeErrorShape(t *testing.T) {
 	require.NoError(t, err)
 	payload = nil
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&payload))
-	_ = resp.Body.Close()
-	assert.Equal(t, 405, resp.StatusCode)
-	assert.Equal(t, false, payload["ok"])
+	resp.Body.Close()
+	require.Equal(t, 405, resp.StatusCode)
+	require.Equal(t, false, payload["ok"])
 }
 
 func TestBridgeCustomConfig(t *testing.T) {
@@ -236,8 +235,8 @@ func TestBridgeCustomConfig(t *testing.T) {
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	_, _ = io.Copy(io.Discard, resp.Body)
-	_ = resp.Body.Close()
-	assert.Equal(t, 413, resp.StatusCode)
+	resp.Body.Close()
+	require.Equal(t, 413, resp.StatusCode)
 }
 
 func TestBridgeFollowsCtxLifetime(t *testing.T) {
@@ -245,7 +244,7 @@ func TestBridgeFollowsCtxLifetime(t *testing.T) {
 	b := NewBridge("127.0.0.1", 0)
 	require.NoError(t, b.Start(ctx))
 	host, port := b.Addr()
-	assert.NotZero(t, port)
+	require.NotZero(t, port)
 	cancel()
 	require.Eventually(t, func() bool {
 		c, err := http.Get(fmt.Sprintf("http://%s:%d/health", host, port))

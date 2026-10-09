@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"sync"
+	"time"
 
 	"rapid/lib/errors"
 	"rapid/services/download/rpc/api"
@@ -47,7 +48,7 @@ type JSONRpc struct {
 }
 
 func NewJSONRpc(host string, port int, token string, client ...*http.Client) *JSONRpc {
-	httpClient := http.DefaultClient
+	httpClient := &http.Client{Timeout: 30 * time.Second}
 	if len(client) > 0 && client[0] != nil {
 		httpClient = client[0]
 	}

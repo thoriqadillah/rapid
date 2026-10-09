@@ -33,13 +33,19 @@ func NewSidebarItem(destination, label string) *SidebarItem {
 		destination: destination,
 		iconColor:   theme.ColorTextMuted,
 	}
-	i.SetObjectName(*qt.NewQAnyStringView3("sidebarItem"))
+	objectName := qt.NewQAnyStringView3("sidebarItem")
+	i.SetObjectName(*objectName)
+	objectName.Delete()
 	i.SetAttribute(qt.WA_StyledBackground)
 	i.SetAttribute(qt.WA_Hover)
 	i.SetMinimumHeight(36)
 	i.SetSizePolicy2(qt.QSizePolicy__Expanding, qt.QSizePolicy__Fixed)
-	i.SetCursor(qt.NewQCursor2(qt.PointingHandCursor))
+	cursor := qt.NewQCursor2(qt.PointingHandCursor)
+	i.SetCursor(cursor)
+	cursor.Delete()
 	i.SetMouseTracking(true)
+	i.SetFocusPolicy(qt.StrongFocus)
+	i.SetAccessibleName(label)
 
 	i.iconLabel = qt.NewQLabel3("")
 	i.iconLabel.SetStyleSheet("QLabel { background: transparent; border: none; outline: none; }")
@@ -86,6 +92,14 @@ func NewSidebarItem(destination, label string) *SidebarItem {
 		super(event)
 		i.activate()
 	})
+	i.OnKeyPressEvent(func(super func(event *qt.QKeyEvent), event *qt.QKeyEvent) {
+		switch qt.Key(event.Key()) {
+		case qt.Key_Return, qt.Key_Enter, qt.Key_Space:
+			i.activate()
+			return
+		}
+		super(event)
+	})
 	i.OnPaintEvent(func(super func(*qt.QPaintEvent), event *qt.QPaintEvent) {
 		super(event)
 		i.paintBackground()
@@ -105,6 +119,7 @@ func (i *SidebarItem) Destination() string {
 
 func (i *SidebarItem) SetLabel(v string) {
 	i.label.SetText(v)
+	i.SetAccessibleName(v)
 	i.refreshStyle()
 }
 
@@ -187,8 +202,11 @@ func (i *SidebarItem) activate() {
 }
 
 func (i *SidebarItem) refreshIcon() {
+	// QLabel.SetPixmap copies, so any pixmap we create here can be freed at once.
 	if i.iconSource == "" {
-		i.iconLabel.SetPixmap(qt.NewQPixmap2(0, 0))
+		empty := qt.NewQPixmap2(0, 0)
+		i.iconLabel.SetPixmap(empty)
+		empty.Delete()
 		return
 	}
 	color := i.iconColor
@@ -201,7 +219,12 @@ func (i *SidebarItem) refreshIcon() {
 	}
 	pixmap := ui.TintedPixmap(i.iconSource, color, size)
 	if pixmap == nil {
-		pixmap = qt.NewQPixmap2(0, 0)
+		// TintedPixmap returns a shared cache entry on success; only the
+		// synthetic empty fallback is ours to free.
+		empty := qt.NewQPixmap2(0, 0)
+		i.iconLabel.SetPixmap(empty)
+		empty.Delete()
+		return
 	}
 	i.iconLabel.SetPixmap(pixmap)
 }
@@ -238,14 +261,19 @@ func (i *SidebarItem) backgroundColor() *qt.QColor {
 }
 
 func (i *SidebarItem) paintBackground() {
-	background := i.backgroundColor()
-	if background == nil {
-		return
-	}
 	painter := qt.NewQPainter2(i.QPaintDevice)
-	defer painter.End()
+	defer painter.Delete()
 	painter.SetRenderHint2(qt.QPainter__Antialiasing, true)
-	painter.SetPen(qt.NewQColor11(0, 0, 0, 0))
-	painter.SetBrush(qt.NewQBrush3(background))
-	painter.DrawRoundedRect2(0, 0, i.Width(), i.Height(), float64(theme.RadiusSm), float64(theme.RadiusSm))
-}
+
+		if background := i.backgroundColor(); background != nil {
+			transparent := qt.NewQColor11(0, 0, 0, 0)
+			pen := qt.NewQPen3(transparent)
+			brush := qt.NewQBrush3(background)
+			painter.SetPenWithPen(pen)
+			painter.SetBrush(brush)
+			painter.DrawRoundedRect2(0, 0, i.Width(), i.Height(), float64(theme.RadiusSm), float64(theme.RadiusSm))
+			transparent.Delete()
+			pen.Delete()
+			brush.Delete()
+		}
+	}

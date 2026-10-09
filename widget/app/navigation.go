@@ -107,7 +107,7 @@ func (n *Navigation) Push(route string) bool {
 	if page == nil {
 		return false
 	}
-	setObjectName(page, string(route))
+	setObjectName(page, route)
 	n.Host.AddWidget(page)
 	n.stack = append(n.stack, navigationEntry{route: route, page: page})
 	n.Host.SetCurrentWidget(page)
@@ -126,7 +126,7 @@ func (n *Navigation) Back() bool {
 		n.Host.RemoveWidget(current.page)
 	}
 	current.page.Hide()
-	current.page.Delete()
+	current.page.DeleteLater()
 	previous := n.stack[len(n.stack)-1]
 	n.Host.SetCurrentWidget(previous.page)
 	n.emitChanged(previous.route)
@@ -188,5 +188,7 @@ func setObjectName(widget *qt.QWidget, name string) {
 	if widget == nil || name == "" {
 		return
 	}
-	widget.SetObjectName(*qt.NewQAnyStringView3(name))
+	view := qt.NewQAnyStringView3(name)
+	defer view.Delete() // SetObjectName copies the view
+	widget.SetObjectName(*view)
 }

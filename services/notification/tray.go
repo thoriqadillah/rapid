@@ -109,15 +109,31 @@ func (t *trayController) setBadge(count int) {
 	if icon == nil || icon.IsNull() {
 		return
 	}
-	size := icon.ActualSize(qt.NewQSize2(64, 64))
+	// setBadge runs on every count change; release every Qt temporary so the
+	// tray badge does not leak a painter, pixmap, icon, font and several colors
+	// per update. MIQT does not finalize New* constructor results.
+	requested := qt.NewQSize2(64, 64)
+	size := icon.ActualSize(requested)
+	requested.Delete()
 	if size == nil || size.Width() <= 0 || size.Height() <= 0 {
-		size = qt.NewQSize2(64, 64)
+		fallback := qt.NewQSize2(64, 64)
+		size = fallback
+		defer fallback.Delete()
 	}
+
 	pixmap := qt.NewQPixmap3(size)
-	pixmap.FillWithFillColor(qt.NewQColor11(0, 0, 0, 0))
+	defer pixmap.Delete()
+	clear := qt.NewQColor11(0, 0, 0, 0)
+	pixmap.FillWithFillColor(clear)
+	clear.Delete()
+
 	painter := qt.NewQPainter2(pixmap.QPaintDevice)
+	defer painter.Delete()
 	painter.SetRenderHint2(qt.QPainter__Antialiasing, true)
-	icon.Paint(painter, qt.NewQRect4(0, 0, size.Width(), size.Height()))
+	rect := qt.NewQRect4(0, 0, size.Width(), size.Height())
+	icon.Paint(painter, rect)
+	rect.Delete()
+
 	badge := fmtBadge(count)
 	badgeSize := size.Width() / 2
 	if badgeSize < 10 {
@@ -131,16 +147,26 @@ func (t *trayController) setBadge(count int) {
 		width = badgeSize
 	}
 	height := badgeSize
-	painter.SetPen(qt.NewQColor6("white"))
-	painter.SetBrush(qt.NewQBrush3(qt.NewQColor6("#e53935")))
+	penColor := qt.NewQColor6("white")
+	badgeColor := qt.NewQColor6("#e53935")
+	brush := qt.NewQBrush3(badgeColor)
+	painter.SetPen(penColor)
+	painter.SetBrush(brush)
 	painter.DrawRoundedRect2(size.Width()-width, size.Height()-height, width, height, 4, 4)
+	penColor.Delete()
+	badgeColor.Delete()
+	brush.Delete()
+
 	font := qt.NewQFont()
 	font.SetPixelSize(badgeSize * 3 / 4)
 	font.SetBold(true)
-	painter.SetFont(font)
+	painter.SetFont(font) // QPainter copies the font
+	font.Delete()
 	painter.DrawText7(size.Width()-width, size.Height()-height, width, height, 0x84, badge)
-	painter.End()
-	t.tray.SetIcon(qt.NewQIcon2(pixmap))
+
+	badgeIcon := qt.NewQIcon2(pixmap)
+	t.tray.SetIcon(badgeIcon) // tray copies the icon
+	badgeIcon.Delete()
 }
 
 func fmtBadge(count int) string {

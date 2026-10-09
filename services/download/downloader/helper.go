@@ -3,57 +3,81 @@ package downloader
 import (
 	"mime"
 	"net/url"
-	"os/exec"
 	"path"
 	"rapid/lib"
 	"strings"
-	"syscall"
 )
 
-// getCategory guesses the lib.Category from mime and filename.
-func getCategory(mimeType, fileName string) lib.Category {
-	var guess string
-	if fileName != "" {
-		guess = mime.TypeByExtension(path.Ext(fileName))
-	}
-
-	if mimeType == "" || guess == "" {
-		return lib.CategoryUnknown
-	}
-
-	if strings.HasPrefix(mimeType, "video/") || strings.HasPrefix(guess, "video/") {
-		return lib.CategoryVideo
-	}
-
-	if strings.HasPrefix(mimeType, "audio/") || strings.HasPrefix(guess, "audio/") {
-		return lib.CategoryAudio
-	}
-
-	if strings.HasPrefix(mimeType, "image/") || strings.HasPrefix(guess, "image/") {
-		return lib.CategoryImage
-	}
-	docs := map[string]bool{
+var (
+	docTypes = map[string]bool{
 		"application/pdf":  true,
 		"application/json": true,
 		"application/xml":  true,
 	}
-
-	if strings.HasPrefix(mimeType, "text/") || strings.HasPrefix(guess, "text/") || docs[mimeType] || docs[guess] {
-		return lib.CategoryDocument
-	}
-
-	comp := map[string]bool{
+	zipTypes = map[string]bool{
 		"application/zip":              true,
 		"application/x-rar-compressed": true,
 		"application/x-7z-compressed":  true,
 		"application/gzip":             true,
 		"application/x-tar":            true,
 	}
-	if comp[mimeType] || comp[guess] {
+)
+
+// normalizeMIME strips parameters ("video/mp4; codecs=..." -> "video/mp4") and
+// returns "" for anything unparseable.
+func normalizeMIME(s string) string {
+	if s == "" {
+		return ""
+	}
+	mt, _, err := mime.ParseMediaType(s)
+	if err != nil {
+		return ""
+	}
+	return mt
+}
+
+func categoryOfMIME(t string) lib.Category {
+	switch {
+	case strings.HasPrefix(t, "video/"):
+		return lib.CategoryVideo
+	case strings.HasPrefix(t, "audio/"):
+		return lib.CategoryAudio
+	case strings.HasPrefix(t, "image/"):
+		return lib.CategoryImage
+	case strings.HasPrefix(t, "text/"), docTypes[t]:
+		return lib.CategoryDocument
+	case zipTypes[t]:
 		return lib.CategoryCompressed
 	}
+	return lib.CategoryUnknown
+}
 
-	return lib.CategoryApplication
+// getCategory guesses the lib.Category from mime and filename.
+//
+// Either source alone is enough: a server that sends "video/mp4" for a URL
+// without a file extension (very common, e.g. "/download?id=1") must still be
+// classified as video. Parameters are stripped first.
+func getCategory(mimeType, fileName string) lib.Category {
+	candidates := []string{normalizeMIME(mimeType)}
+	if fileName != "" {
+		candidates = append(candidates, normalizeMIME(mime.TypeByExtension(path.Ext(fileName))))
+	}
+
+	known := false
+	for _, t := range candidates {
+		if t == "" {
+			continue
+		}
+		known = true
+		if c := categoryOfMIME(t); c != lib.CategoryUnknown {
+			return c
+		}
+	}
+	if known {
+		// A recognised type that is none of the above (e.g. application/octet-stream).
+		return lib.CategoryApplication
+	}
+	return lib.CategoryUnknown
 }
 
 // filenameOf returns the URL path basename, or "" when absent.
@@ -67,16 +91,4 @@ func filenameOf(rawURI string) string {
 		return ""
 	}
 	return name
-}
-
-func isAlive(cmd *exec.Cmd) bool {
-	if cmd == nil || cmd.Process == nil {
-		return false
-	}
-
-	if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
-		return false
-	}
-
-	return cmd.Process.Signal(syscall.Signal(0)) == nil
 }

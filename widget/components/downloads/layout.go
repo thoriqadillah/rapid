@@ -12,8 +12,13 @@ const (
 	DefaultSidebarItem = "all"
 )
 
-func NewLayout(navigation *app.Navigation) *components.Layout {
-	layout := components.NewLayout()
+// Layout is the components.Layout plus download-specific sidebar counts.
+type Layout struct {
+	*components.Layout
+}
+
+func NewLayout(navigation *app.Navigation) *Layout {
+	layout := &Layout{Layout: components.NewLayout()}
 	downloads := components.NewSidebarSection()
 	downloads.SetItems([]components.SidebarItemData{
 		{
@@ -28,55 +33,13 @@ func NewLayout(navigation *app.Navigation) *components.Layout {
 	categories.SetTopMargin(theme.SpacingMd)
 	categories.SetHeading("CATEGORIES")
 	categories.SetItems([]components.SidebarItemData{
-		{
-			Destination:  lib.CategoryAudio.String(),
-			Label:        lib.CategoryAudio.Label(),
-			IconSource:   ui.IconPath("MdiSquareRounded.svg"),
-			IconColor:    theme.CategoryColor(lib.CategoryAudio),
-			CategoryItem: true,
-		},
-		{
-			Destination:  lib.CategoryApplication.String(),
-			Label:        lib.CategoryApplication.Label(),
-			IconSource:   ui.IconPath("MdiSquareRounded.svg"),
-			IconColor:    theme.CategoryColor(lib.CategoryApplication),
-			CategoryItem: true,
-		},
-		{
-			Destination:  lib.CategoryImage.String(),
-			Label:        lib.CategoryImage.Label(),
-			IconSource:   ui.IconPath("MdiSquareRounded.svg"),
-			IconColor:    theme.CategoryColor(lib.CategoryImage),
-			CategoryItem: true,
-		},
-		{
-			Destination:  lib.CategoryCompressed.String(),
-			Label:        lib.CategoryCompressed.Label(),
-			IconSource:   ui.IconPath("MdiSquareRounded.svg"),
-			IconColor:    theme.CategoryColor(lib.CategoryCompressed),
-			CategoryItem: true,
-		},
-		{
-			Destination:  lib.CategoryDocument.String(),
-			Label:        lib.CategoryDocument.Label(),
-			IconSource:   ui.IconPath("MdiSquareRounded.svg"),
-			IconColor:    theme.CategoryColor(lib.CategoryDocument),
-			CategoryItem: true,
-		},
-		{
-			Destination:  lib.CategoryVideo.String(),
-			Label:        lib.CategoryVideo.Label(),
-			IconSource:   ui.IconPath("MdiSquareRounded.svg"),
-			IconColor:    theme.CategoryColor(lib.CategoryVideo),
-			CategoryItem: true,
-		},
-		{
-			Destination:  lib.CategoryUnknown.String(),
-			Label:        lib.CategoryUnknown.Label(),
-			IconSource:   ui.IconPath("MdiSquareRounded.svg"),
-			IconColor:    theme.CategoryColor(lib.CategoryUnknown),
-			CategoryItem: true,
-		},
+		categorySidebarItem(lib.CategoryAudio),
+		categorySidebarItem(lib.CategoryApplication),
+		categorySidebarItem(lib.CategoryImage),
+		categorySidebarItem(lib.CategoryCompressed),
+		categorySidebarItem(lib.CategoryDocument),
+		categorySidebarItem(lib.CategoryVideo),
+		categorySidebarItem(lib.CategoryUnknown),
 	})
 	layout.SidebarWidget.AddSection(categories)
 	layout.SidebarWidget.AddStretch()
@@ -84,9 +47,8 @@ func NewLayout(navigation *app.Navigation) *components.Layout {
 	settings := components.NewSidebarSection()
 	settings.SetItems([]components.SidebarItemData{
 		{
-			Destination: "settings",
-			Label:       "Setting",
-			IconSource:  ui.IconPath("MdiLightSettings.svg"),
+			Label:      "Setting",
+			IconSource: ui.IconPath("MdiLightSettings.svg"),
 			OnActivated: func() {
 				navigation.Push(app.RouteSettings)
 			},
@@ -95,5 +57,33 @@ func NewLayout(navigation *app.Navigation) *components.Layout {
 	layout.SidebarWidget.AddSection(settings)
 	layout.SidebarWidget.SetCurrentDestination(DefaultSidebarItem)
 
+	previous := DefaultSidebarItem
+	layout.OnDestinationSelected(func(destination string) {
+		if destination != "" {
+			previous = destination
+			return
+		}
+
+		layout.SidebarWidget.SetCurrentDestination(previous)
+	})
+
 	return layout
+}
+
+// SetCounts updates the sidebar badges, hiding zero counts.
+func (l *Layout) SetCounts(counts map[string]int) {
+	if l == nil || l.SidebarWidget == nil {
+		return
+	}
+	l.SidebarWidget.SetCounts(counts)
+}
+
+func categorySidebarItem(category lib.Category) components.SidebarItemData {
+	return components.SidebarItemData{
+		Destination:  category.String(),
+		Label:        category.Label(),
+		IconSource:   ui.IconPath("MdiSquareRounded.svg"),
+		IconColor:    theme.CategoryColor(category),
+		CategoryItem: true,
+	}
 }

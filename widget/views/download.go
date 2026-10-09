@@ -1,106 +1,127 @@
 package views
 
 import (
+	"context"
 	"fmt"
+
+	download "rapid/services/download"
+	"rapid/services/download/api"
 	"rapid/services/notification"
 	"rapid/widget/app"
 	"rapid/widget/components/downloads"
 	"rapid/widget/theme"
-	"rapid/widget/ui"
 
 	qt "github.com/mappu/miqt/qt6"
 )
 
-var selectedSidebarItem = downloads.DefaultSidebarItem
+// DownloadViewDeps is the constructor injection that replaces the QML context
+// properties (DownloadService/DownloadFilter/Clipboard/Navigation).
+type DownloadViewDeps struct {
+	Navigation     *app.Navigation
+	Notifier       *notification.Service
+	Service        *download.Service // nil -> empty DB-backed service
+	PollIntervalMs int
+}
 
-func NewDownloadView(parent *qt.QWidget, notifier *notification.Service, navigation *app.Navigation) *qt.QWidget {
-	layout := downloads.NewLayout(navigation)
+func NewDownloadView(parent *qt.QWidget, deps DownloadViewDeps) *qt.QWidget {
+	service := deps.Service
+	ctx := context.Background()
+
+	layout := downloads.NewLayout(deps.Navigation)
+
+	banner := downloads.NewClipboardBanner(nil)
+
+	panel := downloads.NewTablePanel(nil)
+
+	header := downloads.NewTableHeader(panel)
+	list := downloads.NewDownloadList(panel)
+
+	panelLayout := qt.NewQVBoxLayout2()
+	panelLayout.SetContentsMargins(0, 0, 0, 0)
+	panelLayout.SetSpacing(0)
+	panelLayout.AddWidget(header.QWidget)
+	panelLayout.AddWidget2(list.QWidget, 1)
+	panel.SetLayout(panelLayout.QLayout)
 
 	content := qt.NewQWidget2()
 	contentLayout := qt.NewQVBoxLayout2()
-	contentLayout.SetContentsMargins(theme.SpacingXl, theme.SpacingXl, theme.SpacingXl, theme.SpacingXl)
-	contentLayout.SetSpacing(theme.SpacingLg)
+	contentLayout.SetContentsMargins(theme.SpacingSm, theme.SpacingSm, theme.SpacingSm, theme.SpacingSm)
+	contentLayout.SetSpacing(theme.SpacingMd)
+	contentLayout.AddWidget(banner.QWidget)
+	contentLayout.AddWidget2(panel, 1)
 	content.SetLayout(contentLayout.QLayout)
-
-	panel := qt.NewQWidget2()
-	panel.SetMaximumWidth(820)
-	panel.SetSizePolicy2(qt.QSizePolicy__Expanding, qt.QSizePolicy__Preferred)
-	panel.SetStyleSheet(fmt.Sprintf(
-		"QWidget { background-color: %s; border-radius: %dpx; }",
-		theme.CssColor(theme.ColorSurface), theme.RadiusMd,
-	))
-	panelLayout := qt.NewQVBoxLayout2()
-	panelLayout.SetContentsMargins(theme.SpacingXl, theme.SpacingXl, theme.SpacingXl, theme.SpacingXl)
-	panelLayout.SetSpacing(theme.SpacingLg)
-	panel.SetLayout(panelLayout.QLayout)
-
-	title := qt.NewQLabel3("component demo")
-	title.SetStyleSheet("font-size: 20px; color: " + theme.CssColor(theme.ColorText) + "; background: transparent;")
-	panelLayout.AddWidget(title.QWidget)
-
-	routeStatus := qt.NewQLabel3(fmt.Sprintf("Selected: %s", layout.SidebarWidget.CurrentDestination()))
-	routeStatus.SetStyleSheet("color: " + theme.CssColor(theme.ColorTextMuted) + "; background: transparent;")
-	panelLayout.AddWidget(routeStatus.QWidget)
-
-	buttons := qt.NewQHBoxLayout2()
-	buttons.SetSpacing(theme.SpacingSm)
-	panelLayout.AddLayout(buttons.QLayout)
-	buttons.AddWidget(ui.NewRButton("Base", ui.BaseVariant, false).QWidget)
-	buttons.AddWidget(ui.NewRButton("Primary", ui.PrimaryVariant, false).QWidget)
-	buttons.AddWidget(ui.NewRButton("Danger", ui.DangerVariant, false).QWidget)
-	buttons.AddWidget(ui.NewRButton("Link", ui.LinkVariant, false).QWidget)
-	buttons.AddWidget(ui.NewRButton("Outline", ui.PrimaryVariant, true).QWidget)
-	buttons.AddWidget(ui.NewRButtonIcon(ui.IconPath("MdiLightPlus.svg"), ui.BaseVariant, false).QWidget)
-
-	iconButton := ui.NewRButton("New", ui.PrimaryVariant, false)
-	iconButton.SetIconSource(ui.IconPath("MdiLightPlus.svg"))
-	buttons.AddWidget(iconButton.QWidget)
-
-	disabledButton := ui.NewRButton("Disabled", ui.PrimaryVariant, false)
-	disabledButton.SetDisabled(true)
-	buttons.AddWidget(disabledButton.QWidget)
-
-	panelLayout.AddWidget(ui.NewRSwitch(true).QWidget)
-
-	field := ui.NewRTextField()
-	field.SetLabel("URL")
-	field.SetPlaceholder("https://example.com")
-	field.SetError("invalid URL")
-	field.SetPrefixIcon(ui.IconPath("MdiLightContentPaste.svg"))
-	panelLayout.AddWidget(field.QWidget)
-
-	dialogButton := ui.NewRButton("Open dialog", ui.SecondaryVariant, false)
-	dialogButton.OnClicked(func() {
-		downloadDialog := downloads.NewDownloadDialog(parent)
-		downloadDialog.Open()
-	})
-	panelLayout.AddWidget(dialogButton.QWidget)
-
-	notificationButton := ui.NewRButton("Open notification", ui.SecondaryVariant, false)
-	notificationButton.OnClicked(func() {
-		notifier.Info("Hello", "World", true)
-	})
-	panelLayout.AddWidget(notificationButton.QWidget)
-	contentLayout.AddStretch()
-	contentLayout.AddWidget(panel)
-	contentLayout.SetAlignment(panel, qt.AlignHCenter)
-	contentLayout.AddStretch()
 	layout.AddContentWidget(content)
 
-	layout.OnDestinationSelected(func(destination string) {
-		routeStatus.SetText("Selected: " + destination)
-	})
-	layout.OnAddClicked(func() {
-		downloadDialog := downloads.NewDownloadDialog(parent)
-		downloadDialog.Open()
-	})
-	layout.HeaderWidget.SearchField.OnTextChanged(func(text string) {
-		if text == "" {
-			routeStatus.SetText("Selected: " + layout.SidebarWidget.CurrentDestination())
+	loadHistory := func(gid string) {
+		if gid == "" {
 			return
 		}
-		routeStatus.SetText("Search: " + text)
+		list.SetSpeedHistory(gid, service.SpeedSamples(ctx, gid))
+	}
+
+	render := func() {
+		list.SetItems(service.ComputedItems())
+		layout.SetCounts(service.Counts())
+		loadHistory(list.ExpandedGid())
+	}
+
+	// The download service is a process singleton while this view is rebuilt on
+	// every navigation. Keep the returned unsubscribe and detach on destroy so
+	// the service does not retain this page's closures and widget tree forever.
+	unsubscribe := service.OnChanged(render)
+	layout.OnDestroyed(unsubscribe)
+
+	list.OnExpand(loadHistory)
+
+	// Phase 1/2: action buttons are intentionally not wired to the downloader.
+	list.OnPause(func(gid string) { fmt.Printf("download: pause %s (not wired)\n", gid) })
+	list.OnResume(func(gid string) { fmt.Printf("download: resume %s (not wired)\n", gid) })
+	list.OnStop(func(gid string) { fmt.Printf("download: stop %s (not wired)\n", gid) })
+	list.OnRemove(func(gid string, deleteFromDisk bool) {
+		fmt.Printf("download: remove %s fromDisk=%v (not wired)\n", gid, deleteFromDisk)
+	})
+	list.OnDeleteRequested(func(d api.Download) {
+		dialog := downloads.NewDeleteConfirmationDialog(parent, d.Name(), func(deleteFromDisk bool) {
+			fmt.Printf("download: delete %s fromDisk=%v (not wired)\n", d.GID, deleteFromDisk)
+		})
+		dialog.Open()
 	})
 
+	layout.OnDestinationSelected(func(destination string) {
+		if destination == "" {
+			return
+		}
+		list.Collapse()
+		service.SetCategory(destination)
+	})
+	layout.HeaderWidget.SearchField.OnTextChanged(func(text string) {
+		list.Collapse()
+		service.SetSearch(text)
+	})
+	layout.OnAddClicked(func() {
+		openDownloadDialog(parent, deps)
+	})
+
+	banner.OnDownload(func(string) { openDownloadDialog(parent, deps) })
+	banner.OnDismiss(func() { banner.SetURL("") })
+
+	render()
+
+	// Load the DB rows (notifies -> render); a closed/missing DB just keeps
+	// the empty state instead of falling back to in-memory dummies.
+	service.Refresh(ctx)
+
+	if deps.PollIntervalMs > 0 {
+		timer := qt.NewQTimer2(layout.QObject)
+		timer.SetInterval(deps.PollIntervalMs)
+		timer.OnTimeout(func() { service.Refresh(ctx) })
+		timer.Start2()
+	}
+
 	return layout.QWidget
+}
+
+func openDownloadDialog(parent *qt.QWidget, deps DownloadViewDeps) {
+	dialog := downloads.NewDownloadDialog(parent, downloads.DownloadDialogOptions{Navigation: deps.Navigation})
+	dialog.Open()
 }

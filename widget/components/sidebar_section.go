@@ -1,6 +1,8 @@
 package components
 
 import (
+	"strconv"
+
 	"rapid/widget/theme"
 
 	qt "github.com/mappu/miqt/qt6"
@@ -28,6 +30,7 @@ type SidebarSection struct {
 	itemWidgets  []*SidebarItem
 	current      string
 	topMargin    int
+	activated    []func(string)
 }
 
 func NewSidebarSection() *SidebarSection {
@@ -63,11 +66,14 @@ func (s *SidebarSection) SetItems(items []SidebarItemData) {
 	s.items = append([]SidebarItemData(nil), items...)
 	for s.ItemsLayout.Count() > 1 {
 		item := s.ItemsLayout.TakeAt(s.ItemsLayout.Count() - 1)
-		if item != nil && item.Widget() != nil {
-			widget := item.Widget()
+		if item == nil {
+			continue
+		}
+		if widget := item.Widget(); widget != nil {
 			widget.Hide()
 			widget.DeleteLater()
 		}
+		item.Delete() // takeAt transfers ownership; the item leaks otherwise
 	}
 	s.itemWidgets = s.itemWidgets[:0]
 	for _, data := range s.items {
@@ -78,6 +84,11 @@ func (s *SidebarSection) SetItems(items []SidebarItemData) {
 		item.SetCategoryItem(data.CategoryItem)
 		item.SetSelected(data.Destination == s.current)
 		item.OnActivated(data.OnActivated)
+		// Wire the section, not the caller, so items rebuilt by SetItems stay
+		// connected (B21: AddSection's per-item wiring was lost on every
+		// rebuild and a sidebar click then did nothing).
+		destination := data.Destination
+		item.OnActivated(func() { s.emitActivated(destination) })
 		s.ItemsLayout.AddWidget(item.QWidget)
 		s.itemWidgets = append(s.itemWidgets, item)
 	}
@@ -85,6 +96,18 @@ func (s *SidebarSection) SetItems(items []SidebarItemData) {
 
 func (s *SidebarSection) Items() []SidebarItemData {
 	return append([]SidebarItemData(nil), s.items...)
+}
+
+// SetCounts updates badges keyed by destination; zero/absent hides the badge.
+func (s *SidebarSection) SetCounts(counts map[string]int) {
+	for _, item := range s.itemWidgets {
+		n := counts[item.Destination()]
+		if n > 0 {
+			item.SetCount(strconv.Itoa(n))
+		} else {
+			item.SetCount("")
+		}
+	}
 }
 
 func (s *SidebarSection) SetCurrentDestination(v string) {
@@ -116,4 +139,20 @@ func (s *SidebarSection) Refresh() {
 
 func (s *SidebarSection) ItemWidgets() []*SidebarItem {
 	return append([]*SidebarItem(nil), s.itemWidgets...)
+}
+
+// OnActivated registers a destination callback. Unlike per-item wiring, it
+// survives SetItems because the section re-wires every item it creates.
+func (s *SidebarSection) OnActivated(fn func(string)) {
+	if fn != nil {
+		s.activated = append(s.activated, fn)
+	}
+}
+
+func (s *SidebarSection) emitActivated(destination string) {
+	for _, fn := range s.activated {
+		if fn != nil {
+			fn(destination)
+		}
+	}
 }

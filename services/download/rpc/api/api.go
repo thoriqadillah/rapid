@@ -2,6 +2,8 @@ package api
 
 import (
 	"rapid/lib"
+	"rapid/lib/helpers"
+	"rapid/lib/helpers/iter"
 	"rapid/services/download/api"
 )
 
@@ -38,18 +40,15 @@ type Aria2File struct {
 }
 
 func (s Aria2File) ToDownloadFile() api.DownloadFile {
-	uris := make([]api.FileURI, 0, len(s.URIs))
-	for _, uri := range s.URIs {
-		uris = append(uris, uri.ToFileURI())
-	}
-
 	return api.DownloadFile{
-		Index:           lib.StringToInt[int](s.Index),
+		Index:           helpers.StringToInt[int](s.Index),
 		Path:            s.Path,
-		Length:          lib.StringToInt[int64](s.Length),
-		CompletedLength: lib.StringToInt[int64](s.CompletedLength),
-		Selected:        lib.StringToBool(s.Selected),
-		URIs:            uris,
+		Length:          helpers.StringToInt[int64](s.Length),
+		CompletedLength: helpers.StringToInt[int64](s.CompletedLength),
+		Selected:        helpers.StringToBool(s.Selected),
+		URIs: iter.Map(s.URIs, func(uri Aria2URI) api.FileURI {
+			return uri.ToFileURI()
+		}),
 	}
 }
 
@@ -71,25 +70,23 @@ type Aria2Status struct {
 }
 
 func (s Aria2Status) ToDownload() api.Download {
-	files := make([]api.DownloadFile, 0, len(s.Files))
-	for _, f := range s.Files {
-		files = append(files, f.ToDownloadFile())
-	}
 	return api.Download{
 		GID:             s.GID,
 		Status:          s.Status,
 		Dir:             s.Dir,
 		Category:        lib.Category(s.Category),
-		TotalLength:     lib.StringToInt[int64](s.TotalLength),
-		CompletedLength: lib.StringToInt[int64](s.CompletedLength),
-		DownloadSpeed:   lib.StringToInt[int64](s.DownloadSpeed),
-		Connections:     lib.StringToInt[int64](s.Connections),
-		NumPieces:       lib.StringToInt[int64](s.NumPieces),
-		PieceLength:     lib.StringToInt[int64](s.PieceLength),
-		VerifiedLength:  new(lib.StringToInt[int64](s.VerifiedLength)),
-		ErrorCode:       lib.StringToInt[int](s.ErrorCode),
+		TotalLength:     helpers.StringToInt[int64](s.TotalLength),
+		CompletedLength: helpers.StringToInt[int64](s.CompletedLength),
+		DownloadSpeed:   helpers.StringToInt[int64](s.DownloadSpeed),
+		Connections:     helpers.StringToInt[int64](s.Connections),
+		NumPieces:       helpers.StringToInt[int64](s.NumPieces),
+		PieceLength:     helpers.StringToInt[int64](s.PieceLength),
+		VerifiedLength:  helpers.StringToIntPtr[int64](s.VerifiedLength),
+		ErrorCode:       helpers.StringToInt[int](s.ErrorCode),
 		ErrorMessage:    s.ErrorMessage,
-		Files:           files,
+		Files: iter.Map(s.Files, func(f Aria2File) api.DownloadFile {
+			return f.ToDownloadFile()
+		}),
 	}
 }
 
@@ -105,6 +102,11 @@ type Aria2TellStatusResponse struct {
 type Aria2AddUriResponse struct {
 	JSONRpcResponse
 	Result string `json:"result"`
+}
+
+type Aria2TellActiveResponse struct {
+	JSONRpcResponse
+	Result []Aria2Status `json:"result"`
 }
 
 type Ari2VersionResponse struct {

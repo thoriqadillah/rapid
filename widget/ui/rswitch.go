@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"fmt"
+
 	"rapid/widget/theme"
 
 	qt "github.com/mappu/miqt/qt6"
@@ -29,7 +31,17 @@ func NewRSwitch(checked bool) *RSwitch {
 		inactiveColor: theme.ColorBorder,
 	}
 	s.SetFixedSize2(switchWidth, switchHeight)
-	s.SetCursor(qt.NewQCursor2(qt.PointingHandCursor))
+	s.SetStyleSheet(fmt.Sprintf(`
+		QCheckBox::indicator {
+			width: %dpx;
+			height: %dpx;
+		}`,
+		switchWidth,
+		switchHeight,
+	))
+	cursor := qt.NewQCursor2(qt.PointingHandCursor)
+	s.SetCursor(cursor)
+	cursor.Delete()
 	s.SetFocusPolicy(qt.StrongFocus)
 	s.SetChecked(checked)
 	if checked {
@@ -38,26 +50,27 @@ func NewRSwitch(checked bool) *RSwitch {
 
 	s.anim = qt.NewQVariantAnimation2(s.QObject)
 	s.anim.SetDuration(knobAnimDuration)
-	s.anim.SetEasingCurve(qt.NewQEasingCurve3(qt.QEasingCurve__InOutCubic))
+	easingCurve := qt.NewQEasingCurve3(qt.QEasingCurve__InOutCubic)
+	s.anim.SetEasingCurve(easingCurve) // the animation copies the curve
+	easingCurve.Delete()
 	s.anim.OnValueChanged(func(v *qt.QVariant) {
 		s.progress = v.ToDouble()
 		s.Update()
 	})
 
 	s.OnToggled(func(on bool) {
-		s.anim.SetStartValue(qt.NewQVariant9(s.progress))
 		to := 0.0
 		if on {
 			to = 1
 		}
-		s.anim.SetEndValue(qt.NewQVariant9(to))
+		// SetStartValue/SetEndValue copy their QVariant, so free both at once.
+		start := qt.NewQVariant9(s.progress)
+		end := qt.NewQVariant9(to)
+		s.anim.SetStartValue(start)
+		s.anim.SetEndValue(end)
+		start.Delete()
+		end.Delete()
 		s.anim.Start()
-	})
-
-	s.OnMouseReleaseEvent(func(super func(*qt.QMouseEvent), e *qt.QMouseEvent) {
-		if s.IsEnabled() {
-			s.SetChecked(!s.IsChecked())
-		}
 	})
 
 	s.OnPaintEvent(func(super func(*qt.QPaintEvent), e *qt.QPaintEvent) {
@@ -92,23 +105,33 @@ func (s *RSwitch) InactiveColor() *qt.QColor {
 
 func (s *RSwitch) paint() {
 	p := qt.NewQPainter2(s.QWidget.QPaintDevice)
-	defer p.End()
+	defer p.Delete()
 	p.SetRenderHint(qt.QPainter__Antialiasing)
 
+	// blend() returns a fresh QColor (miqt does not finalize constructors), and
+	// the animation repaints on every timer tick, so each temporary is freed
+	// explicitly. DarkerWithInt is GC-managed by miqt, so it is not freed here.
 	background := blend(theme.ColorSurface, s.activeColor, s.progress)
-	border := background.DarkerWithInt(120)
 	if !s.IsEnabled() {
-		background = blend(theme.ColorTextMuted, background, 0.5)
-		border = background.DarkerWithInt(120)
+		disabled := blend(theme.ColorTextMuted, background, 0.5)
+		background.Delete()
+		background = disabled
 	}
+	border := background.DarkerWithInt(120)
+
+	trackBrush := qt.NewQBrush3(background)
 	p.SetPen(border)
-	p.SetBrush(qt.NewQBrush3(background))
+	p.SetBrush(trackBrush)
 	p.DrawRoundedRect2(0, 0, switchWidth-1, switchHeight-1, switchHeight/2, switchHeight/2)
+	trackBrush.Delete()
+	background.Delete()
 
 	knobX := knobPad + int(s.progress*float64(switchWidth-knobSize-2*knobPad))
+	knobBrush := qt.NewQBrush3(theme.ColorText)
 	p.SetPenWithStyle(qt.NoPen)
-	p.SetBrush(qt.NewQBrush3(theme.ColorText))
+	p.SetBrush(knobBrush)
 	p.DrawRoundedRect2(knobX, knobPad, knobSize, knobSize, knobSize/2, knobSize/2)
+	knobBrush.Delete()
 }
 
 // blend lerps two colors by t (0..1).

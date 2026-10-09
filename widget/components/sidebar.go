@@ -46,6 +46,14 @@ func (s *Sidebar) SetCurrentDestination(v string) {
 		section.SetCurrentDestination(v)
 	}
 }
+
+// SetCounts updates badges keyed by destination; zero/absent hides the badge.
+func (s *Sidebar) SetCounts(counts map[string]int) {
+	for _, section := range s.sections {
+		section.SetCounts(counts)
+	}
+}
+
 func (s *Sidebar) CurrentDestination() string {
 	return s.current
 }
@@ -65,11 +73,17 @@ func (s *Sidebar) SetOpen(v bool) {
 
 func (s *Sidebar) animate(prop string, target int) {
 	anim := qt.NewQPropertyAnimation2(qt.UnsafeNewQObject(s.UnsafePointer()), []byte(prop))
-	anim.SetParent(qt.UnsafeNewQObject(s.UnsafePointer()))
+	anim.SetParent(qt.UnsafeNewQObject(s.UnsafePointer())) // Qt owns the animation
 	anim.SetDuration(sidebarAnimDuration)
-	anim.SetStartValue(qt.NewQVariant4(s.Width()))
-	anim.SetEndValue(qt.NewQVariant4(target))
-	anim.SetEasingCurve(qt.NewQEasingCurve3(qt.QEasingCurve__InOutCubic))
+	start := qt.NewQVariant4(s.Width())
+	end := qt.NewQVariant4(target)
+	easingCurve := qt.NewQEasingCurve3(qt.QEasingCurve__InOutCubic)
+	anim.SetStartValue(start)
+	anim.SetEndValue(end)
+	anim.SetEasingCurve(easingCurve)
+	start.Delete()
+	end.Delete()
+	easingCurve.Delete()
 	anim.Start()
 }
 
@@ -103,11 +117,7 @@ func (s *Sidebar) AddSection(section *SidebarSection) {
 		return
 	}
 	s.sections = append(s.sections, section)
-	for _, item := range section.ItemWidgets() {
-		item.OnActivated(func() {
-			s.Activate(item.destination)
-		})
-	}
+	section.OnActivated(s.Activate)
 	s.AddContentWidget(section.QWidget)
 }
 
@@ -119,7 +129,7 @@ func (s *Sidebar) OnDestinationSelected(fn func(string)) {
 
 func (s *Sidebar) refreshStyle() {
 	s.SetStyleSheet(fmt.Sprintf(
-		"background-color: %s; border-right: 1px solid %s;",
-		theme.CssColor(theme.ColorSurface), theme.CssColor(theme.ColorBorder),
+		"background-color: %s;",
+		theme.CssColor(theme.ColorSurface),
 	))
 }
