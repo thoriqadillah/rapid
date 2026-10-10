@@ -20,8 +20,12 @@ func NewSidebarLabel(text string) *SidebarLabel {
 	font.SetLetterSpacing(qt.QFont__AbsoluteSpacing, 1)
 	l.SetFont(font)
 	l.SetStyleSheet(fmt.Sprintf(
-		"color: %s; background: transparent; border: none; font-size: %dpx;",
-		theme.CssColor(theme.ColorTextMuted), theme.TextSizeSm,
+		`color: %s;
+		background: transparent;
+		border: none;
+		font-size: %dpx;`,
+		theme.CssColor(theme.ColorTextMuted),
+		theme.TextSizeSm,
 	))
 	l.SetMinimumHeight(theme.TextSizeSm + theme.SpacingXs)
 	l.SetSizePolicy2(qt.QSizePolicy__Preferred, qt.QSizePolicy__Fixed)
@@ -30,8 +34,4 @@ func NewSidebarLabel(text string) *SidebarLabel {
 
 func (l *SidebarLabel) SetText(text string) {
 	l.QLabel.SetText(text)
-}
-
-func (l *SidebarLabel) Text() string {
-	return l.QLabel.Text()
 }

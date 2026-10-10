@@ -207,10 +207,6 @@ func (it *downloadItem) SetItem(d api.Download) {
 	it.detail.SetItem(d)
 }
 
-func (it *downloadItem) Item() api.Download {
-	return it.item
-}
-
 func (it *downloadItem) SetIndex(index int) {
 	if it.index == index {
 		return
@@ -225,10 +221,6 @@ func (it *downloadItem) SetHighlighted(on bool) {
 	}
 	it.highlighted = on
 	it.Update()
-}
-
-func (it *downloadItem) Highlighted() bool {
-	return it.highlighted
 }
 
 func (it *downloadItem) SetMenuOpen(on bool) {
@@ -317,10 +309,6 @@ func (it *downloadItem) detachDetailEffect() {
 	it.detailBox.SetGraphicsEffect(nil)
 	it.detailEffect = nil
 	it.opacityAnim = nil
-}
-
-func (it *downloadItem) Expanded() bool {
-	return it.detailExpanded
 }
 
 func (it *downloadItem) SetSamples(samples []int64) {

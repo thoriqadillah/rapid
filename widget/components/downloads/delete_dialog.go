@@ -41,6 +41,7 @@ func NewDeleteConfirmationDialog(owner *qt.QWidget, displayName string, onConfir
 			onConfirm(deleteFromDisk)
 		}
 		dialog.Accept()
+		dialog.DeleteLater()
 	}
 
 	// QDialog already handles Esc (via RDialog) and Enter (default button), and

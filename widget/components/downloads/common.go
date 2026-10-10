@@ -11,9 +11,9 @@ import (
 // Animation durations, mirroring the QML transitions (detailHeight 150ms,
 // detail opacity/slide 250ms, list add/remove 150ms).
 const (
-	addRemoveDuration    = 200
-	detailHeightDuration = 200
-	detailFadeDuration   = 300
+	addRemoveDuration    = 150
+	detailHeightDuration = 250
+	detailFadeDuration   = 150
 )
 
 // styledLabel builds a transparent QLabel with the given color and the theme

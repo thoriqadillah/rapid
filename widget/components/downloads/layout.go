@@ -2,6 +2,7 @@ package downloads
 
 import (
 	"rapid/lib"
+	"rapid/lib/reactive"
 	"rapid/widget/app"
 	"rapid/widget/components"
 	"rapid/widget/theme"
@@ -55,27 +56,20 @@ func NewLayout(navigation *app.Navigation) *Layout {
 		},
 	})
 	layout.SidebarWidget.AddSection(settings)
-	layout.SidebarWidget.SetCurrentDestination(DefaultSidebarItem)
-
-	previous := DefaultSidebarItem
-	layout.OnDestinationSelected(func(destination string) {
-		if destination != "" {
-			previous = destination
-			return
-		}
-
-		layout.SidebarWidget.SetCurrentDestination(previous)
-	})
+	layout.SidebarWidget.SetActive(DefaultSidebarItem)
 
 	return layout
 }
 
-// SetCounts updates the sidebar badges, hiding zero counts.
-func (l *Layout) SetCounts(counts map[string]int) {
-	if l == nil || l.SidebarWidget == nil {
+// BindCounts updates the sidebar badges, hiding zero counts.
+func (l *Layout) BindCounts(counts *reactive.Computed[map[string]int]) {
+	if l.SidebarWidget == nil {
 		return
 	}
-	l.SidebarWidget.SetCounts(counts)
+
+	l.OnDestroyed(reactive.Effect(func() {
+		l.SidebarWidget.SetCounts(counts.Get())
+	}))
 }
 
 func categorySidebarItem(category lib.Category) components.SidebarItemData {

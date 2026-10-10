@@ -1,32 +1,35 @@
 package components
 
-import qt "github.com/mappu/miqt/qt6"
+import (
+	"rapid/lib/reactive"
+
+	qt "github.com/mappu/miqt/qt6"
+)
 
 // Layout is the explicit Qt Widgets equivalent of the QML Loader/slot layout.
 type Layout struct {
 	*qt.QWidget
-	HeaderWidget  *Header
+	headerWidget  *Header
 	SidebarWidget *Sidebar
-	ContentWidget *qt.QWidget
-	ContentLayout *qt.QVBoxLayout
+	contentWidget *qt.QWidget
+	contentLayout *qt.QVBoxLayout
 
-	grid          *qt.QGridLayout
-	sidebarOpen   bool
-	destinationCB []func(string)
-	addCB         []func()
+	grid        *qt.QGridLayout
+	sidebarOpen bool
+	addCB       []func()
 }
 
 func NewLayout() *Layout {
 	l := &Layout{
 		QWidget:       qt.NewQWidget3(nil, 0),
-		ContentWidget: qt.NewQWidget2(),
-		ContentLayout: qt.NewQVBoxLayout2(),
+		contentWidget: qt.NewQWidget2(),
+		contentLayout: qt.NewQVBoxLayout2(),
 		grid:          qt.NewQGridLayout2(),
 		sidebarOpen:   true,
 	}
-	l.ContentLayout.SetContentsMargins(0, 0, 0, 0)
-	l.ContentWidget.SetLayout(l.ContentLayout.QLayout)
-	l.ContentWidget.SetFocusPolicy(qt.StrongFocus)
+	l.contentLayout.SetContentsMargins(0, 0, 0, 0)
+	l.contentWidget.SetLayout(l.contentLayout.QLayout)
+	l.contentWidget.SetFocusPolicy(qt.StrongFocus)
 
 	l.grid.SetContentsMargins(0, 0, 0, 0)
 	l.grid.SetSpacing(0)
@@ -35,22 +38,22 @@ func NewLayout() *Layout {
 	l.grid.SetRowStretch(0, 0)
 	l.grid.SetRowStretch(1, 1)
 	l.SetLayout(l.grid.QLayout)
-	l.grid.AddWidget3(l.ContentWidget, 1, 1, 1, 1)
+	l.grid.AddWidget3(l.contentWidget, 1, 1, 1, 1)
 	l.SetSidebar(nil)
 	l.SetHeader(nil)
 	return l
 }
 
 func (l *Layout) SetHeader(header *Header) {
-	if l.HeaderWidget != nil {
-		l.grid.RemoveWidget(l.HeaderWidget.QWidget)
-		l.HeaderWidget.Hide()
-		l.HeaderWidget.DeleteLater()
+	if l.headerWidget != nil {
+		l.grid.RemoveWidget(l.headerWidget.QWidget)
+		l.headerWidget.Hide()
+		l.headerWidget.DeleteLater()
 	}
 	if header == nil {
 		header = NewHeader()
 	}
-	l.HeaderWidget = header
+	l.headerWidget = header
 	l.grid.AddWidget2(header.QWidget, 0, 1)
 	header.OnMenuClicked(func() { l.SetSidebarOpen(!l.sidebarOpen) })
 	header.OnAddClicked(func() {
@@ -74,13 +77,6 @@ func (l *Layout) SetSidebar(sidebar *Sidebar) {
 	l.SidebarWidget = sidebar
 	l.sidebarOpen = sidebar.Open()
 	l.grid.AddWidget3(sidebar.QWidget, 0, 0, 2, 1)
-	sidebar.OnDestinationSelected(func(destination string) {
-		for _, fn := range l.destinationCB {
-			if fn != nil {
-				fn(destination)
-			}
-		}
-	})
 }
 
 func (l *Layout) SetSidebarOpen(open bool) {
@@ -94,15 +90,17 @@ func (l *Layout) SidebarOpen() bool {
 	return l.sidebarOpen
 }
 
-func (l *Layout) AddContentWidget(widget *qt.QWidget) {
-	if widget != nil {
-		l.ContentLayout.AddWidget(widget)
-	}
+func (l *Layout) BindSearch(search reactive.Model[string]) {
+	l.headerWidget.searchField.Bind(search)
 }
 
-func (l *Layout) OnDestinationSelected(fn func(string)) {
-	if fn != nil {
-		l.destinationCB = append(l.destinationCB, fn)
+func (l *Layout) BindDestination(destination reactive.Model[string]) {
+	l.SidebarWidget.Bind(destination)
+}
+
+func (l *Layout) AddContentWidget(widget *qt.QWidget) {
+	if widget != nil {
+		l.contentLayout.AddWidget(widget)
 	}
 }
 
@@ -112,15 +110,8 @@ func (l *Layout) OnAddClicked(fn func()) {
 	}
 }
 
-func (l *Layout) SearchText() string {
-	if l.HeaderWidget == nil {
-		return ""
-	}
-	return l.HeaderWidget.SearchText()
-}
-
 func (l *Layout) FocusContent() {
-	if l.ContentWidget != nil {
-		l.ContentWidget.SetFocus()
+	if l.contentWidget != nil {
+		l.contentWidget.SetFocus()
 	}
 }

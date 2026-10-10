@@ -3,6 +3,7 @@ package components
 import (
 	"fmt"
 
+	"rapid/lib/helpers/bools"
 	"rapid/widget/theme"
 	"rapid/widget/ui"
 
@@ -21,7 +22,7 @@ type SidebarItem struct {
 	destination string
 	iconSource  string
 	iconColor   *qt.QColor
-	category    bool
+	isCategory  bool
 	selected    bool
 	hovered     bool
 	callbacks   []func()
@@ -109,36 +110,10 @@ func NewSidebarItem(destination, label string) *SidebarItem {
 	return i
 }
 
-func (i *SidebarItem) SetDestination(v string) {
-	i.destination = v
-}
-
-func (i *SidebarItem) Destination() string {
-	return i.destination
-}
-
-func (i *SidebarItem) SetLabel(v string) {
-	i.label.SetText(v)
-	i.SetAccessibleName(v)
-	i.refreshStyle()
-}
-
-func (i *SidebarItem) Label() string {
-	return i.label.Text()
-}
-
 func (i *SidebarItem) SetCount(v string) {
 	i.countLabel.SetText(v)
 	i.countLabel.SetVisible(v != "")
 	i.refreshStyle()
-}
-
-func (i *SidebarItem) Count() string {
-	return i.countLabel.Text()
-}
-
-func (i *SidebarItem) CountVisible() bool {
-	return i.countLabel.Text() != ""
 }
 
 func (i *SidebarItem) SetIconSource(v string) {
@@ -146,34 +121,16 @@ func (i *SidebarItem) SetIconSource(v string) {
 	i.refreshIcon()
 }
 
-func (i *SidebarItem) IconSource() string {
-	return i.iconSource
-}
-
 func (i *SidebarItem) SetIconColor(v *qt.QColor) {
-	if v == nil {
-		v = theme.ColorTextMuted
-	}
-	i.iconColor = v
+	i.iconColor = bools.Ternary(v == nil, theme.ColorTextMuted, v)
 	i.refreshIcon()
-}
-
-func (i *SidebarItem) IconColor() *qt.QColor {
-	return i.iconColor
 }
 
 func (i *SidebarItem) SetCategoryItem(v bool) {
-	i.category = v
-	size := theme.IconSm
-	if v {
-		size = theme.IconXs
-	}
+	i.isCategory = v
+	size := bools.Ternary(v, theme.IconXs, int(theme.IconSm))
 	i.iconLabel.SetFixedSize2(size, size)
 	i.refreshIcon()
-}
-
-func (i *SidebarItem) CategoryItem() bool {
-	return i.category
 }
 
 func (i *SidebarItem) SetSelected(v bool) {
@@ -181,10 +138,6 @@ func (i *SidebarItem) SetSelected(v bool) {
 	i.refreshStyle()
 	i.refreshIcon()
 	i.Update()
-}
-
-func (i *SidebarItem) Selected() bool {
-	return i.selected
 }
 
 func (i *SidebarItem) OnActivated(fn func()) {
@@ -209,14 +162,8 @@ func (i *SidebarItem) refreshIcon() {
 		empty.Delete()
 		return
 	}
-	color := i.iconColor
-	if i.selected && !i.category {
-		color = theme.ColorText
-	}
-	size := theme.IconSm
-	if i.category {
-		size = theme.IconXs
-	}
+	color := bools.Ternary(i.selected && !i.isCategory, theme.ColorText, i.iconColor)
+	size := bools.Ternary(i.isCategory, theme.IconXs, theme.IconSm)
 	pixmap := ui.TintedPixmap(i.iconSource, color, size)
 	if pixmap == nil {
 		// TintedPixmap returns a shared cache entry on success; only the
@@ -265,15 +212,15 @@ func (i *SidebarItem) paintBackground() {
 	defer painter.Delete()
 	painter.SetRenderHint2(qt.QPainter__Antialiasing, true)
 
-		if background := i.backgroundColor(); background != nil {
-			transparent := qt.NewQColor11(0, 0, 0, 0)
-			pen := qt.NewQPen3(transparent)
-			brush := qt.NewQBrush3(background)
-			painter.SetPenWithPen(pen)
-			painter.SetBrush(brush)
-			painter.DrawRoundedRect2(0, 0, i.Width(), i.Height(), float64(theme.RadiusSm), float64(theme.RadiusSm))
-			transparent.Delete()
-			pen.Delete()
-			brush.Delete()
-		}
+	if background := i.backgroundColor(); background != nil {
+		transparent := qt.NewQColor11(0, 0, 0, 0)
+		pen := qt.NewQPen3(transparent)
+		brush := qt.NewQBrush3(background)
+		painter.SetPenWithPen(pen)
+		painter.SetBrush(brush)
+		painter.DrawRoundedRect2(0, 0, i.Width(), i.Height(), float64(theme.RadiusSm), float64(theme.RadiusSm))
+		transparent.Delete()
+		pen.Delete()
+		brush.Delete()
 	}
+}

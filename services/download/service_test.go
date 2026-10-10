@@ -11,7 +11,9 @@ import (
 )
 
 func newServiceWithItems(items []api.Download) *Service {
-	return &Service{items: cloneDownloads(items)}
+	s := NewService()
+	s.SetItems(items)
+	return s
 }
 
 func TestServiceFilterAndCounts(t *testing.T) {
@@ -22,33 +24,33 @@ func TestServiceFilterAndCounts(t *testing.T) {
 		{GID: "u1"},
 	})
 
-	counts := s.Counts()
+	counts := s.Counts.Get()
 	require.Equal(t, 4, counts["all"])
 	require.Equal(t, 2, counts["video"])
 	require.Equal(t, 1, counts["audio"])
 	require.NotContains(t, counts, "")
 
 	s.SetCategory("video")
-	require.Len(t, s.ComputedItems(), 2)
+	require.Len(t, s.Items.Get(), 2)
 
 	// The sidebar "All downloads" destination is "all": selecting it after a
 	// category must show everything again.
 	s.SetCategory("all")
-	require.Len(t, s.ComputedItems(), 4)
-	require.Empty(t, s.Category())
+	require.Len(t, s.Items.Get(), 4)
+	require.Empty(t, s.Category.Peek())
 
 	s.SetSearch("dune")
-	filtered := s.ComputedItems()
+	filtered := s.Items.Get()
 	require.Len(t, filtered, 1)
 	require.Equal(t, "v2", filtered[0].GID)
 
 	// Clearing the category keeps the search.
 	s.SetCategory("")
-	require.Len(t, s.ComputedItems(), 1)
+	require.Len(t, s.Items.Get(), 1)
 
 	s.SetSearch("  DUNE  ")
-	require.Len(t, s.ComputedItems(), 1)
-	require.Equal(t, "dune", s.Search())
+	require.Len(t, s.Items.Get(), 1)
+	require.Equal(t, "dune", s.Search.Peek())
 }
 
 func TestServiceMatches(t *testing.T) {
@@ -140,11 +142,11 @@ func TestServiceRefreshFromDB(t *testing.T) {
 	s := NewService()
 	require.NoError(t, s.Refresh(t.Context()))
 
-	all := s.All()
+	all := s.items.Peek()
 	require.Len(t, all, 2)
 	require.Equal(t, "b", all[0].GID, "newest-first order")
 	require.Equal(t, "a", all[1].GID)
 
-	require.Equal(t, 2, s.Counts()["all"])
-	require.Equal(t, "b", s.ComputedItems()[0].GID)
+	require.Equal(t, 2, s.Counts.Get()["all"])
+	require.Equal(t, "b", s.Items.Get()[0].GID)
 }

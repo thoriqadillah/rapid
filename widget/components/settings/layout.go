@@ -36,7 +36,7 @@ func NewLayout(navigation *app.Navigation) *components.Layout {
 		},
 	})
 	layout.SidebarWidget.AddSection(downloads)
-	layout.SidebarWidget.SetCurrentDestination("general")
+	layout.SidebarWidget.Activate("general")
 
 	return layout
 }

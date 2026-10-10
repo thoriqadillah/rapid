@@ -2,6 +2,7 @@ package downloads
 
 import (
 	"rapid/lib/helpers/bools"
+	"rapid/lib/reactive"
 	"rapid/services/download/api"
 	"rapid/widget/theme"
 	"rapid/widget/ui"
@@ -111,9 +112,22 @@ func newEmptyState(parent *qt.QWidget) *qt.QWidget {
 	return w
 }
 
-// SetItems refreshes the list. Insertion order is preserved (the store already
+func (l *DownloadList) BindItems(items *reactive.Computed[[]api.Download]) {
+	l.OnDestroyed(reactive.Effect(func() {
+		l.updateItems(items.Get())
+	}))
+}
+
+func (l *DownloadList) BindFilterChange(isChanged *reactive.Computed[bool]) {
+	l.OnDestroyed(reactive.Effect(func() {
+		isChanged.Get()
+		l.collapse()
+	}))
+}
+
+// updateItems refreshes the list. Insertion order is preserved (the store already
 // sorts newest-first); the list never re-sorts.
-func (l *DownloadList) SetItems(items []api.Download) {
+func (l *DownloadList) updateItems(items []api.Download) {
 	wanted := make(map[string]bool, len(items))
 	ordered := make([]*downloadItem, 0, len(items))
 	for i, d := range items {
@@ -142,7 +156,7 @@ func (l *DownloadList) SetItems(items []api.Download) {
 		l.byGid = make(map[string]*downloadItem, len(ordered))
 		for _, it := range ordered {
 			l.containerLayout.AddWidget(it.QWidget)
-			l.byGid[it.Item().GID] = it
+			l.byGid[it.item.GID] = it
 		}
 		l.containerLayout.AddStretch()
 		l.items = ordered
@@ -160,7 +174,7 @@ func sameOrder(a, b []*downloadItem) bool {
 		return false
 	}
 	for i := range a {
-		if a[i] != b[i] {
+		if a[i].item.GID != b[i].item.GID {
 			return false
 		}
 	}
@@ -181,7 +195,7 @@ func (l *DownloadList) detachAll() {
 }
 
 func (l *DownloadList) wireItem(it *downloadItem) {
-	it.OnToggle(func() { l.toggle(it.Item().GID) })
+	it.OnToggle(func() { l.toggle(it.item.GID) })
 	it.OnContextMenu(func(d api.Download, pos *qt.QPoint) { l.openMenu(d, pos) })
 	it.OnPause(func(gid string) { l.emitGid(l.pauseCB, gid) })
 	it.OnResume(func(gid string) { l.emitGid(l.resumeCB, gid) })
@@ -198,13 +212,13 @@ func (l *DownloadList) wireItem(it *downloadItem) {
 func (l *DownloadList) toggle(gid string) {
 	l.expandedGid = bools.Ternary(l.expandedGid == gid, "", gid)
 	for _, it := range l.items {
-		it.SetExpanded(it.Item().GID == l.expandedGid)
+		it.SetExpanded(it.item.GID == l.expandedGid)
 	}
 	l.emitExpand()
 }
 
-// Collapse closes the expanded row (category/search changes do this).
-func (l *DownloadList) Collapse() {
+// collapse closes the expanded row (category/search changes do this).
+func (l *DownloadList) collapse() {
 	if l.expandedGid == "" {
 		return
 	}
@@ -215,19 +229,11 @@ func (l *DownloadList) Collapse() {
 	l.emitExpand()
 }
 
-func (l *DownloadList) ExpandedGid() string {
-	return l.expandedGid
-}
-
 // SetSpeedHistory feeds the sparkline of the matching row.
 func (l *DownloadList) SetSpeedHistory(gid string, samples []int64) {
-	if it := l.byGid[gid]; it != nil {
+	if it, ok := l.byGid[gid]; ok && it != nil {
 		it.SetSamples(samples)
 	}
-}
-
-func (l *DownloadList) Count() int {
-	return len(l.items)
 }
 
 func (l *DownloadList) openMenu(d api.Download, pos *qt.QPoint) {

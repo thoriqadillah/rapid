@@ -8,6 +8,7 @@ import (
 
 	"github.com/uptrace/bun"
 
+	"rapid/lib/helpers/iter"
 	"rapid/services/download/api"
 )
 
@@ -79,11 +80,8 @@ func getAllDownloads(ctx context.Context, db bun.IDB) ([]api.Download, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make([]api.Download, 0, len(rows))
-	for i := range rows {
-		out = append(out, toDownloadModel(rows[i]))
-	}
-	return out, nil
+
+	return iter.Map(rows, toDownloadModel), nil
 }
 
 // Get returns a zero Download (and nil error) when the gid is missing.
@@ -231,11 +229,8 @@ func loadFileRows(ctx context.Context, db bun.IDB, gid string) (map[int]download
 		Scan(ctx); err != nil {
 		return nil, err
 	}
-	byIndex := make(map[int]downloadFileRow, len(existing))
-	for i := range existing {
-		byIndex[existing[i].Index] = existing[i]
-	}
-	return byIndex, nil
+
+	return iter.KeyBy(existing, func(dfr downloadFileRow) int { return dfr.Index }), nil
 }
 
 // insertFileRow creates a file row, returning it with its new id.
@@ -261,9 +256,13 @@ func insertFileRow(ctx context.Context, db bun.IDB, gid string, f api.DownloadFi
 // rows (rebuilt right after by the caller).
 func updateFileRow(ctx context.Context, db bun.IDB, fr downloadFileRow, f api.DownloadFile) error {
 	patch := downloadFileRow{
-		ID: fr.ID, Path: f.Path, Length: f.Length,
-		CompletedLength: f.CompletedLength, Selected: f.Selected,
+		ID:              fr.ID,
+		Path:            f.Path,
+		Length:          f.Length,
+		CompletedLength: f.CompletedLength,
+		Selected:        f.Selected,
 	}
+
 	if _, err := db.NewUpdate().
 		Model(&patch).
 		ExcludeColumn("gid", "index").
@@ -285,14 +284,15 @@ func insertFileURIs(ctx context.Context, db bun.IDB, fileID int64, uris []api.Fi
 	if len(uris) == 0 {
 		return nil // bun rejects empty bulk inserts; nothing to write anyway
 	}
-	rows := make([]fileURIrow, 0, len(uris))
-	for _, u := range uris {
-		rows = append(rows, fileURIrow{
+
+	rows := iter.Map(uris, func(u api.FileURI) fileURIrow {
+		return fileURIrow{
 			FileID: fileID,
 			URI:    u.URI,
 			Status: u.Status,
-		})
-	}
+		}
+	})
+
 	_, err := db.NewInsert().Model(&rows).Exec(ctx)
 	return err
 }

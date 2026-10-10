@@ -14,8 +14,8 @@ func TestRTextFieldBasicStateAndLayout(t *testing.T) {
 	field := NewRTextField()
 	field.SetLabel("URL")
 	require.True(t, !field.label.IsHidden() && field.label.Text() == "URL", "label was not shown")
-	field.SetText("https://example.com")
-	require.Equal(t, "https://example.com", field.Text(), "text")
+	field.value.Set("https://example.com")
+	require.Equal(t, "https://example.com", field.value.Get(), "text")
 	field.SetPlaceholder("Paste URL")
 	require.Equal(t, "Paste URL", field.field.PlaceholderText(), "placeholder was not applied")
 	field.SetError("Invalid URL")
@@ -66,6 +66,6 @@ func TestRTextFieldInputContract(t *testing.T) {
 	require.False(t, field.SelectByMouse(), "select-by-mouse state was not retained")
 	changed := ""
 	field.OnTextChanged(func(text string) { changed = text })
-	field.SetText("abc")
+	field.value.Set("abc")
 	require.Equal(t, "abc", changed, "text changed callback value")
 }

@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 
+	"rapid/lib/reactive"
 	"rapid/widget/theme"
 
 	qt "github.com/mappu/miqt/qt6"
@@ -22,6 +23,7 @@ type RTextField struct {
 	iconSize      int
 	iconColor     *qt.QColor
 	selectByMouse bool
+	value         reactive.Model[string]
 }
 
 func NewRTextField() *RTextField {
@@ -34,6 +36,7 @@ func NewRTextField() *RTextField {
 		iconSize:      theme.IconMd,
 		iconColor:     theme.ColorTextMuted,
 		selectByMouse: true,
+		value:         reactive.NewSignal(""),
 	}
 
 	w.label.SetStyleSheet(fmt.Sprintf("color: %s; font-size: %dpx; margin: 0; padding: 0; background: transparent;", theme.CssColor(theme.ColorText), theme.TextSize))
@@ -55,6 +58,16 @@ func NewRTextField() *RTextField {
 		super(e)
 		w.field.SetFocus()
 	})
+	w.field.OnTextChanged(func(s string) {
+		if w.value.Get() != s {
+			w.value.Set(s)
+		}
+	})
+	w.field.OnDestroyed(reactive.Effect(func() {
+		if v := w.value.Get(); v != w.field.Text() {
+			w.field.SetText(v)
+		}
+	}))
 
 	w.fieldRow.SetContentsMargins(0, 0, 0, 0)
 	w.fieldRow.SetSpacing(theme.SpacingSm)
@@ -106,15 +119,16 @@ func (w *RTextField) applyStyle() {
 		QLineEdit:focus {
 			border-color: %s;
 		}
-	`, theme.CssColor(theme.ColorInputBackground), theme.CssColor(theme.ColorText), theme.CssColor(border), theme.RadiusSm, right, left, theme.TouchTarget, theme.TextSize, theme.CssColor(focusBorder)))
-}
-
-func (w *RTextField) SetText(text string) {
-	w.field.SetText(text)
-}
-
-func (w *RTextField) Text() string {
-	return w.field.Text()
+	`, theme.CssColor(theme.ColorInputBackground),
+		theme.CssColor(theme.ColorText),
+		theme.CssColor(border),
+		theme.RadiusSm,
+		right,
+		left,
+		theme.TouchTarget,
+		theme.TextSize,
+		theme.CssColor(focusBorder),
+	))
 }
 
 func (w *RTextField) SetPlaceholder(text string) {
@@ -210,6 +224,20 @@ func (w *RTextField) IconColor() *qt.QColor {
 
 func (w *RTextField) OnTextChanged(fn func(string)) {
 	w.field.OnTextChanged(fn)
+}
+
+func (w *RTextField) Bind(model reactive.Model[string]) {
+	modelValue, cleanup := reactive.Bind(model)
+	w.value = modelValue
+	unsub := reactive.Effect(func() {
+		w.field.SetText(w.value.Get())
+	})
+
+	unbind := func() {
+		unsub()
+		cleanup()
+	}
+	w.field.OnDestroyed(unbind)
 }
 
 func (w *RTextField) FieldWidget() *qt.QWidget {

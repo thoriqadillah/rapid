@@ -31,3 +31,11 @@ func Reduce[I, O any](s []I, f func(I, O) O, initial O) O {
 	}
 	return result
 }
+
+func KeyBy[I any, K comparable](s []I, f func(I) K) map[K]I {
+	result := make(map[K]I, len(s))
+	for _, v := range s {
+		result[f(v)] = v
+	}
+	return result
+}

@@ -3,6 +3,7 @@ package components
 import (
 	"fmt"
 
+	"rapid/lib/reactive"
 	"rapid/widget/theme"
 
 	qt "github.com/mappu/miqt/qt6"
@@ -15,36 +16,47 @@ const (
 
 type Sidebar struct {
 	*qt.QWidget
-	ContentLayout *qt.QVBoxLayout
+	contentLayout *qt.QVBoxLayout
 
-	current   string
-	open      bool
-	sections  []*SidebarSection
-	callbacks []func(string)
+	destination *reactive.Signal[string]
+	open        bool
+	sections    []*SidebarSection
+	callbacks   []func(string)
 }
 
 func NewSidebar() *Sidebar {
 	s := &Sidebar{
 		QWidget:       qt.NewQWidget3(nil, 0),
-		ContentLayout: qt.NewQVBoxLayout2(),
+		contentLayout: qt.NewQVBoxLayout2(),
 		open:          true,
+		destination:   reactive.NewSignal(""),
 	}
 	s.SetMinimumWidth(SidebarWidth)
 	s.SetMaximumWidth(SidebarWidth)
 	s.SetSizePolicy2(qt.QSizePolicy__Fixed, qt.QSizePolicy__Expanding)
 	s.SetAttribute(qt.WA_StyledBackground)
-	s.ContentLayout.SetContentsMargins(theme.SpacingSm, theme.SpacingSm, theme.SpacingSm, theme.SpacingSm)
-	s.ContentLayout.SetSpacing(theme.SpacingXs)
-	s.SetLayout(s.ContentLayout.QLayout)
+	s.contentLayout.SetContentsMargins(theme.SpacingSm, theme.SpacingSm, theme.SpacingSm, theme.SpacingSm)
+	s.contentLayout.SetSpacing(theme.SpacingXs)
+	s.SetLayout(s.contentLayout.QLayout)
 	s.refreshStyle()
 	return s
 }
 
-func (s *Sidebar) SetCurrentDestination(v string) {
-	s.current = v
-	for _, section := range s.sections {
-		section.SetCurrentDestination(v)
+func (s *Sidebar) SetActive(dest string) {
+	if dest == "" {
+		return
 	}
+
+	s.destination.Set(dest)
+	for _, section := range s.sections {
+		section.SetActive(dest)
+	}
+}
+
+func (s *Sidebar) Bind(dest reactive.Model[string]) {
+	modelValue, dispose := reactive.Bind(dest)
+	s.destination = modelValue
+	s.OnDestroyed(dispose)
 }
 
 // SetCounts updates badges keyed by destination; zero/absent hides the badge.
@@ -52,10 +64,6 @@ func (s *Sidebar) SetCounts(counts map[string]int) {
 	for _, section := range s.sections {
 		section.SetCounts(counts)
 	}
-}
-
-func (s *Sidebar) CurrentDestination() string {
-	return s.current
 }
 
 func (s *Sidebar) SetOpen(v bool) {
@@ -92,8 +100,7 @@ func (s *Sidebar) Open() bool {
 }
 
 func (s *Sidebar) Activate(destination string) {
-	s.current = destination
-	s.SetCurrentDestination(destination)
+	s.SetActive(destination)
 	for _, fn := range s.callbacks {
 		if fn != nil {
 			fn(destination)
@@ -103,13 +110,13 @@ func (s *Sidebar) Activate(destination string) {
 
 func (s *Sidebar) AddContentWidget(widget *qt.QWidget) {
 	if widget != nil {
-		s.ContentLayout.AddWidget(widget)
+		s.contentLayout.AddWidget(widget)
 	}
 }
 
 // AddStretch inserts flexible vertical space between navigation groups.
 func (s *Sidebar) AddStretch() {
-	s.ContentLayout.AddStretch()
+	s.contentLayout.AddStretch()
 }
 
 func (s *Sidebar) AddSection(section *SidebarSection) {
@@ -119,12 +126,6 @@ func (s *Sidebar) AddSection(section *SidebarSection) {
 	s.sections = append(s.sections, section)
 	section.OnActivated(s.Activate)
 	s.AddContentWidget(section.QWidget)
-}
-
-func (s *Sidebar) OnDestinationSelected(fn func(string)) {
-	if fn != nil {
-		s.callbacks = append(s.callbacks, fn)
-	}
 }
 
 func (s *Sidebar) refreshStyle() {
