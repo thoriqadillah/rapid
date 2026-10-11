@@ -102,18 +102,18 @@ func (r *JSONRpc) Call(ctx context.Context, method string, body []byte) ([]byte,
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.BaseURL, bytes.NewReader(body))
 	if err != nil {
-		return nil, errors.Aria2Errorf("cannot connect to aria2: %v", err)
+		return nil, errors.NewAria2Error("cannot connect to aria2", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := r.HTTPClient.Do(req)
 	if err != nil {
-		return nil, errors.Aria2Errorf("cannot connect to aria2: %v", err)
+		return nil, errors.NewAria2Error("cannot connect to aria2", err)
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, errors.Aria2Errorf("cannot connect to aria2: %v", err)
+		return nil, errors.NewAria2Error("cannot connect to aria2", err)
 	}
 
 	var v api.JSONRpcResponse

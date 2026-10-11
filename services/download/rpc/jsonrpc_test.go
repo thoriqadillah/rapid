@@ -117,7 +117,7 @@ func TestIntegrationGetVersion(t *testing.T) {
 	rpc := NewJSONRpc("127.0.0.1", port, "")
 	raw, err := rpc.Call(t.Context(), "aria2.getVersion", nil)
 	require.NoError(t, err)
-	var v api.Ari2VersionResponse
+	var v api.Aria2VersionResponse
 	require.NoError(t, json.Unmarshal(raw, &v))
 	require.NotEmpty(t, v.Result.Version)
 }

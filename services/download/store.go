@@ -12,9 +12,8 @@ import (
 	"rapid/services/download/api"
 )
 
-// Row structs mirror the goose schema (db/migrations/00001_create_downloads.sql).
-// Field types track the api models one-to-one; the store overwrites whole
-// rows (merging lives in the service, which holds previous state).
+const SpeedHistoryLimit = 60
+const speedSamplesKeep = 120
 
 type downloadRow struct {
 	bun.BaseModel   `bun:"table:downloads"`

@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"time"
 
+	"rapid/db"
 	"rapid/lib"
 	"rapid/services/download/api"
 	"rapid/services/settings"
@@ -187,26 +188,29 @@ func (d *DownloadSeeder) Name() string {
 	return "DownloadSeeder"
 }
 
-func (d *DownloadSeeder) Seed(ctx context.Context, db bun.IDB) error {
-	for i, dl := range samples(d.settings.DownloadDir) {
-		_, err := upsertDownload(ctx, db, dl)
-		if err != nil {
-			return err
-		}
-
-		if dl.Status == "active" {
-			base := dl.DownloadSpeed
-			if base == 0 {
-				base = 1000000
+func (d *DownloadSeeder) Seed(ctx context.Context) error {
+	return db.DB().RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		for i, dl := range samples(d.settings.DownloadDir) {
+			_, err := upsertDownload(ctx, tx, dl)
+			if err != nil {
+				return err
 			}
-			now := time.Now().UnixMilli()
-			for j, speed := range speedCurve(base, 60, uint64(i)) {
-				timestamp := now - 60000 + int64(j)*1000
-				if err := addSpeedSample(ctx, db, dl.GID, timestamp, speed); err != nil {
-					return err
+
+			if dl.Status == "active" {
+				base := dl.DownloadSpeed
+				if base == 0 {
+					base = 1000000
+				}
+				now := time.Now().UnixMilli()
+				for j, speed := range speedCurve(base, 60, uint64(i)) {
+					timestamp := now - 60000 + int64(j)*1000
+					if err := addSpeedSample(ctx, tx, dl.GID, timestamp, speed); err != nil {
+						return err
+					}
 				}
 			}
 		}
-	}
-	return nil
+
+		return nil
+	})
 }

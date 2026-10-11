@@ -63,11 +63,6 @@ func NewRTextField() *RTextField {
 			w.value.Set(s)
 		}
 	})
-	w.field.OnDestroyed(reactive.Effect(func() {
-		if v := w.value.Get(); v != w.field.Text() {
-			w.field.SetText(v)
-		}
-	}))
 
 	w.fieldRow.SetContentsMargins(0, 0, 0, 0)
 	w.fieldRow.SetSpacing(theme.SpacingSm)
@@ -133,6 +128,10 @@ func (w *RTextField) applyStyle() {
 
 func (w *RTextField) SetPlaceholder(text string) {
 	w.field.SetPlaceholderText(text)
+}
+
+func (w *RTextField) SetText(text string) {
+	w.field.SetText(text)
 }
 
 func (w *RTextField) Placeholder() string {
@@ -224,6 +223,19 @@ func (w *RTextField) IconColor() *qt.QColor {
 
 func (w *RTextField) OnTextChanged(fn func(string)) {
 	w.field.OnTextChanged(fn)
+}
+
+func (w *RTextField) OnReturnPressed(fn func()) {
+	w.field.OnReturnPressed(fn)
+}
+
+// SelectAll selects the whole text.
+func (w *RTextField) SelectAll() {
+	w.field.SelectAll()
+}
+
+func (w *RTextField) SetFocus() {
+	w.field.SetFocus()
 }
 
 func (w *RTextField) Bind(model reactive.Model[string]) {

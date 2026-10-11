@@ -12,15 +12,29 @@ import (
 // Aria2Error is a daemon/RPC failure.
 type Aria2Error struct {
 	Msg string
+	Err error
 }
 
 func (e *Aria2Error) Error() string {
-	return e.Msg
+	if e.Err == nil {
+		return e.Msg
+	}
+	return e.Msg + ": " + e.Err.Error()
+}
+
+// Unwrap exposes the cause so errors.Is/As (e.g. context.Canceled) work.
+func (e *Aria2Error) Unwrap() error {
+	return e.Err
 }
 
 // NewAria2Error builds an Aria2Error.
-func NewAria2Error(msg string) *Aria2Error {
-	return &Aria2Error{Msg: msg}
+func NewAria2Error(msg string, errs ...error) *Aria2Error {
+	var err error
+	if len(errs) > 0 {
+		err = errs[0]
+	}
+
+	return &Aria2Error{Msg: msg, Err: err}
 }
 
 // Aria2Errorf builds an Aria2Error with formatting.
@@ -31,15 +45,29 @@ func Aria2Errorf(format string, args ...any) *Aria2Error {
 // PluginError is raised when a resolver plugin cannot run or answers invalidly.
 type PluginError struct {
 	Msg string
+	Err error
 }
 
 func (e *PluginError) Error() string {
-	return e.Msg
+	if e.Err == nil {
+		return e.Msg
+	}
+	return e.Msg + ": " + e.Err.Error()
+}
+
+// Unwrap exposes the cause so errors.Is/As work.
+func (e *PluginError) Unwrap() error {
+	return e.Err
 }
 
 // NewPluginError builds a PluginError.
-func NewPluginError(msg string) *PluginError {
-	return &PluginError{Msg: msg}
+func NewPluginError(msg string, errs ...error) *PluginError {
+	var err error
+	if len(errs) > 0 {
+		err = errs[0]
+	}
+
+	return &PluginError{Msg: msg, Err: err}
 }
 
 // PluginErrorf builds a PluginError with formatting.
@@ -50,20 +78,29 @@ func PluginErrorf(format string, args ...any) *PluginError {
 // TransportError is raised when a plugin transport cannot send or receive.
 type TransportError struct {
 	Msg string
+	Err error
 }
 
 func (e *TransportError) Error() string {
-	return e.Msg
+	if e.Err == nil {
+		return e.Msg
+	}
+	return e.Msg + ": " + e.Err.Error()
+}
+
+// Unwrap exposes the cause so errors.Is/As work.
+func (e *TransportError) Unwrap() error {
+	return e.Err
 }
 
 // NewTransportError builds a TransportError.
-func NewTransportError(msg string) *TransportError {
-	return &TransportError{Msg: msg}
-}
+func NewTransportError(msg string, errs ...error) *TransportError {
+	var err error
+	if len(errs) > 0 {
+		err = errs[0]
+	}
 
-// TransportErrorf builds a TransportError with formatting.
-func TransportErrorf(format string, args ...any) *TransportError {
-	return &TransportError{Msg: fmt.Sprintf(format, args...)}
+	return &TransportError{Msg: msg, Err: err}
 }
 
 // JsonRpcError is raised when a plugin replies with an error or garbage.
@@ -90,7 +127,7 @@ func IsAria2NotFound(err error) bool {
 		return false
 	}
 
-	return strings.Contains(e.Msg, "Invalid GID")
+	return strings.Contains(e.Msg, "Invalid GID") || strings.Contains(e.Msg, "is not found")
 }
 
 // BrowserRequestError is raised for unsafe or invalid extension requests.

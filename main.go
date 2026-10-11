@@ -15,6 +15,7 @@ import (
 	"rapid/services/settings"
 	"rapid/widget/app"
 	"rapid/widget/components/downloads"
+	"rapid/widget/qtpaths"
 	"rapid/widget/theme"
 	"rapid/widget/ui"
 	"rapid/widget/views"
@@ -41,7 +42,11 @@ func run() error {
 	trayAvailable := qt.QSystemTrayIcon_IsSystemTrayAvailable()
 	qt.QGuiApplication_SetQuitOnLastWindowClosed(!trayAvailable)
 
-	s := settings.Default(executableDir())
+	s, err := settings.Default(executableDir(), qtpaths.Resolve())
+	if err != nil {
+		return fmt.Errorf("load settings: %w", err)
+	}
+
 	if err := db.Open(filepath.Join(s.DataDir, "database.db")); err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}

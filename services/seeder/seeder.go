@@ -5,15 +5,11 @@ package seeder
 import (
 	"context"
 	"fmt"
-	"rapid/db"
-
-	"github.com/uptrace/bun"
 )
 
-// Seeder seeds one data set.
 type Seeder interface {
 	Name() string
-	Seed(ctx context.Context, db bun.IDB) error
+	Seed(ctx context.Context) error
 }
 
 // SeederService runs seeders in order, aborting on the first error.
@@ -28,14 +24,11 @@ func NewSeederService(seeders ...Seeder) *SeederService {
 
 // Seed prints "Seeding: NAME" then runs each seeder.
 func (s *SeederService) Seed(ctx context.Context) error {
-	return db.DB().RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		for _, seeder := range s.seeders {
-			fmt.Printf("Seeding: %s\n", seeder.Name())
-			if err := seeder.Seed(ctx, tx); err != nil {
-				return err
-			}
+	for _, seeder := range s.seeders {
+		fmt.Printf("Seeding: %s\n", seeder.Name())
+		if err := seeder.Seed(ctx); err != nil {
+			return err
 		}
-
-		return nil
-	})
+	}
+	return nil
 }

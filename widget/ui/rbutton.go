@@ -31,7 +31,9 @@ type RButton struct {
 	cornerRadius int
 	text         string
 	iconSource   string
+	iconTint     *qt.QColor
 	hovered      bool
+	styleKey     string
 }
 
 func NewRButton(text string, variant RButtonVariant, outlined bool) *RButton {
@@ -152,10 +154,18 @@ func (b *RButton) foregroundColor() *qt.QColor {
 }
 
 func (b *RButton) iconColor() *qt.QColor {
+	if b.iconTint != nil {
+		return b.iconTint
+	}
 	if b.hovered && b.IsEnabled() {
 		return theme.ColorTextInverted
 	}
 	return b.foregroundColor()
+}
+
+func (b *RButton) SetIconTint(color *qt.QColor) {
+	b.iconTint = color
+	b.refreshIcon()
 }
 
 func (b *RButton) refreshIcon() {
@@ -166,6 +176,12 @@ func (b *RButton) refreshIcon() {
 }
 
 func (b *RButton) setStyleSheet() {
+	key := fmt.Sprintf("%d|%t|%t|%t|%d|%t", b.variant, b.outlined, b.link, b.iconOnly, b.cornerRadius, b.hovered && b.IsEnabled())
+	if key == b.styleKey {
+		return
+	}
+	b.styleKey = key
+
 	bg := theme.ColorButtonBase
 	hoverBg := theme.ColorButtonBaseHover
 	variantColor := theme.ColorButtonBase

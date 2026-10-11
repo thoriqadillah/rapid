@@ -27,7 +27,15 @@ func main() {
 		base = os.Args[1]
 	}
 
-	s := settings.Default(base)
+	paths, err := settings.SystemPaths()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	s, err := settings.Default(base, paths)
+	if err != nil {
+		log.Fatal(err)
+	}
 	if err := db.Open(filepath.Join(s.DataDir, "database.db")); err != nil {
 		log.Fatal(err)
 	}

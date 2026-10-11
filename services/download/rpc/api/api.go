@@ -109,7 +109,7 @@ type Aria2TellActiveResponse struct {
 	Result []Aria2Status `json:"result"`
 }
 
-type Ari2VersionResponse struct {
+type Aria2VersionResponse struct {
 	JSONRpcResponse
 	Result Aria2Version `json:"result"`
 }
