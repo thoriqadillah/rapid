@@ -68,7 +68,7 @@ func TestEstText(t *testing.T) {
 		{0, 0, 0, "—"},
 	}
 	for _, c := range cases {
-		d := Download{TotalLength: c.total, CompletedLength: c.done, DownloadSpeed: c.speed}
+		d := Download{Status: "active", TotalLength: c.total, CompletedLength: c.done, DownloadSpeed: c.speed}
 		require.Equal(t, c.want, d.FormatEstimation(), "total=%d done=%d speed=%d", c.total, c.done, c.speed)
 	}
 }

@@ -7,6 +7,7 @@ import (
 
 	"rapid/db"
 	"rapid/lib"
+	"rapid/lib/reactive"
 	"rapid/services/download/api"
 )
 
@@ -30,27 +31,33 @@ func TestServiceFilterAndCounts(t *testing.T) {
 	require.Equal(t, 1, counts["audio"])
 	require.NotContains(t, counts, "")
 
-	s.SetCategory("video")
+	s.Category.Set("video")
 	require.Len(t, s.Items.Get(), 2)
 
 	// The sidebar "All downloads" destination is "all": selecting it after a
-	// category must show everything again.
-	s.SetCategory("all")
+	// category must show everything again (matches treats "all" as all).
+	s.Category.Set("all")
 	require.Len(t, s.Items.Get(), 4)
-	require.Empty(t, s.Category.Peek())
+	require.Equal(t, "all", s.Category.Peek())
 
-	s.SetSearch("dune")
+	s.Search.Set("dune")
 	filtered := s.Items.Get()
 	require.Len(t, filtered, 1)
 	require.Equal(t, "v2", filtered[0].GID)
 
 	// Clearing the category keeps the search.
-	s.SetCategory("")
+	s.Category.Set("")
 	require.Len(t, s.Items.Get(), 1)
 
-	s.SetSearch("  DUNE  ")
+	s.Search.Set("  DUNE  ")
 	require.Len(t, s.Items.Get(), 1)
-	require.Equal(t, "dune", s.Search.Peek())
+	require.Equal(t, "  DUNE  ", s.Search.Peek())
+
+	s.Search.Set("MP4")
+	mp4Upper := len(s.Items.Get())
+	s.Search.Set("mp4")
+	require.Equal(t, mp4Upper, len(s.Items.Get()), "MP4 and mp4 must match the same rows")
+	require.Equal(t, "mp4", s.Search.Peek())
 }
 
 func TestServiceMatches(t *testing.T) {
@@ -72,6 +79,8 @@ func TestServiceMatches(t *testing.T) {
 		{"exact category", video, "video", "", true},
 		{"wrong category", video, "audio", "", false},
 		{"title hit", video, "", "stellar", true},
+		{"uppercase search", video, "", "STELLAR", true},
+		{"padded search", video, "", "  stellar  ", true},
 		{"filename fallback", api.Download{
 			Category: lib.CategoryVideo,
 			Resolved: &api.ResolvedURL{Filename: "dune.mkv"},
@@ -87,19 +96,39 @@ func TestServiceMatches(t *testing.T) {
 	}
 }
 
+func TestFilterChangedOnlyTracksFilters(t *testing.T) {
+	s := newServiceWithItems([]api.Download{{GID: "x", Status: "active"}})
+	var runs int
+	dispose := reactive.Effect(func() {
+		s.FilterChanged.Get()
+		runs++
+	})
+	defer dispose()
+	runs = 0 // ignore the initial dependency-collecting run
+
+	// A progress tick changes items but must not collapse the expanded row.
+	s.SetItems([]api.Download{{GID: "x", Status: "active", DownloadSpeed: 99}})
+	require.Equal(t, 0, runs, "progress tick must not fire FilterChanged")
+
+	s.Search.Set("foo")
+	require.Equal(t, 1, runs)
+	s.Category.Set("video")
+	require.Equal(t, 2, runs)
+}
+
 func TestServiceOnChanged(t *testing.T) {
 	s := newServiceWithItems(nil)
 	var calls int
 	s.OnChanged(func() { calls++ })
 
-	s.SetCategory("video")
-	s.SetSearch("abc")
+	s.Category.Set("video")
+	s.Search.Set("abc")
 	s.SetItems([]api.Download{{GID: "x"}})
 	require.Equal(t, 3, calls)
 
 	// Idempotent updates still count as changes? No: same filter is a no-op.
-	s.SetCategory("video")
-	s.SetSearch("abc")
+	s.Category.Set("video")
+	s.Search.Set("abc")
 	require.Equal(t, 3, calls)
 }
 
@@ -125,7 +154,7 @@ func TestServiceUnsubscribeAndNoOpRefresh(t *testing.T) {
 	require.Equal(t, 2, calls, "changed refresh should notify")
 
 	unsubscribe()
-	s.SetCategory("video")
+	s.Category.Set("video")
 	require.Equal(t, 2, calls, "unsubscribed callback must not fire")
 
 	// Unsubscribing twice is safe.

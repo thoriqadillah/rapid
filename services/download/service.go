@@ -60,8 +60,8 @@ func NewService() *Service {
 		)
 	})
 	s.FilterChanged = reactive.NewComputed(func() bool {
-		s.Items.Get()
-		s.Counts.Get()
+		s.Category.Get()
+		s.Search.Get()
 		return true
 	})
 	return s
@@ -74,12 +74,16 @@ func (s *Service) SetItems(items []api.Download) {
 }
 
 func (s *Service) matches(d api.Download, category, search string) bool {
-	if category != "" && category != "all" && string(d.Category) != category {
+	category = bools.Ternary(category != "all", category, "")
+	if category != "" && string(d.Category) != category {
 		return false
 	}
+
+	search = strings.ToLower(strings.TrimSpace(search))
 	if search == "" {
 		return true
 	}
+
 	if d.Resolved != nil {
 		title := d.Resolved.Title
 		if title == "" {
@@ -98,21 +102,9 @@ func (s *Service) matches(d api.Download, category, search string) bool {
 	return false
 }
 
-// SetCategory applies the sidebar filter ("" or "all" means all) and notifies.
-func (s *Service) SetCategory(category string) {
-	category = bools.Ternary(category != "all", category, "")
-	s.Category.Set(category)
-}
-
-// SetSearch applies a lowercased, trimmed search filter and notifies.
-func (s *Service) SetSearch(query string) {
-	query = strings.ToLower(strings.TrimSpace(query))
-	s.Search.Set(query)
-}
-
 // OnChanged subscribes to list/filter changes. The callback runs on the
-// caller's (GUI) thread; SetCategory/SetSearch/SetItems/Refresh must all run
-// there.
+// caller's (GUI) thread; Category/Search/SetItems/Refresh writes must all
+// happen there.
 //
 // The returned function unsubscribes (it disposes the underlying Effect).
 // Widget views MUST call it when they are destroyed: the graph retains every

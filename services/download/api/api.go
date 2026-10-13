@@ -113,6 +113,9 @@ func (d Download) FormatStatus() string {
 
 // SpeedText is "—" on error, "<size>/s" when downloading, else "—".
 func (d Download) FormatSpeed() string {
+	if d.Status != "active" {
+		return dash
+	}
 	if d.Status == "error" {
 		return dash
 	}
@@ -154,6 +157,10 @@ func (d Download) IsTerminal() bool {
 }
 
 func (d Download) FormatEstimation() string {
+	if d.Status != "active" {
+		return dash
+	}
+
 	remaining := d.TotalLength - d.CompletedLength
 	if remaining <= 0 || d.DownloadSpeed <= 0 {
 		return dash
