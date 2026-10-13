@@ -1,6 +1,8 @@
 package download
 
 import (
+	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -9,13 +11,54 @@ import (
 	"rapid/lib"
 	"rapid/lib/reactive"
 	"rapid/services/download/api"
+	"rapid/services/download/downloader"
+	"rapid/services/settings"
 )
 
 func newServiceWithItems(items []api.Download) *Service {
-	s := NewService()
-	s.SetItems(items)
+	s := NewService(settings.Settings{})
+	s.items.Set(items)
 	return s
 }
+
+// fakeDownloader is a tiny in-memory Downloader for service tests. Tests
+// never boot a daemon; S4/S5/S9 extend it with scripted action behaviors.
+type fakeDownloader struct {
+	started    bool
+	stopped    bool
+	known      map[string]api.Download // gids GetStatus knows
+	listened   []string
+	unlistened []string
+}
+
+var _ downloader.Downloader = (*fakeDownloader)(nil)
+
+func (f *fakeDownloader) Start(context.Context) error { f.started = true; return nil }
+func (f *fakeDownloader) Stop() error                 { f.stopped = true; return nil }
+func (f *fakeDownloader) Download(context.Context, api.ResolvedURL) (api.Download, error) {
+	return api.Download{}, nil
+}
+func (f *fakeDownloader) Pause(context.Context, string) (api.Download, error) {
+	return api.Download{}, nil
+}
+func (f *fakeDownloader) Resume(context.Context, string) (api.Download, error) {
+	return api.Download{}, nil
+}
+func (f *fakeDownloader) Remove(context.Context, string) (api.Download, error) {
+	return api.Download{}, nil
+}
+func (f *fakeDownloader) Purge(context.Context, string) error { return nil }
+func (f *fakeDownloader) GetStatus(_ context.Context, id string) (api.Download, error) {
+	if d, ok := f.known[id]; ok {
+		return d, nil
+	}
+	return api.Download{}, fmt.Errorf("unknown gid %q", id)
+}
+func (f *fakeDownloader) Listen(id string, _ downloader.NotifyCallback, _ downloader.ErrorCallback) {
+	f.listened = append(f.listened, id)
+}
+func (f *fakeDownloader) Unlisten(id string)                 { f.unlistened = append(f.unlistened, id) }
+func (f *fakeDownloader) Refresh(context.Context, ...string) {}
 
 func TestServiceFilterAndCounts(t *testing.T) {
 	s := newServiceWithItems([]api.Download{
@@ -107,7 +150,7 @@ func TestFilterChangedOnlyTracksFilters(t *testing.T) {
 	runs = 0 // ignore the initial dependency-collecting run
 
 	// A progress tick changes items but must not collapse the expanded row.
-	s.SetItems([]api.Download{{GID: "x", Status: "active", DownloadSpeed: 99}})
+	s.items.Set([]api.Download{{GID: "x", Status: "active", DownloadSpeed: 99}})
 	require.Equal(t, 0, runs, "progress tick must not fire FilterChanged")
 
 	s.Search.Set("foo")
@@ -119,11 +162,12 @@ func TestFilterChangedOnlyTracksFilters(t *testing.T) {
 func TestServiceOnChanged(t *testing.T) {
 	s := newServiceWithItems(nil)
 	var calls int
-	s.OnChanged(func() { calls++ })
+	unsubscribe := reactive.Effect((func() { calls++ }))
+	defer unsubscribe()
 
 	s.Category.Set("video")
 	s.Search.Set("abc")
-	s.SetItems([]api.Download{{GID: "x"}})
+	s.items.Set([]api.Download{{GID: "x"}})
 	require.Equal(t, 3, calls)
 
 	// Idempotent updates still count as changes? No: same filter is a no-op.
@@ -132,50 +176,47 @@ func TestServiceOnChanged(t *testing.T) {
 	require.Equal(t, 3, calls)
 }
 
-func TestServiceUnsubscribeAndNoOpRefresh(t *testing.T) {
-	require.NoError(t, db.OpenMemory(t.Context()))
-	t.Cleanup(func() { db.Close() })
-	mustUpsert(t, db.DB(), api.Download{GID: "a", Category: lib.CategoryVideo})
-
-	s := NewService()
+func TestServiceUnsubscribe(t *testing.T) {
+	s := NewService(settings.Settings{})
 	var calls int
-	unsubscribe := s.OnChanged(func() { calls++ })
+	unsubscribe := reactive.Effect((func() { calls++ }))
 
-	require.NoError(t, s.Refresh(t.Context()))
-	require.Equal(t, 1, calls, "first load should notify")
-
-	// The widget layer polls Refresh on a timer: an unchanged result must be a
-	// no-op so the UI does not rebuild (and re-allocate Qt objects) every tick.
-	require.NoError(t, s.Refresh(t.Context()))
-	require.Equal(t, 1, calls, "unchanged refresh must not notify")
-
-	mustUpsert(t, db.DB(), api.Download{GID: "b", Category: lib.CategoryAudio})
-	require.NoError(t, s.Refresh(t.Context()))
-	require.Equal(t, 2, calls, "changed refresh should notify")
+	s.items.Set([]api.Download{{GID: "x"}})
+	require.Equal(t, 1, calls)
 
 	unsubscribe()
-	s.Category.Set("video")
-	require.Equal(t, 2, calls, "unsubscribed callback must not fire")
+	s.items.Set([]api.Download{{GID: "y"}})
+	require.Equal(t, 1, calls, "unsubscribed callback must not fire")
 
 	// Unsubscribing twice is safe.
 	unsubscribe()
 }
 
-func TestServiceRefreshFromDB(t *testing.T) {
+func TestServiceStartLoadsAndClose(t *testing.T) {
 	require.NoError(t, db.OpenMemory(t.Context()))
 	t.Cleanup(func() { db.Close() })
-
-	mustUpsert(t, db.DB(), api.Download{GID: "a", Category: lib.CategoryVideo})
+	mustUpsert(t, db.DB(), api.Download{GID: "a", Status: "waiting", Category: lib.CategoryVideo})
 	mustUpsert(t, db.DB(), api.Download{GID: "b", Category: lib.CategoryAudio})
 
-	s := NewService()
-	require.NoError(t, s.Refresh(t.Context()))
+	s := NewService(settings.Settings{})
+	fake := &fakeDownloader{known: map[string]api.Download{
+		"a": {GID: "a", Status: "waiting"},
+	}}
+	s.downloader = fake
+	require.NoError(t, s.Start(t.Context()))
 
 	all := s.items.Peek()
 	require.Len(t, all, 2)
 	require.Equal(t, "b", all[0].GID, "newest-first order")
 	require.Equal(t, "a", all[1].GID)
-
 	require.Equal(t, 2, s.Counts.Get()["all"])
-	require.Equal(t, "b", s.Items.Get()[0].GID)
+
+	// Only the waiting row is re-listened; "b" is idle and the daemon is
+	// asked about nothing else.
+	require.True(t, fake.started)
+	require.Equal(t, []string{"a"}, fake.listened)
+
+	s.Close()
+	require.True(t, fake.stopped)
+	s.Close() // idempotent
 }

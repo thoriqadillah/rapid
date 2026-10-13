@@ -108,10 +108,11 @@ func run() error {
 	stackView := qt.NewQStackedWidget2()
 	win.SetCentralWidget(stackView.QWidget)
 
-	downloadService := download.NewService()
-	if err := downloadService.Refresh(context.Background()); err != nil {
-		return fmt.Errorf("load downloads: %w", err)
+	downloadService := download.NewService(s)
+	if err := downloadService.Start(context.Background()); err != nil {
+		return fmt.Errorf("start downloads: %w", err)
 	}
+	defer downloadService.Close()
 
 	navigation := app.NewNavigation(stackView)
 	navigation.RegisterAll(app.RouteMap{

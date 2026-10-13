@@ -39,3 +39,12 @@ func KeyBy[I any, K comparable](s []I, f func(I) K) map[K]I {
 	}
 	return result
 }
+
+func FindIndex[I any](s []I, f func(I) bool) int {
+	for i, v := range s {
+		if f(v) {
+			return i
+		}
+	}
+	return -1
+}

@@ -80,17 +80,6 @@ func NewDownloadView(parent *qt.QWidget, deps DownloadViewDeps) *qt.QWidget {
 	banner.OnDownload(func(string) { openDownloadDialog(parent, deps) })
 	banner.OnDismiss(func() { banner.SetURL("") })
 
-	// Load the DB rows (notifies -> render); a closed/missing DB just keeps
-	// the empty state instead of falling back to in-memory dummies.
-	service.Refresh(ctx)
-
-	if deps.PollIntervalMs > 0 {
-		timer := qt.NewQTimer2(layout.QObject)
-		timer.SetInterval(deps.PollIntervalMs)
-		timer.OnTimeout(func() { service.Refresh(ctx) })
-		timer.Start2()
-	}
-
 	return layout.QWidget
 }
 

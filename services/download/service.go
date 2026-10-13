@@ -2,6 +2,7 @@ package download
 
 import (
 	"context"
+	"log/slog"
 	"path/filepath"
 	"strings"
 
@@ -9,20 +10,16 @@ import (
 	"rapid/lib/helpers/bools"
 	"rapid/lib/helpers/iter"
 	"rapid/lib/reactive"
+	"rapid/lib/worker"
 	"rapid/services/download/api"
+	"rapid/services/download/downloader"
+	"rapid/services/download/rpc"
+	"rapid/services/plugin"
+	"rapid/services/settings"
+
+	"github.com/mappu/miqt/qt6/mainthread"
 )
 
-// Service is the application-facing download list for the widget layer.
-//
-// It owns the newest-first download slice plus the active category/search
-// filter as reactive signals. Items/Counts are memos over them; views either
-// subscribe with OnChanged (one Effect per subscriber) or bind the memos
-// directly into widgets (FilteredItems/Counts), and dispose on
-// destroy. All methods must run on the GUI thread; effects fire synchronously
-// on the writer's goroutine (see lib/reactive).
-//
-// db.DB() is a process singleton, so the service reads it directly instead of
-// taking a DB handle.
 type Service struct {
 	items         *reactive.Signal[[]api.Download]
 	Category      *reactive.Signal[string]
@@ -30,14 +27,26 @@ type Service struct {
 	Items         *reactive.Computed[[]api.Download]
 	Counts        *reactive.Computed[map[string]int]
 	FilterChanged *reactive.Computed[bool]
+
+	settings   settings.Settings
+	downloader downloader.Downloader
+	fallback   downloader.Resolver
+	plugins    *plugin.Manager // nil until S8 constructs it here
+	queue      *worker.Queue
 }
 
-// NewService builds an empty service backed by the process DB.
-func NewService() *Service {
+func NewService(settings settings.Settings) *Service {
+	client := rpc.NewJSONRpc(settings.Aria2Host, settings.Aria2Port, settings.Aria2Token)
+	dl := downloader.NewAria2Downloader(settings, client, true /*manageDaemon*/, nil /*globalNotify unused for now*/)
 	s := &Service{
-		items:    reactive.NewSignal([]api.Download(nil)),
-		Category: reactive.NewSignal(""),
-		Search:   reactive.NewSignal(""),
+		items:      reactive.NewSignal([]api.Download(nil)),
+		Category:   reactive.NewSignal(""),
+		Search:     reactive.NewSignal(""),
+		settings:   settings,
+		downloader: dl,
+		fallback:   dl, // aria2 doubles as the probe resolver (S9)
+		plugins:    nil,
+		queue:      worker.NewQueue(16),
 	}
 	s.Items = reactive.NewComputed(func() []api.Download {
 		items, category, search := s.items.Get(), s.Category.Get(), s.Search.Get()
@@ -67,10 +76,40 @@ func NewService() *Service {
 	return s
 }
 
-// SetItems replaces the in-memory list (already ordered newest-first) and
-// notifies subscribers.
-func (s *Service) SetItems(items []api.Download) {
-	s.items.Set(cloneDownloads(items))
+// Start boots the action queue and the downloader, loads the DB rows, and
+// re-listens on restored rows the daemon still knows. Called once at startup
+// on the GUI thread; steady-state control ops go through the queue instead.
+func (s *Service) Start(ctx context.Context) error {
+	s.queue.Start(ctx)
+	items, err := getAllDownloads(ctx, db.DB())
+	if err != nil {
+		return err
+	}
+
+	s.items.Set(items)
+	if err := s.downloader.Start(ctx); err != nil {
+		return err
+	}
+	for _, d := range items {
+		if d.Status != "active" && d.Status != "waiting" {
+			continue
+		}
+		if _, err := s.downloader.GetStatus(ctx, d.GID); err != nil {
+			slog.Warn("download: daemon forgot gid", "gid", d.GID, "err", err)
+			continue
+		}
+		s.downloader.Listen(d.GID, s.onListenerNotify, s.onListenerError)
+	}
+	return nil
+}
+
+// Close stops the action queue (pending tasks are abandoned) then the
+// downloader (which saves the aria2 session). Runs at quit. Idempotent.
+func (s *Service) Close() {
+	s.queue.Close()
+	if err := s.downloader.Stop(); err != nil {
+		slog.Error("download: stop downloader", "err", err)
+	}
 }
 
 func (s *Service) matches(d api.Download, category, search string) bool {
@@ -102,58 +141,24 @@ func (s *Service) matches(d api.Download, category, search string) bool {
 	return false
 }
 
-// OnChanged subscribes to list/filter changes. The callback runs on the
-// caller's (GUI) thread; Category/Search/SetItems/Refresh writes must all
-// happen there.
-//
-// The returned function unsubscribes (it disposes the underlying Effect).
-// Widget views MUST call it when they are destroyed: the graph retains every
-// live effect — and its whole widget closure — until disposed.
-func (s *Service) OnChanged(fn func()) func() {
-	if s == nil || fn == nil {
-		return func() {}
-	}
-	// Read through both memos so the effect tracks every source
-	// (items via filtered+counts, category/search via filtered). The first
-	// run only collects dependencies; callbacks fire on later re-runs.
-	first := true
-	return reactive.Effect(func() {
-		s.Items.Get()
-		s.Counts.Get()
-		if first {
-			first = false
+func (s *Service) onListenerNotify(d api.Download) {
+	mainthread.Start(func() {
+		i := iter.FindIndex(s.items.Peek(), func(it api.Download) bool { return it.GID == d.GID })
+		if i < 0 {
 			return
 		}
-		fn()
+
+		newItems := cloneDownloads(s.items.Peek())
+		newItems[i] = d
+		s.items.Set(newItems)
 	})
 }
 
-// Refresh reloads every download from the process DB, newest-first. It notifies
-// subscribers only when the data actually changed: the widget layer polls this
-// on a timer, and notifying unconditionally forced a full re-render (and its
-// native Qt allocations) every tick even when nothing had moved.
-func (s *Service) Refresh(ctx context.Context) error {
-	items, err := getAllDownloads(ctx, db.DB())
-	if err != nil {
-		return err
-	}
-	if downloadsEqual(s.items.Peek(), items) {
-		return nil
-	}
-	s.items.Set(items)
-	return nil
-}
-
-func downloadsEqual(a, b []api.Download) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if !a[i].Equal(b[i]) {
-			return false
-		}
-	}
-	return true
+// onListenerError funnels listener errors to notifyError on the GUI thread.
+func (s *Service) onListenerError(err error) {
+	mainthread.Start(func() {
+		slog.Error("download service error", "task", "Download service", "err", err)
+	})
 }
 
 // SpeedHistory returns the last 60 samples for gid in ascending ts order.
