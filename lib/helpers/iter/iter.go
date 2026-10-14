@@ -40,6 +40,16 @@ func KeyBy[I any, K comparable](s []I, f func(I) K) map[K]I {
 	return result
 }
 
+func Find[I any](s []I, f func(I) bool) (I, bool) {
+	for _, v := range s {
+		if f(v) {
+			return v, true
+		}
+	}
+	var zero I
+	return zero, false
+}
+
 func FindIndex[I any](s []I, f func(I) bool) int {
 	for i, v := range s {
 		if f(v) {

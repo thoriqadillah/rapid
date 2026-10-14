@@ -3,12 +3,16 @@ package download
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"rapid/db"
 	"rapid/lib"
+	"rapid/lib/errors"
 	"rapid/lib/reactive"
 	"rapid/services/download/api"
 	"rapid/services/download/downloader"
@@ -29,6 +33,11 @@ type fakeDownloader struct {
 	known      map[string]api.Download // gids GetStatus knows
 	listened   []string
 	unlistened []string
+	calls      []string // "op:gid" in execution order
+	pauseErr   error
+	resumeErr  error
+	removeErr  error
+	purgeErr   error
 }
 
 var _ downloader.Downloader = (*fakeDownloader)(nil)
@@ -47,20 +56,51 @@ func (f *fakeDownloader) Download(context.Context, api.ResolvedURL) (api.Downloa
 	return api.Download{}, nil
 }
 
-func (f *fakeDownloader) Pause(context.Context, string) (api.Download, error) {
-	return api.Download{}, nil
+func (f *fakeDownloader) Pause(_ context.Context, id string) (api.Download, error) {
+	f.calls = append(f.calls, "pause:"+id)
+	if f.pauseErr != nil {
+		return api.Download{}, f.pauseErr
+	}
+	d, ok := f.known[id]
+	if !ok {
+		return api.Download{}, fmt.Errorf("unknown gid %q", id)
+	}
+	d.Status = "paused"
+	f.known[id] = d
+	return d, nil
 }
 
-func (f *fakeDownloader) Resume(context.Context, string) (api.Download, error) {
-	return api.Download{}, nil
+func (f *fakeDownloader) Resume(_ context.Context, id string) (api.Download, error) {
+	f.calls = append(f.calls, "resume:"+id)
+	if f.resumeErr != nil {
+		return api.Download{}, f.resumeErr
+	}
+	d, ok := f.known[id]
+	if !ok {
+		return api.Download{}, fmt.Errorf("unknown gid %q", id)
+	}
+	d.Status = "active"
+	f.known[id] = d
+	return d, nil
 }
 
-func (f *fakeDownloader) Remove(context.Context, string) (api.Download, error) {
-	return api.Download{}, nil
+func (f *fakeDownloader) Remove(_ context.Context, id string) (api.Download, error) {
+	f.calls = append(f.calls, "remove:"+id)
+	if f.removeErr != nil {
+		return api.Download{}, f.removeErr
+	}
+	d, ok := f.known[id]
+	if !ok {
+		return api.Download{}, fmt.Errorf("unknown gid %q", id)
+	}
+	d.Status = "removed"
+	f.known[id] = d
+	return d, nil
 }
 
-func (f *fakeDownloader) Purge(context.Context, string) error {
-	return nil
+func (f *fakeDownloader) Purge(_ context.Context, id string) error {
+	f.calls = append(f.calls, "purge:"+id)
+	return f.purgeErr
 }
 
 func (f *fakeDownloader) GetStatus(_ context.Context, id string) (api.Download, error) {
@@ -255,7 +295,7 @@ func newMergeService(t *testing.T, items []api.Download) *Service {
 		mustUpsert(t, db.DB(), d)
 	}
 	s := NewService(settings.Settings{})
-	s.items.Set(cloneDownloads(items))
+	s.items.Set(items)
 	return s
 }
 
@@ -313,7 +353,7 @@ func TestMergeTransitionsFireOnce(t *testing.T) {
 	s.upsertDownload(api.Download{GID: "e", Status: "error", ErrorMessage: "boom"})
 
 	require.Equal(t, []string{"c"}, completed)
-	require.Equal(t, []string{"e: boom"}, failed)
+	require.Equal(t, []string{"Failed to download e: boom"}, failed)
 
 	// An unknown gid arriving terminal still fires (no previous state).
 	s.upsertDownload(api.Download{GID: "new", Status: "complete"})
@@ -338,4 +378,148 @@ func TestMergePrependsUnknownGidAndSamplesSpeed(t *testing.T) {
 	dbRow, err := getDownload(t.Context(), db.DB(), "a")
 	require.NoError(t, err)
 	require.Equal(t, "a", dbRow.GID)
+}
+
+// newActionService builds a live service around a fake downloader: Start
+// boots the real queue (t.Context cancels it at test end) with no DB rows,
+// then memory is seeded. No Qt loop runs here, so GUI-marshaled tails are
+// dropped — tests assert downloader-side effects plus direct GUI-method
+// checks.
+func newActionService(t *testing.T, items []api.Download) (*Service, *fakeDownloader) {
+	t.Helper()
+	require.NoError(t, db.OpenMemory(t.Context()))
+	t.Cleanup(func() { db.Close() })
+	s := NewService(settings.Settings{})
+	fake := &fakeDownloader{known: map[string]api.Download{}}
+	for _, d := range items {
+		fake.known[d.GID] = d
+	}
+	s.downloader = fake
+	require.NoError(t, s.Start(t.Context()))
+	t.Cleanup(s.Close)
+	s.items.Set(items)
+	return s, fake
+}
+
+// syncQueue enqueues a barrier behind every pending op; the worker drains in
+// order, so returning means earlier actions finished their downloader work.
+func syncQueue(t *testing.T, s *Service) {
+	t.Helper()
+	done := make(chan struct{})
+	if !s.queue.Enqueue(func(context.Context) { close(done) }) {
+		t.Fatal("action queue closed")
+	}
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for action queue")
+	}
+}
+
+func TestPauseResumePreserveOrder(t *testing.T) {
+	s, fake := newActionService(t, []api.Download{{GID: "a", Status: "active"}})
+	s.Pause(t.Context(), "a")
+	s.Resume(t.Context(), "a")
+	syncQueue(t, s)
+	require.Equal(t, []string{"pause:a", "resume:a"}, fake.calls)
+	require.Equal(t, []string{"a"}, fake.unlistened, "pause stops listening")
+	require.Equal(t, []string{"a"}, fake.listened, "resume listens again")
+}
+
+func TestPauseFailureKeepsRow(t *testing.T) {
+	s, fake := newActionService(t, []api.Download{{GID: "a", Status: "active"}})
+	fake.pauseErr = fmt.Errorf("daemon gone")
+	s.Pause(t.Context(), "a")
+	syncQueue(t, s)
+	require.Equal(t, []string{"pause:a"}, fake.calls)
+	require.Empty(t, fake.unlistened, "failed pause keeps listening")
+	require.Equal(t, "active", s.items.Peek()[0].Status, "row keeps its state")
+}
+
+func TestStopRetainsRemovedRow(t *testing.T) {
+	s, fake := newActionService(t, []api.Download{{GID: "a", Status: "active"}})
+	s.Stop(t.Context(), "a")
+	syncQueue(t, s)
+	require.Equal(t, []string{"remove:a"}, fake.calls)
+	require.Equal(t, []string{"a"}, fake.unlistened)
+	require.Equal(t, "removed", fake.known["a"].Status)
+}
+
+func TestDeleteUnlinksFilesAndPurges(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "a.mkv")
+	aria2 := file + ".aria2"
+	keep := filepath.Join(dir, "keep.mkv")
+	for _, p := range []string{file, aria2, keep} {
+		require.NoError(t, os.WriteFile(p, []byte("x"), 0o644))
+	}
+	s, fake := newActionService(t, []api.Download{{
+		GID: "a", Status: "complete",
+		Files: []api.DownloadFile{{Index: 0, Path: file}},
+	}})
+	s.Delete(t.Context(), "a", true)
+	syncQueue(t, s)
+	require.Equal(t, []string{"remove:a", "purge:a"}, fake.calls)
+	require.Equal(t, []string{"a"}, fake.unlistened)
+	require.NoFileExists(t, file)
+	require.NoFileExists(t, aria2)
+	require.FileExists(t, keep)
+}
+
+func TestDeleteNotFoundProceeds(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "a.mkv")
+	require.NoError(t, os.WriteFile(file, []byte("x"), 0o644))
+	s, fake := newActionService(t, []api.Download{{
+		GID: "a", Status: "error",
+		Files: []api.DownloadFile{{Index: 0, Path: file}},
+	}})
+	fake.removeErr = errors.Aria2Errorf("aria2 error code 1: GID#a is not found")
+	fake.purgeErr = errors.Aria2Errorf("aria2 error code 1: GID#a is not found")
+	s.Delete(t.Context(), "a", true)
+	syncQueue(t, s)
+	require.NoFileExists(t, file, "unknown gid counts as already gone")
+	require.Equal(t, []string{"a"}, fake.unlistened)
+}
+
+func TestDeleteKeepsRowOnRemoveError(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "a.mkv")
+	require.NoError(t, os.WriteFile(file, []byte("x"), 0o644))
+	s, fake := newActionService(t, []api.Download{{
+		GID: "a", Status: "active",
+		Files: []api.DownloadFile{{Index: 0, Path: file}},
+	}})
+	fake.removeErr = fmt.Errorf("connection refused")
+	s.Delete(t.Context(), "a", true)
+	syncQueue(t, s)
+	require.FileExists(t, file, "aborted delete touches nothing")
+	require.Empty(t, fake.unlistened)
+	require.Equal(t, "active", s.items.Peek()[0].Status)
+}
+
+func TestActiveCount(t *testing.T) {
+	s := NewService(settings.Settings{})
+	s.items.Set([]api.Download{
+		{GID: "a", Status: "active"},
+		{GID: "b", Status: "paused"},
+		{GID: "c", Status: "complete"},
+		{GID: "d", Status: "error"},
+		{GID: "e", Status: "waiting"},
+		{GID: "f", Status: "removed"},
+	})
+	require.Equal(t, 1, s.ActiveCount.Get(), "only transferring rows count")
+
+	var runs int
+	dispose := reactive.Effect(func() { s.ActiveCount.Get(); runs++ })
+	defer dispose()
+	s.items.Set(s.items.Peek())
+	require.Equal(t, 1, runs, "same count must not notify")
+}
+
+func TestMergeUpdatesActiveCount(t *testing.T) {
+	s := newMergeService(t, []api.Download{{GID: "a", Status: "active"}})
+	require.Equal(t, 1, s.ActiveCount.Get())
+	s.upsertDownload(api.Download{GID: "a", Status: "complete"})
+	require.Equal(t, 0, s.ActiveCount.Get())
 }

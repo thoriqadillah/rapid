@@ -23,7 +23,7 @@ type Queue struct {
 // NewQueue buffers up to depth pending tasks.
 func NewQueue(depth int) *Queue {
 	return &Queue{
-		tasks:  make(chan func(ctx context.Context), min(1, depth)),
+		tasks:  make(chan func(ctx context.Context), max(1, depth)),
 		closed: make(chan struct{}),
 	}
 }

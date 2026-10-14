@@ -84,6 +84,43 @@ Code wins per the task file's own rule; this file records _what_ and _why_.
 - **Merge entry is a method, `s.upsertDownload` (user),** sharing its name
   with the store function — reads fine at call sites, slightly confusing
   in the store file. Left as is.
+## S4
+
+- **Active = status `active` only (Python), not non-terminal.** Task S4/S12
+  says non-terminal, but Python counts strictly `active` for both the badge
+  and the quit-guard names, and S18's title agrees. Paused/waiting rows
+  neither badge nor block quit.
+- **ActiveCount is a `Computed[int]` field, Reduce-powered (user).**
+  Writer-Signal + `setItems` came and went: per-tick repaint is unfelt,
+  silent-stale is not. No `ActiveCount()`/`ActiveDownloads()` methods —
+  S12/S18 read the field / derive from `Items`. Against the task's
+  "State vs events" prescription, on evidence. Active-only counting
+  unchanged.
+- **Delete = Remove + Purge (checklist)**, not Python's purge-only (which
+  leaves actives running). Unknown gids tolerate not-found on both calls;
+  `IsAria2NotFound` already covers both aria2 phrasings — no extension.
+- **`.aria2` control files unlinked on delete** (checklist addition over
+  Python's path-only unlink). Other unlink errors log and continue.
+- **Pause unlistens, Resume re-listens** (Python). Stop retains the
+  `removed` row; only Delete purges + drops.
+- **No `DownloadName` wrapper:** `api.Download.Name()` already implements
+  the exact title/filename/basename/gid table — S12 should call `d.Name()`.
+- **Action failures carry display names** (`failAction` looks up `Name()`,
+  falls back to gid) via the Failed event → `"Download error"` toast.
+- **Tests are two-tier (no Qt loop in service tests):** downloader-side
+  effects through the real queue + barrier (`newActionService` boots a
+  real `Start` against the fake); GUI-marshaled tails are dropped without
+  a pumped loop, so memory/DB tails are covered by direct method tests
+  (`dropFromMemory`, merge) and store tests. `mainthread.Start` without a
+  QApplication silently drops — hence the split, documented on `syncQueue`.
+- **Queue `min(1, depth)` → `max` (agent fix):** the clamp was inverted and
+  capped the buffer at 1, wedging the second rapid action.
+- **Disk unlink lives in helpers as `removeFiles` (user)** — moved out of
+  the service with its behavior unchanged.
+- **Memory drop uses `iter.Filter` (user)** — no clone/index juggling.
+- **Merge fallback is conditional-ternary (settled):** previous row's
+  values apply only when fresh lacks them (checklist), written with
+  `bools.Ternary` to match surrounding style. Identical behavior today.
 - **`toResolvedModel` nil-means-missing (empty URL → nil)** caught one test
   fixture: resolved fixtures need a real URL to survive the DB round trip.
 - **`TestServiceOnChanged` fixed (agent):** the post-`OnChanged`-deletion

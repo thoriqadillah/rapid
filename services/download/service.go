@@ -8,7 +8,9 @@ import (
 	"strings"
 	"time"
 
+	stderr "errors"
 	"rapid/db"
+	"rapid/lib/errors"
 	"rapid/lib/helpers/bools"
 	"rapid/lib/helpers/iter"
 	"rapid/lib/reactive"
@@ -31,6 +33,8 @@ type Service struct {
 	Items         *reactive.Computed[[]api.Download]
 	Counts        *reactive.Computed[map[string]int]
 	FilterChanged *reactive.Computed[bool]
+	// ActiveCount memoizes transferring rows for the badge and quit guard.
+	ActiveCount *reactive.Computed[int]
 
 	settings   settings.Settings
 	downloader downloader.Downloader
@@ -80,6 +84,18 @@ func NewService(settings settings.Settings) *Service {
 		s.Search.Get()
 		return true
 	})
+	s.ActiveCount = reactive.NewComputed(func() int {
+		return iter.Reduce(
+			s.items.Get(),
+			func(d api.Download, n int) int {
+				if d.Status == "active" {
+					return n + 1
+				}
+				return n
+			},
+			0,
+		)
+	})
 	return s
 }
 
@@ -116,6 +132,89 @@ func (s *Service) Close() {
 	s.queue.Close()
 	if err := s.downloader.Stop(); err != nil {
 		slog.Error("download: stop downloader", "err", err)
+	}
+}
+
+// Pause suspends gid and stops listening for it; the row keeps its state
+// with no speed line until resumed or removed.
+func (s *Service) Pause(ctx context.Context, gid string) {
+	s.queue.Enqueue(func(ctx context.Context) {
+		d, err := s.downloader.Pause(ctx, gid)
+		if err != nil {
+			mainthread.Start(func() { s.emitError("pause", gid, err) })
+			return
+		}
+		s.downloader.Unlisten(gid)
+		mainthread.Start(func() { s.upsertDownload(d) })
+	})
+}
+
+// Resume restarts gid and listens for it again.
+func (s *Service) Resume(ctx context.Context, gid string) {
+	s.queue.Enqueue(func(ctx context.Context) {
+		d, err := s.downloader.Resume(ctx, gid)
+		if err != nil {
+			mainthread.Start(func() { s.emitError("resume", gid, err) })
+			return
+		}
+		s.downloader.Listen(gid, s.onListenerNotify, s.onListenerError)
+		mainthread.Start(func() { s.upsertDownload(d) })
+	})
+}
+
+// Stop halts gid but retains its removed row until Delete purges it.
+func (s *Service) Stop(ctx context.Context, gid string) {
+	s.queue.Enqueue(func(ctx context.Context) {
+		d, err := s.downloader.Remove(ctx, gid)
+		if err != nil {
+			mainthread.Start(func() { s.emitError("stop", gid, err) })
+			return
+		}
+		s.downloader.Unlisten(gid)
+		mainthread.Start(func() { s.upsertDownload(d) })
+	})
+}
+
+// Delete purges gid from the daemon and drops its row (and optionally its
+// files). Files are snapshotted here on the GUI thread: the queued op can't
+// read in-memory state later.
+func (s *Service) Delete(ctx context.Context, gid string, fromDisk bool) {
+	d, ok := iter.Find(s.items.Peek(), func(d api.Download) bool { return d.GID == gid })
+	if !ok {
+		return
+	}
+
+	s.queue.Enqueue(func(ctx context.Context) {
+		if _, err := s.downloader.Remove(ctx, gid); err != nil && !errors.IsAria2NotFound(err) {
+			mainthread.Start(func() { s.emitError("delete", gid, err) })
+			return
+		}
+		if err := s.downloader.Purge(ctx, gid); err != nil && !errors.IsAria2NotFound(err) {
+			mainthread.Start(func() { s.emitError("delete", gid, err) })
+			return
+		}
+		s.downloader.Unlisten(gid)
+		if fromDisk {
+			removeFiles(d.Files)
+		}
+		mainthread.Start(func() {
+			if err := removeDownload(context.Background(), db.DB(), gid); err != nil {
+				s.emitError("delete", gid, err)
+				return
+			}
+			newItems := iter.Filter(s.items.Peek(), func(d api.Download) bool { return d.GID != gid })
+			s.items.Set(newItems)
+		})
+	})
+}
+
+// emitError reports a failed control op with the download's display name.
+// GUI thread only in production (called marshaled); plain Go otherwise, so
+// tests call it directly.
+func (s *Service) emitError(action, gid string, err error) {
+	d, ok := iter.Find(s.items.Peek(), func(d api.Download) bool { return d.GID == gid })
+	if ok {
+		s.error.Emit(fmt.Errorf("Failed to %s %s: %w", action, d.Name(), err))
 	}
 }
 
@@ -163,7 +262,7 @@ func (s *Service) upsertDownload(d api.Download) {
 	if i >= 0 {
 		prev = items[i]
 		// aria2 doesn't know these; keep the previous row's when fresh lacks them.
-		d.Category = prev.Category
+		d.Category = bools.Ternary(d.Category != "", d.Category, prev.Category)
 		d.Resolved = bools.Ternary(d.Resolved != nil, d.Resolved, prev.Resolved)
 	}
 
@@ -182,11 +281,11 @@ func (s *Service) upsertDownload(d api.Download) {
 
 	if err != nil {
 		slog.Error("download: persist notified row", "gid", d.GID, "err", err)
-		s.error.Emit(fmt.Errorf("%s: %w", d.Name(), err))
+		s.emitError("download", d.GID, err)
 		return
 	}
 
-	next := cloneDownloads(s.items.Peek())
+	next := cloneItems(s.items.Peek())
 	if i >= 0 {
 		next[i] = merged
 	} else {
@@ -201,7 +300,7 @@ func (s *Service) upsertDownload(d api.Download) {
 	}
 
 	if !prev.IsError() && merged.IsError() {
-		s.error.Emit(fmt.Errorf("%s: %s", merged.Name(), merged.ErrorMessage))
+		s.emitError("download", d.GID, stderr.New(merged.ErrorMessage))
 	}
 }
 
@@ -236,15 +335,5 @@ func (s *Service) SpeedSamples(ctx context.Context, gid string) []int64 {
 	})
 }
 
-func cloneDownloads(items []api.Download) []api.Download {
-	if items == nil {
-		return nil
-	}
-	out := make([]api.Download, len(items))
-	copy(out, items)
-	return out
-}
-
-// TODO(full-wire): Pause/Resume/Stop/Delete/Download/Resolve/PickFolder/
-// ActiveCount/ActiveDownloads. These will operate through the downloader and
-// update the in-memory slice + store, then notify.
+// TODO(full-wire): Download/Resolve/PickFolder. These will operate through
+// the downloader and update the in-memory slice + store, then notify.
