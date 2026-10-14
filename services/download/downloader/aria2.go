@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"rapid/lib/errors"
 	"rapid/lib/helpers"
+	"rapid/lib/helpers/iter"
 	libmaps "rapid/lib/helpers/maps"
 	"rapid/services/download/api"
 	"rapid/services/download/rpc"
@@ -847,12 +848,15 @@ func (d *Aria2Downloader) TellActive(ctx context.Context) (map[string]api.Downlo
 	if err := json.Unmarshal(raw, &res); err != nil {
 		return nil, err
 	}
-	out := make(map[string]api.Download, len(res.Result))
-	for _, s := range res.Result {
-		dl := s.ToDownload()
-		out[dl.GID] = dl
-	}
-	return out, nil
+
+	return iter.Reduce(
+		res.Result,
+		func(s rpcapi.Aria2Status, memo map[string]api.Download) map[string]api.Download {
+			memo[s.GID] = s.ToDownload()
+			return memo
+		}, map[string]api.Download{},
+	), nil
+
 }
 
 // Refresh polls listeners. With no ids it covers every registered listener:
@@ -874,8 +878,6 @@ func (d *Aria2Downloader) Refresh(ctx context.Context, id ...string) {
 	d.mu.Unlock()
 
 	if len(id) == 0 {
-		// One tellActive covers every actively-transferring listener; only the
-		// remaining paused/terminal listeners need a tellStatus each.
 		if active, err := d.TellActive(ctx); err == nil {
 			for gid, e := range targets {
 				if status, ok := active[gid]; ok {

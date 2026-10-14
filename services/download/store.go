@@ -106,11 +106,38 @@ func getDownload(ctx context.Context, db bun.IDB, gid string) (api.Download, err
 }
 
 // AddSpeedSample inserts a sample; a duplicate ts keeps the FIRST sample.
+// Pruned to speedSamplesKeep latest per gid. Plain queries on db: callers
+// that need atomicity with other writes own the tx (bun.Tx satisfies IDB).
 func addSpeedSample(ctx context.Context, db bun.IDB, gid string, ts, speed int64) error {
-	row := &speedSampleRow{GID: gid, TS: ts, Speed: speed}
 	_, err := db.NewInsert().
-		Model(row).
+		Model(&speedSampleRow{GID: gid, TS: ts, Speed: speed}).
 		On("CONFLICT (gid, ts) DO NOTHING").
+		Exec(ctx)
+	if err != nil {
+		return err
+	}
+	return pruneSpeedSamples(ctx, db, gid)
+}
+
+// pruneSpeedSamples keeps the latest speedSamplesKeep rows per gid.
+func pruneSpeedSamples(ctx context.Context, db bun.IDB, gid string) error {
+	var keep []int64
+	if err := db.NewSelect().
+		Model((*speedSampleRow)(nil)).
+		Column("ts").
+		Where("gid = ?", gid).
+		Order("ts DESC").
+		Limit(speedSamplesKeep).
+		Scan(ctx, &keep); err != nil {
+		return err
+	}
+	if len(keep) == 0 {
+		return nil
+	}
+	_, err := db.NewDelete().
+		Model((*speedSampleRow)(nil)).
+		Where("gid = ?", gid).
+		Where("ts NOT IN (?)", bun.List(keep)).
 		Exec(ctx)
 	return err
 }
@@ -202,9 +229,11 @@ func upsertDownload(ctx context.Context, db bun.IDB, dl api.Download) (api.Downl
 			return api.Download{}, err
 		}
 	} else {
+		// updated_at is Go-owned (no trigger): refresh it on every write.
+		row.UpdatedAt = now
 		if _, err := db.NewUpdate().
 			Model(row).
-			ExcludeColumn("created_at", "updated_at").
+			ExcludeColumn("created_at").
 			Where("gid = ?", row.GID).
 			Exec(ctx); err != nil {
 			return api.Download{}, err

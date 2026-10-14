@@ -2,14 +2,17 @@ package download
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"rapid/db"
 	"rapid/lib/helpers/bools"
 	"rapid/lib/helpers/iter"
 	"rapid/lib/reactive"
+	"rapid/lib/signal"
 	"rapid/lib/worker"
 	"rapid/services/download/api"
 	"rapid/services/download/downloader"
@@ -18,6 +21,7 @@ import (
 	"rapid/services/settings"
 
 	"github.com/mappu/miqt/qt6/mainthread"
+	"github.com/uptrace/bun"
 )
 
 type Service struct {
@@ -33,11 +37,14 @@ type Service struct {
 	fallback   downloader.Resolver
 	plugins    *plugin.Manager // nil until S8 constructs it here
 	queue      *worker.Queue
+
+	completed signal.Event[api.Download]
+	error     signal.Event[error]
 }
 
 func NewService(settings settings.Settings) *Service {
 	client := rpc.NewJSONRpc(settings.Aria2Host, settings.Aria2Port, settings.Aria2Token)
-	dl := downloader.NewAria2Downloader(settings, client, true /*manageDaemon*/, nil /*globalNotify unused for now*/)
+	dl := downloader.NewAria2Downloader(settings, client, true, nil /*globalNotify unused for now*/)
 	s := &Service{
 		items:      reactive.NewSignal([]api.Download(nil)),
 		Category:   reactive.NewSignal(""),
@@ -143,18 +150,69 @@ func (s *Service) matches(d api.Download, category, search string) bool {
 
 func (s *Service) onListenerNotify(d api.Download) {
 	mainthread.Start(func() {
-		i := iter.FindIndex(s.items.Peek(), func(it api.Download) bool { return it.GID == d.GID })
-		if i < 0 {
-			return
-		}
-
-		newItems := cloneDownloads(s.items.Peek())
-		newItems[i] = d
-		s.items.Set(newItems)
+		s.upsertDownload(d)
 	})
 }
 
-// onListenerError funnels listener errors to notifyError on the GUI thread.
+// upsertDownload folds a downloader notification into DB + memory + user
+// events. GUI thread only: DB writes stay here, state has no lock.
+func (s *Service) upsertDownload(d api.Download) {
+	items := s.items.Peek()
+	i := iter.FindIndex(items, func(it api.Download) bool { return it.GID == d.GID })
+	var prev api.Download
+	if i >= 0 {
+		prev = items[i]
+		// aria2 doesn't know these; keep the previous row's when fresh lacks them.
+		d.Category = prev.Category
+		d.Resolved = bools.Ternary(d.Resolved != nil, d.Resolved, prev.Resolved)
+	}
+
+	var merged api.Download
+	err := db.DB().RunInTx(context.Background(), nil, func(ctx context.Context, tx bun.Tx) error {
+		var err error
+		merged, err = upsertDownload(ctx, tx, d)
+		if err != nil {
+			return err
+		}
+		if d.Status == "active" && d.DownloadSpeed > 0 {
+			return addSpeedSample(ctx, tx, d.GID, time.Now().UnixMilli(), d.DownloadSpeed)
+		}
+		return nil
+	})
+
+	if err != nil {
+		slog.Error("download: persist notified row", "gid", d.GID, "err", err)
+		s.error.Emit(fmt.Errorf("%s: %w", d.Name(), err))
+		return
+	}
+
+	next := cloneDownloads(s.items.Peek())
+	if i >= 0 {
+		next[i] = merged
+	} else {
+		next = append([]api.Download{merged}, next...) // newest-first
+	}
+	s.items.Set(next)
+
+	// Terminal transitions fire exactly once; a poll refresh can redeliver
+	// the same terminal status.
+	if !prev.IsFinished() && merged.IsFinished() {
+		s.completed.Emit(merged)
+	}
+
+	if !prev.IsError() && merged.IsError() {
+		s.error.Emit(fmt.Errorf("%s: %s", merged.Name(), merged.ErrorMessage))
+	}
+}
+
+func (s *Service) OnCompleted(fn func(api.Download)) (disconnect func()) {
+	return s.completed.Connect(fn)
+}
+
+func (s *Service) OnError(fn func(error)) (disconnect func()) {
+	return s.error.Connect(fn)
+}
+
 func (s *Service) onListenerError(err error) {
 	mainthread.Start(func() {
 		slog.Error("download service error", "task", "Download service", "err", err)

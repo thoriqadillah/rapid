@@ -33,31 +33,51 @@ type fakeDownloader struct {
 
 var _ downloader.Downloader = (*fakeDownloader)(nil)
 
-func (f *fakeDownloader) Start(context.Context) error { f.started = true; return nil }
-func (f *fakeDownloader) Stop() error                 { f.stopped = true; return nil }
+func (f *fakeDownloader) Start(context.Context) error {
+	f.started = true
+	return nil
+}
+
+func (f *fakeDownloader) Stop() error {
+	f.stopped = true
+	return nil
+}
+
 func (f *fakeDownloader) Download(context.Context, api.ResolvedURL) (api.Download, error) {
 	return api.Download{}, nil
 }
+
 func (f *fakeDownloader) Pause(context.Context, string) (api.Download, error) {
 	return api.Download{}, nil
 }
+
 func (f *fakeDownloader) Resume(context.Context, string) (api.Download, error) {
 	return api.Download{}, nil
 }
+
 func (f *fakeDownloader) Remove(context.Context, string) (api.Download, error) {
 	return api.Download{}, nil
 }
-func (f *fakeDownloader) Purge(context.Context, string) error { return nil }
+
+func (f *fakeDownloader) Purge(context.Context, string) error {
+	return nil
+}
+
 func (f *fakeDownloader) GetStatus(_ context.Context, id string) (api.Download, error) {
 	if d, ok := f.known[id]; ok {
 		return d, nil
 	}
 	return api.Download{}, fmt.Errorf("unknown gid %q", id)
 }
+
 func (f *fakeDownloader) Listen(id string, _ downloader.NotifyCallback, _ downloader.ErrorCallback) {
 	f.listened = append(f.listened, id)
 }
-func (f *fakeDownloader) Unlisten(id string)                 { f.unlistened = append(f.unlistened, id) }
+
+func (f *fakeDownloader) Unlisten(id string) {
+	f.unlistened = append(f.unlistened, id)
+}
+
 func (f *fakeDownloader) Refresh(context.Context, ...string) {}
 
 func TestServiceFilterAndCounts(t *testing.T) {
@@ -161,8 +181,12 @@ func TestFilterChangedOnlyTracksFilters(t *testing.T) {
 
 func TestServiceOnChanged(t *testing.T) {
 	s := newServiceWithItems(nil)
-	var calls int
-	unsubscribe := reactive.Effect((func() { calls++ }))
+	calls := -1 // ignore the initial dependency-collecting run
+	unsubscribe := reactive.Effect(func() {
+		s.Items.Get()
+		s.Counts.Get()
+		calls++
+	})
 	defer unsubscribe()
 
 	s.Category.Set("video")
@@ -219,4 +243,99 @@ func TestServiceStartLoadsAndClose(t *testing.T) {
 	s.Close()
 	require.True(t, fake.stopped)
 	s.Close() // idempotent
+}
+
+// newMergeService seeds both the DB and the in-memory slice with items;
+// merge tests call s.mergeDownload directly (no Qt event loop needed).
+func newMergeService(t *testing.T, items []api.Download) *Service {
+	t.Helper()
+	require.NoError(t, db.OpenMemory(t.Context()))
+	t.Cleanup(func() { db.Close() })
+	for _, d := range items {
+		mustUpsert(t, db.DB(), d)
+	}
+	s := NewService(settings.Settings{})
+	s.items.Set(cloneDownloads(items))
+	return s
+}
+
+func TestMergePreservesResolvedAndCategory(t *testing.T) {
+	prev := api.Download{GID: "a", Status: "active", Category: lib.CategoryVideo,
+		Resolved:        &api.ResolvedURL{URL: "https://cdn.example.com/dune.mkv", Title: "Dune", Filename: "dune.mkv"},
+		DownloadSpeed:   100,
+		TotalLength:     1000,
+		CompletedLength: 100,
+		Files:           []api.DownloadFile{{Index: 0, Path: "/dl/dune.mkv"}},
+	}
+	s := newMergeService(t, []api.Download{prev})
+
+	s.upsertDownload(api.Download{GID: "a", Status: "active", DownloadSpeed: 200,
+		TotalLength: 1000, CompletedLength: 200,
+		Files: []api.DownloadFile{{Index: 0, Path: "/dl/dune.mkv"}}})
+
+	got := s.items.Peek()[0]
+	require.Equal(t, "Dune", got.Resolved.Title, "aria2 never reports resolved metadata")
+	require.Equal(t, lib.CategoryVideo, got.Category)
+	require.Equal(t, int64(200), got.DownloadSpeed)
+
+	dbRow, err := getDownload(t.Context(), db.DB(), "a")
+	require.NoError(t, err)
+	require.Equal(t, "Dune", dbRow.Resolved.Title, "preserved fields persist")
+}
+
+func TestMergeActiveSpeedZeroIsAuthoritative(t *testing.T) {
+	prev := api.Download{GID: "a", Status: "active", DownloadSpeed: 100, TotalLength: 1000, CompletedLength: 100}
+	s := newMergeService(t, []api.Download{prev})
+
+	s.upsertDownload(api.Download{GID: "a", Status: "active", DownloadSpeed: 0, TotalLength: 1000, CompletedLength: 100})
+	require.Equal(t, int64(0), s.items.Peek()[0].DownloadSpeed,
+		"stalled download must read 0, not a stale number")
+
+	hist, err := getSpeedHistory(t.Context(), db.DB(), "a", 60)
+	require.NoError(t, err)
+	require.Empty(t, hist, "no sample for a zero-speed tick")
+}
+
+func TestMergeTransitionsFireOnce(t *testing.T) {
+	s := newMergeService(t, []api.Download{
+		{GID: "c", Status: "active"},
+		{GID: "e", Status: "waiting"},
+	})
+	var completed, failed []string
+	s.OnCompleted(func(d api.Download) { completed = append(completed, d.GID) })
+	drop := s.OnCompleted(func(d api.Download) { completed = append(completed, "dropped:"+d.GID) })
+	drop()
+	s.OnError(func(err error) { failed = append(failed, err.Error()) })
+
+	s.upsertDownload(api.Download{GID: "c", Status: "complete"})
+	s.upsertDownload(api.Download{GID: "c", Status: "complete"}) // redelivery: silent
+	s.upsertDownload(api.Download{GID: "e", Status: "error", ErrorMessage: "boom"})
+	s.upsertDownload(api.Download{GID: "e", Status: "error", ErrorMessage: "boom"})
+
+	require.Equal(t, []string{"c"}, completed)
+	require.Equal(t, []string{"e: boom"}, failed)
+
+	// An unknown gid arriving terminal still fires (no previous state).
+	s.upsertDownload(api.Download{GID: "new", Status: "complete"})
+	require.Equal(t, []string{"c", "new"}, completed)
+}
+
+func TestMergePrependsUnknownGidAndSamplesSpeed(t *testing.T) {
+	s := newMergeService(t, []api.Download{{GID: "b", Status: "paused"}})
+
+	s.upsertDownload(api.Download{GID: "a", Status: "active", DownloadSpeed: 512,
+		TotalLength: 1000, CompletedLength: 10})
+
+	peek := s.items.Peek()
+	require.Len(t, peek, 2)
+	require.Equal(t, "a", peek[0].GID, "new gids prepend newest-first")
+
+	hist, err := getSpeedHistory(t.Context(), db.DB(), "a", 60)
+	require.NoError(t, err)
+	require.Len(t, hist, 1)
+	require.Equal(t, int64(512), hist[0].Speed)
+
+	dbRow, err := getDownload(t.Context(), db.DB(), "a")
+	require.NoError(t, err)
+	require.Equal(t, "a", dbRow.GID)
 }

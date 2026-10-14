@@ -74,7 +74,7 @@ func (s Aria2Status) ToDownload() api.Download {
 		GID:             s.GID,
 		Status:          s.Status,
 		Dir:             s.Dir,
-		Category:        lib.Category(s.Category),
+		Category:        lib.ToCategory(s.Category),
 		TotalLength:     helpers.StringToInt[int64](s.TotalLength),
 		CompletedLength: helpers.StringToInt[int64](s.CompletedLength),
 		DownloadSpeed:   helpers.StringToInt[int64](s.DownloadSpeed),

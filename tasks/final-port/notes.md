@@ -42,6 +42,54 @@ Code wins per the task file's own rule; this file records _what_ and _why_.
   user-facing actions (S4) / completion events (S12), which is when the
   service has something user-caused to report.
 
+## S3
+
+- **`Refresh` + `downloadsEqual` deleted (user), `downloadsEqual` re-added
+  for the merge skip (agent).** Polling full-reload is gone (view timer
+  removed); notify path is in-memory replace + S3 merge. Service-managed
+  `Poll` (S11) still pending.
+- **Merge follows the checklist over Python on one point:** active rows take
+  aria2's speed verbatim including 0 (Python kept stale speed on 0).
+  Resolved/Category fall back to the previous row; everything else is
+  authoritative fresh. Unknown gids prepend newest-first.
+- **Events are callback slices with index-nil dispose** (`OnCompleted` /
+  `OnFailed`); `OnChanged`/`SetItems` are gone, tests subscribe via raw
+  `reactive.Effect`. Fired on GUI thread from inside the merge.
+- **00002 stays deleted, no 00003 (user: dev phase).** DBs are wiped and
+  reseeded, so no trigger exists anywhere to drop. If a trigger-bearing DB
+  ever needs upgrading again, re-add the drop then.
+- **Tx boundary lives in the service (user), not the store.** Store funcs
+  are plain queries on `bun.IDB` (`bun.Tx` satisfies it); `mergeDownload`
+  wraps upsert + speed sample in one `RunInTx` so a notify persists
+  atomically. `UpdatedAt` still Go-owned on the update path.
+- **`notifyError` removed (user); failures slog inline at the call site**
+  with gid context. Revisit if S4/S12 want toasts for these paths.
+- **Store tx details:** `mergeDownload` owns one `RunInTx` over upsert +
+  speed sample; store helpers stay tx-free. `UpdatedAt` set in Go on the
+  update path (`ExcludeColumn("created_at")` only).
+  `TestUpdatedAtOwnedByTrigger` → `TestUpdatedAtOwnedByGoUpdate`.
+- **No explicit equality skip in the merge (user).** `Signal.Set` already
+  dedups via `DeepEqual` (and `Download.Equal` is `DeepEqual`), so the
+  `downloadsEqual` guard the task prescribed walked every notify twice.
+  Both the check and the helper are gone.
+- **Events use a `lib/signal` package (user), not callback slices.**
+  `signal.Event[T]` with Connect (returns disconnect) / Emit; no value, no
+  initial fire, no dedup — every Emit reaches every slot once. Service keeps
+  thin `OnCompleted`/`OnFailed` wrappers so S12's call shape is unchanged.
+- **`OnFailed` and `OnError` merged into one `Failed Event[error]`
+  (user).** Terminal aria2 failures emit `"<name>: <aria2 message>"`
+  (`"unknown error"` fallback); persist failures emit the wrapped DB error.
+  Main toasts all of them as `"Download error"`. `emitError` and its test
+  are gone; the package test covers the mechanics.
+- **Merge entry is a method, `s.upsertDownload` (user),** sharing its name
+  with the store function — reads fine at call sites, slightly confusing
+  in the store file. Left as is.
+- **`toResolvedModel` nil-means-missing (empty URL → nil)** caught one test
+  fixture: resolved fixtures need a real URL to survive the DB round trip.
+- **`TestServiceOnChanged` fixed (agent):** the post-`OnChanged`-deletion
+  version subscribed with a dependency-less `Effect` that could never
+  re-fire; now reads `Items`+`Counts` like the old method did.
+
 ## Untouched pre-existing failures (clean tree, out of S1/S2 scope)
 
 - `TestSettingsPushKeepsPreviousSidebarSelection` (sidebar nav)

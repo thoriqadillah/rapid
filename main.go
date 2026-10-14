@@ -11,6 +11,7 @@ import (
 
 	"rapid/db"
 	"rapid/services/download"
+	"rapid/services/download/api"
 	"rapid/services/notification"
 	"rapid/services/settings"
 	"rapid/widget/app"
@@ -109,6 +110,12 @@ func run() error {
 	win.SetCentralWidget(stackView.QWidget)
 
 	downloadService := download.NewService(s)
+	downloadService.OnError(func(err error) {
+		notifier.Error("Download error", err.Error(), true)
+	})
+	downloadService.OnCompleted(func(d api.Download) {
+		notifier.Success("Download completed", d.Name(), true)
+	})
 	if err := downloadService.Start(context.Background()); err != nil {
 		return fmt.Errorf("start downloads: %w", err)
 	}

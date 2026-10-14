@@ -203,6 +203,22 @@ func TestStoreSpeedDuplicateIgnored(t *testing.T) {
 	require.Equal(t, []api.SpeedSample{{TS: 1000, Speed: 500}}, hist)
 }
 
+func TestStoreSpeedPrunesToKeep(t *testing.T) {
+	bunDB := testDB(t)
+	ctx := t.Context()
+	mustUpsert(t, bunDB, api.Download{GID: "abc"})
+	for i := range int64(speedSamplesKeep + 10) {
+		require.NoError(t, addSpeedSample(ctx, bunDB, "abc", i, i))
+	}
+	n, err := bunDB.NewSelect().Model((*speedSampleRow)(nil)).Where("gid = ?", "abc").Count(ctx)
+	require.NoError(t, err)
+	require.Equal(t, speedSamplesKeep, n)
+	hist, err := getSpeedHistory(ctx, bunDB, "abc", speedSamplesKeep)
+	require.NoError(t, err)
+	require.Len(t, hist, speedSamplesKeep)
+	require.Equal(t, int64(10), hist[0].TS, "oldest samples drop first")
+}
+
 func TestStoreRemoveCascades(t *testing.T) {
 	bunDB := testDB(t)
 	ctx := t.Context()
@@ -258,7 +274,7 @@ func TestStoreUpsertReturnsFreshRow(t *testing.T) {
 	require.Len(t, row.Files[0].URIs, 1)
 }
 
-func TestUpdatedAtOwnedByTrigger(t *testing.T) {
+func TestUpdatedAtOwnedByGoUpdate(t *testing.T) {
 	bunDB := testDB(t)
 	ctx := t.Context()
 	mustUpsert(t, bunDB, api.Download{GID: "abc", Status: "active"})
@@ -275,5 +291,5 @@ func TestUpdatedAtOwnedByTrigger(t *testing.T) {
 		Where("download_row.gid = ?", "abc").Scan(ctx))
 	require.False(t, row.UpdatedAt.IsZero())
 	require.NotEqual(t, "2020-01-01", row.UpdatedAt.Format("2006-01-02"),
-		"trigger must have refreshed updated_at past the backdate")
+		"Go update path must have refreshed updated_at past the backdate")
 }

@@ -41,7 +41,7 @@ func toDownloadModel(row downloadRow) api.Download {
 		GID:             row.GID,
 		Status:          row.Status,
 		Dir:             row.Dir,
-		Category:        lib.Category(row.Category),
+		Category:        lib.ToCategory(row.Category),
 		TotalLength:     row.TotalLength,
 		CompletedLength: row.CompletedLength,
 		DownloadSpeed:   row.DownloadSpeed,
