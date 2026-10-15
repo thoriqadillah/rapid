@@ -33,8 +33,7 @@ type Service struct {
 	Items         *reactive.Computed[[]api.Download]
 	Counts        *reactive.Computed[map[string]int]
 	FilterChanged *reactive.Computed[bool]
-	// ActiveCount memoizes transferring rows for the badge and quit guard.
-	ActiveCount *reactive.Computed[int]
+	ActiveCount   *reactive.Computed[int]
 
 	settings   settings.Settings
 	downloader downloader.Downloader
@@ -138,7 +137,7 @@ func (s *Service) Close() {
 // Pause suspends gid and stops listening for it; the row keeps its state
 // with no speed line until resumed or removed.
 func (s *Service) Pause(ctx context.Context, gid string) {
-	s.queue.Enqueue(func(ctx context.Context) {
+	s.queue.Go(func(ctx context.Context) {
 		d, err := s.downloader.Pause(ctx, gid)
 		if err != nil {
 			mainthread.Start(func() { s.emitError("pause", gid, err) })
@@ -151,7 +150,7 @@ func (s *Service) Pause(ctx context.Context, gid string) {
 
 // Resume restarts gid and listens for it again.
 func (s *Service) Resume(ctx context.Context, gid string) {
-	s.queue.Enqueue(func(ctx context.Context) {
+	s.queue.Go(func(ctx context.Context) {
 		d, err := s.downloader.Resume(ctx, gid)
 		if err != nil {
 			mainthread.Start(func() { s.emitError("resume", gid, err) })
@@ -164,7 +163,7 @@ func (s *Service) Resume(ctx context.Context, gid string) {
 
 // Stop halts gid but retains its removed row until Delete purges it.
 func (s *Service) Stop(ctx context.Context, gid string) {
-	s.queue.Enqueue(func(ctx context.Context) {
+	s.queue.Go(func(ctx context.Context) {
 		d, err := s.downloader.Remove(ctx, gid)
 		if err != nil {
 			mainthread.Start(func() { s.emitError("stop", gid, err) })
@@ -179,12 +178,12 @@ func (s *Service) Stop(ctx context.Context, gid string) {
 // files). Files are snapshotted here on the GUI thread: the queued op can't
 // read in-memory state later.
 func (s *Service) Delete(ctx context.Context, gid string, fromDisk bool) {
-	d, ok := iter.Find(s.items.Peek(), func(d api.Download) bool { return d.GID == gid })
-	if !ok {
-		return
-	}
+	s.queue.Go(func(ctx context.Context) {
+		d, ok := iter.Find(s.items.Peek(), func(d api.Download) bool { return d.GID == gid })
+		if !ok {
+			return
+		}
 
-	s.queue.Enqueue(func(ctx context.Context) {
 		if _, err := s.downloader.Remove(ctx, gid); err != nil && !errors.IsAria2NotFound(err) {
 			mainthread.Start(func() { s.emitError("delete", gid, err) })
 			return
@@ -197,6 +196,7 @@ func (s *Service) Delete(ctx context.Context, gid string, fromDisk bool) {
 		if fromDisk {
 			removeFiles(d.Files)
 		}
+
 		mainthread.Start(func() {
 			if err := removeDownload(context.Background(), db.DB(), gid); err != nil {
 				s.emitError("delete", gid, err)

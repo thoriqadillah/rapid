@@ -53,9 +53,9 @@ func (q *Queue) Start(ctx context.Context) {
 	}()
 }
 
-// Enqueue adds a task; it blocks while the buffer is full (dropping a user
+// Go adds a task; it blocks while the buffer is full (dropping a user
 // action would be worse than waiting a tick) and reports false after Close.
-func (q *Queue) Enqueue(fn func(ctx context.Context)) bool {
+func (q *Queue) Go(fn func(ctx context.Context)) bool {
 	if fn == nil {
 		return false
 	}

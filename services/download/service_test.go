@@ -128,38 +128,38 @@ func TestServiceFilterAndCounts(t *testing.T) {
 		{GID: "u1"},
 	})
 
-	counts := s.Counts.Get()
+	counts := s.Counts.Peek()
 	require.Equal(t, 4, counts["all"])
 	require.Equal(t, 2, counts["video"])
 	require.Equal(t, 1, counts["audio"])
 	require.NotContains(t, counts, "")
 
 	s.Category.Set("video")
-	require.Len(t, s.Items.Get(), 2)
+	require.Len(t, s.Items.Peek(), 2)
 
 	// The sidebar "All downloads" destination is "all": selecting it after a
 	// category must show everything again (matches treats "all" as all).
 	s.Category.Set("all")
-	require.Len(t, s.Items.Get(), 4)
+	require.Len(t, s.Items.Peek(), 4)
 	require.Equal(t, "all", s.Category.Peek())
 
 	s.Search.Set("dune")
-	filtered := s.Items.Get()
+	filtered := s.Items.Peek()
 	require.Len(t, filtered, 1)
 	require.Equal(t, "v2", filtered[0].GID)
 
 	// Clearing the category keeps the search.
 	s.Category.Set("")
-	require.Len(t, s.Items.Get(), 1)
+	require.Len(t, s.Items.Peek(), 1)
 
 	s.Search.Set("  DUNE  ")
-	require.Len(t, s.Items.Get(), 1)
+	require.Len(t, s.Items.Peek(), 1)
 	require.Equal(t, "  DUNE  ", s.Search.Peek())
 
 	s.Search.Set("MP4")
-	mp4Upper := len(s.Items.Get())
+	mp4Upper := len(s.Items.Peek())
 	s.Search.Set("mp4")
-	require.Equal(t, mp4Upper, len(s.Items.Get()), "MP4 and mp4 must match the same rows")
+	require.Equal(t, mp4Upper, len(s.Items.Peek()), "MP4 and mp4 must match the same rows")
 	require.Equal(t, "mp4", s.Search.Peek())
 }
 
@@ -273,7 +273,7 @@ func TestServiceStartLoadsAndClose(t *testing.T) {
 	require.Len(t, all, 2)
 	require.Equal(t, "b", all[0].GID, "newest-first order")
 	require.Equal(t, "a", all[1].GID)
-	require.Equal(t, 2, s.Counts.Get()["all"])
+	require.Equal(t, 2, s.Counts.Peek()["all"])
 
 	// Only the waiting row is re-listened; "b" is idle and the daemon is
 	// asked about nothing else.
@@ -406,7 +406,7 @@ func newActionService(t *testing.T, items []api.Download) (*Service, *fakeDownlo
 func syncQueue(t *testing.T, s *Service) {
 	t.Helper()
 	done := make(chan struct{})
-	if !s.queue.Enqueue(func(context.Context) { close(done) }) {
+	if !s.queue.Go(func(context.Context) { close(done) }) {
 		t.Fatal("action queue closed")
 	}
 	select {
@@ -508,7 +508,7 @@ func TestActiveCount(t *testing.T) {
 		{GID: "e", Status: "waiting"},
 		{GID: "f", Status: "removed"},
 	})
-	require.Equal(t, 1, s.ActiveCount.Get(), "only transferring rows count")
+	require.Equal(t, 1, s.ActiveCount.Peek(), "only transferring rows count")
 
 	var runs int
 	dispose := reactive.Effect(func() { s.ActiveCount.Get(); runs++ })
@@ -519,7 +519,7 @@ func TestActiveCount(t *testing.T) {
 
 func TestMergeUpdatesActiveCount(t *testing.T) {
 	s := newMergeService(t, []api.Download{{GID: "a", Status: "active"}})
-	require.Equal(t, 1, s.ActiveCount.Get())
+	require.Equal(t, 1, s.ActiveCount.Peek())
 	s.upsertDownload(api.Download{GID: "a", Status: "complete"})
-	require.Equal(t, 0, s.ActiveCount.Get())
+	require.Equal(t, 0, s.ActiveCount.Peek())
 }
