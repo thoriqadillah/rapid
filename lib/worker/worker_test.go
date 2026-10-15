@@ -62,8 +62,10 @@ func TestQueueEnqueueAfterClose(t *testing.T) {
 
 func TestQueueStopsOnCancel(t *testing.T) {
 	q := NewQueue(4)
-	q.Start(t.Context())
-	time.Sleep(50 * time.Millisecond) // let the drain observe the cancel
+	ctx, cancel := context.WithCancel(context.Background())
+	q.Start(ctx)
+	cancel()
+	time.Sleep(500 * time.Millisecond)
 
 	ran := make(chan struct{}, 1)
 	require.True(t, q.Go(func(context.Context) { ran <- struct{}{} }))

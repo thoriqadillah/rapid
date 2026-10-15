@@ -523,3 +523,93 @@ func TestMergeUpdatesActiveCount(t *testing.T) {
 	s.upsertDownload(api.Download{GID: "a", Status: "complete"})
 	require.Equal(t, 0, s.ActiveCount.Peek())
 }
+
+func TestMergeSkipsStaleEcho(t *testing.T) {
+	s := newMergeService(t, []api.Download{{
+		GID:             "a",
+		Status:          "active",
+		DownloadSpeed:   100,
+		TotalLength:     1000,
+		CompletedLength: 100,
+	}})
+	s.settings.PollIntervalMs = 1000
+	now := time.Now()
+
+	s.stampAction("a") // user pauses; in-memory state is still active
+
+	// A straggler carrying the pre-action state is skipped...
+	s.upsertDownload(api.Download{
+		GID:             "a",
+		Status:          "active",
+		DownloadSpeed:   50,
+		TotalLength:     1000,
+		CompletedLength: 50,
+	})
+	require.Equal(t, int64(100), s.items.Peek()[0].DownloadSpeed)
+	dbRow, err := getDownload(t.Context(), db.DB(), "a")
+	require.NoError(t, err)
+	require.Equal(t, int64(100), dbRow.DownloadSpeed, "skipped echo writes nothing")
+
+	// ...while the confirming update applies and clears the stamp.
+	s.upsertDownload(api.Download{GID: "a", Status: "paused"})
+	require.Equal(t, "paused", s.items.Peek()[0].Status)
+
+	// After the window, same-state notifies apply normally again.
+	s.stampAction("a")
+	now = now.Add(3 * time.Second)
+	s.upsertDownload(api.Download{
+		GID:             "a",
+		Status:          "paused",
+		DownloadSpeed:   9,
+		TotalLength:     1000,
+		CompletedLength: 100,
+	})
+	require.Equal(t, int64(9), s.items.Peek()[0].DownloadSpeed)
+}
+
+func TestStartMarksForgottenGidsError(t *testing.T) {
+	require.NoError(t, db.OpenMemory(t.Context()))
+	t.Cleanup(func() { db.Close() })
+	mustUpsert(t, db.DB(), api.Download{GID: "a", Status: "active"})
+	mustUpsert(t, db.DB(), api.Download{GID: "w", Status: "waiting"})
+
+	s := NewService(settings.Settings{})
+	fake := &fakeDownloader{
+		known: map[string]api.Download{
+			"a": {GID: "a", Status: "active"},
+		}}
+	s.downloader = fake
+	require.NoError(t, s.Start(t.Context()))
+	defer s.Close()
+
+	var forgotten api.Download
+	for _, d := range s.items.Peek() {
+		if d.GID == "w" {
+			forgotten = d
+		}
+	}
+	require.Equal(t, "error", forgotten.Status)
+	require.Equal(t, "download not found in aria2", forgotten.ErrorMessage)
+	dbRow, err := getDownload(t.Context(), db.DB(), "w")
+	require.NoError(t, err)
+	require.Equal(t, "error", dbRow.Status, "marking persists")
+	require.Equal(t, []string{"a"}, fake.listened, "only known gids re-listen")
+}
+
+func TestListenerErrorDedupes(t *testing.T) {
+	s := NewService(settings.Settings{})
+	var got []string
+	s.OnError(func(err error) { got = append(got, err.Error()) })
+	now := time.Now()
+
+	boom := fmt.Errorf("websocket drop")
+	s.listenerError("a", boom)
+	s.listenerError("a", boom)
+	require.Len(t, got, 1, "repeat within window stays silent")
+	s.listenerError("b", boom)
+	require.Len(t, got, 2, "other gid is a different storm")
+
+	now = now.Add(31 * time.Second)
+	s.listenerError("a", boom)
+	require.Len(t, got, 3, "window expiry re-arms")
+}

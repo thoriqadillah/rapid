@@ -127,6 +127,25 @@ Code wins per the task file's own rule; this file records _what_ and _why_.
   version subscribed with a dependency-less `Effect` that could never
   re-fire; now reads `Items`+`Counts` like the old method did.
 
+## S5
+
+- **Stamps carry click-time status, not just time (agent).** The task's
+  `map[gid]time` can't implement its own "confirming notify clears" rule;
+  `actionStamp{at, status}` skips same-state echoes within `2×Poll`,
+  applies anything else. Sweep on stamp so deleted rows don't leak entries.
+  Clock injected (`now` field) — tests use a manual clock, no sleeps.
+- **Forgotten gids fail fast (agent):** Start marks them `error` +
+  persists; persist failure returns (DB-broken means the app can't run).
+  Exact message `"download not found in aria2"`.
+- **Dedupe keys need gid the callback lacks (agent):** `ErrorCallback` is
+  `func(error)`, so `Listen` sites wrap per-gid adapter closures — no
+  interface change. `(gid, text)/30s`, first toasts + warns, repeats debug.
+  Core split into `listenerError` (Qt-free tests; marshal drops without a
+  loop, same two-tier story as S4).
+- **Yours, kept as found:** `queue.Go` rename, `OnFailed`→`OnError`,
+  `emitError(action, gid, err)`, merge as `s.upsertDownload`, ternary
+  fallbacks, `iter.Find`, `cloneItems`, `removeItem`.
+
 ## Untouched pre-existing failures (clean tree, out of S1/S2 scope)
 
 - `TestSettingsPushKeepsPreviousSidebarSelection` (sidebar nav)

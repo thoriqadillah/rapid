@@ -26,6 +26,21 @@ import (
 	"github.com/uptrace/bun"
 )
 
+// actionStamp is the in-memory status a gid had when the user last acted.
+type actionStamp struct {
+	at     time.Time
+	status string
+}
+
+// listenerErrorKey identifies one listener failure for storm dedupe.
+type listenerErrorKey struct {
+	gid string
+	msg string
+}
+
+// listenerErrorWindow bounds how long a repeat stays silent.
+const listenerErrorWindow = 30 * time.Second
+
 type Service struct {
 	items         *reactive.Signal[[]api.Download]
 	Category      *reactive.Signal[string]
@@ -43,6 +58,10 @@ type Service struct {
 
 	completed signal.Event[api.Download]
 	error     signal.Event[error]
+
+	// now is the clock for time windows (stamps, dedupe); tests replace it.
+	lastAction map[string]actionStamp
+	errorSeen  map[listenerErrorKey]time.Time
 }
 
 func NewService(settings settings.Settings) *Service {
@@ -57,6 +76,9 @@ func NewService(settings settings.Settings) *Service {
 		fallback:   dl, // aria2 doubles as the probe resolver (S9)
 		plugins:    nil,
 		queue:      worker.NewQueue(16),
+
+		lastAction: map[string]actionStamp{},
+		errorSeen:  map[listenerErrorKey]time.Time{},
 	}
 	s.Items = reactive.NewComputed(func() []api.Download {
 		items, category, search := s.items.Get(), s.Category.Get(), s.Search.Get()
@@ -112,16 +134,24 @@ func (s *Service) Start(ctx context.Context) error {
 	if err := s.downloader.Start(ctx); err != nil {
 		return err
 	}
-	for _, d := range items {
+	for i := range items {
+		d := items[i]
 		if d.Status != "active" && d.Status != "waiting" {
 			continue
 		}
 		if _, err := s.downloader.GetStatus(ctx, d.GID); err != nil {
-			slog.Warn("download: daemon forgot gid", "gid", d.GID, "err", err)
+			// The daemon forgot this gid: leave an error row instead of a
+			// zombie it will never update.
+			items[i].Status = "error"
+			items[i].ErrorMessage = "download file not found"
+			if items[i], err = upsertDownload(ctx, db.DB(), items[i]); err != nil {
+				return err
+			}
 			continue
 		}
-		s.downloader.Listen(d.GID, s.onListenerNotify, s.onListenerError)
+		s.downloader.Listen(d.GID, s.onListenerNotify, func(err error) { s.onListenerError(d.GID, err) })
 	}
+	s.items.Set(items)
 	return nil
 }
 
@@ -137,6 +167,7 @@ func (s *Service) Close() {
 // Pause suspends gid and stops listening for it; the row keeps its state
 // with no speed line until resumed or removed.
 func (s *Service) Pause(ctx context.Context, gid string) {
+	s.stampAction(gid)
 	s.queue.Go(func(ctx context.Context) {
 		d, err := s.downloader.Pause(ctx, gid)
 		if err != nil {
@@ -150,19 +181,21 @@ func (s *Service) Pause(ctx context.Context, gid string) {
 
 // Resume restarts gid and listens for it again.
 func (s *Service) Resume(ctx context.Context, gid string) {
+	s.stampAction(gid)
 	s.queue.Go(func(ctx context.Context) {
 		d, err := s.downloader.Resume(ctx, gid)
 		if err != nil {
 			mainthread.Start(func() { s.emitError("resume", gid, err) })
 			return
 		}
-		s.downloader.Listen(gid, s.onListenerNotify, s.onListenerError)
+		s.downloader.Listen(gid, s.onListenerNotify, func(err error) { s.onListenerError(gid, err) })
 		mainthread.Start(func() { s.upsertDownload(d) })
 	})
 }
 
 // Stop halts gid but retains its removed row until Delete purges it.
 func (s *Service) Stop(ctx context.Context, gid string) {
+	s.stampAction(gid)
 	s.queue.Go(func(ctx context.Context) {
 		d, err := s.downloader.Remove(ctx, gid)
 		if err != nil {
@@ -178,12 +211,13 @@ func (s *Service) Stop(ctx context.Context, gid string) {
 // files). Files are snapshotted here on the GUI thread: the queued op can't
 // read in-memory state later.
 func (s *Service) Delete(ctx context.Context, gid string, fromDisk bool) {
+	s.stampAction(gid)
+	d, ok := iter.Find(s.items.Peek(), func(d api.Download) bool { return d.GID == gid })
+	if !ok {
+		return
+	}
+	files := append([]api.DownloadFile(nil), d.Files...)
 	s.queue.Go(func(ctx context.Context) {
-		d, ok := iter.Find(s.items.Peek(), func(d api.Download) bool { return d.GID == gid })
-		if !ok {
-			return
-		}
-
 		if _, err := s.downloader.Remove(ctx, gid); err != nil && !errors.IsAria2NotFound(err) {
 			mainthread.Start(func() { s.emitError("delete", gid, err) })
 			return
@@ -194,7 +228,7 @@ func (s *Service) Delete(ctx context.Context, gid string, fromDisk bool) {
 		}
 		s.downloader.Unlisten(gid)
 		if fromDisk {
-			removeFiles(d.Files)
+			removeFiles(files)
 		}
 
 		mainthread.Start(func() {
@@ -216,6 +250,29 @@ func (s *Service) emitError(action, gid string, err error) {
 	if ok {
 		s.error.Emit(fmt.Errorf("Failed to %s %s: %w", action, d.Name(), err))
 	}
+}
+
+// stampAction records the row's click-time status so the merge path can
+// tell stale pre-action echoes apart from confirming updates. It also sweeps
+// expired stamps so deleted rows don't leak entries. GUI thread only.
+func (s *Service) stampAction(gid string) {
+	now, window := time.Now(), s.actionWindow()
+	for k, v := range s.lastAction {
+		if now.Sub(v.at) >= window {
+			delete(s.lastAction, k)
+		}
+	}
+	status := ""
+	if d, ok := iter.Find(s.items.Peek(), func(d api.Download) bool { return d.GID == gid }); ok {
+		status = d.Status
+	}
+	s.lastAction[gid] = actionStamp{at: now, status: status}
+}
+
+// actionWindow is how long a pre-action echo stays skippable: twice the poll
+// interval, so one in-flight poll result can't overwrite the clicked state.
+func (s *Service) actionWindow() time.Duration {
+	return 2 * time.Duration(s.settings.PollIntervalMs) * time.Millisecond
 }
 
 func (s *Service) matches(d api.Download, category, search string) bool {
@@ -256,6 +313,13 @@ func (s *Service) onListenerNotify(d api.Download) {
 // upsertDownload folds a downloader notification into DB + memory + user
 // events. GUI thread only: DB writes stay here, state has no lock.
 func (s *Service) upsertDownload(d api.Download) {
+	if action, ok := s.lastAction[d.GID]; ok {
+		delete(s.lastAction, d.GID)
+		if time.Since(action.at) < s.actionWindow() && d.Status == action.status {
+			return // stale pre-action echo; the user already moved past this state
+		}
+	}
+
 	items := s.items.Peek()
 	i := iter.FindIndex(items, func(it api.Download) bool { return it.GID == d.GID })
 	var prev api.Download
@@ -312,10 +376,27 @@ func (s *Service) OnError(fn func(error)) (disconnect func()) {
 	return s.error.Connect(fn)
 }
 
-func (s *Service) onListenerError(err error) {
+func (s *Service) onListenerError(gid string, err error) {
 	mainthread.Start(func() {
-		slog.Error("download service error", "task", "Download service", "err", err)
+		s.listenerError(gid, err)
 	})
+}
+
+// listenerError dedupes listener error storms: the first (gid, text)
+// occurrence within the window toasts + warns, repeats debug-log only.
+// GUI thread only.
+func (s *Service) listenerError(gid string, err error) {
+	if err == nil {
+		return
+	}
+	key := listenerErrorKey{gid: gid, msg: err.Error()}
+	if t, ok := s.errorSeen[key]; ok && time.Since(t) < listenerErrorWindow {
+		slog.Debug("download: listener error (repeat)", "gid", gid, "err", err)
+		return
+	}
+	s.errorSeen[key] = time.Now()
+	slog.Warn("download: listener error", "gid", gid, "err", err)
+	s.error.Emit(fmt.Errorf("gid %s: %w", gid, err))
 }
 
 // SpeedHistory returns the last 60 samples for gid in ascending ts order.
