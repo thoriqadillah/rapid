@@ -12,6 +12,8 @@ import (
 
 const maxWidgetHeight = 16777215
 
+const rowMinHeight = theme.TouchTarget + theme.SpacingSm
+
 // downloadItem is one row: category dot, name, progress bar + %, speed, size,
 // ETA, plus the expandable detail.
 type downloadItem struct {
@@ -25,6 +27,7 @@ type downloadItem struct {
 
 	dot          *qt.QLabel
 	name         *elidedLabel
+	row          *qt.QWidget
 	progress     *ProgressBar
 	progressText *qt.QLabel
 	speed        *qt.QLabel
@@ -33,6 +36,7 @@ type downloadItem struct {
 
 	detail         *DownloadItemDetail
 	detailBox      *qt.QWidget
+	detailScroll   *qt.QScrollArea
 	detailEffect   *qt.QGraphicsOpacityEffect
 	detailExpanded bool
 	heightAnim     *qt.QPropertyAnimation
@@ -49,10 +53,12 @@ type downloadItem struct {
 func newDownloadItem(parent *qt.QWidget) *downloadItem {
 	it := &downloadItem{QWidget: qt.NewQWidget3(parent, 0)}
 	it.SetSizePolicy2(qt.QSizePolicy__Expanding, qt.QSizePolicy__Preferred)
-	it.SetMinimumHeight(theme.TouchTarget + 2*theme.SpacingSm)
+	it.SetMinimumHeight(rowMinHeight)
 	it.SetAttribute(qt.WA_Hover)
 	it.SetMouseTracking(true)
 	it.SetFocusPolicy(qt.StrongFocus)
+	it.SetMaximumHeight(maxWidgetHeight)
+
 	// SetCursor copies the cursor, so the temporary can be released at once.
 	cursor := qt.NewQCursor2(qt.PointingHandCursor)
 	it.SetCursor(cursor)
@@ -91,6 +97,10 @@ func newDownloadItem(parent *qt.QWidget) *downloadItem {
 	it.size = fixedLabel("—", theme.ColorText, SizeColumnWidth)
 	it.eta = fixedLabel("—", theme.ColorText, EtaColumnWidth)
 
+	it.row = qt.NewQWidget3(it.QWidget, 0)
+	it.row.SetSizePolicy2(qt.QSizePolicy__Expanding, qt.QSizePolicy__Fixed)
+	it.row.SetMinimumHeight(rowMinHeight)
+	it.row.SetAttribute(qt.WA_TransparentForMouseEvents)
 	row := qt.NewQHBoxLayout2()
 	row.SetContentsMargins(theme.SpacingLg, theme.SpacingSm, theme.SpacingLg, theme.SpacingSm)
 	row.SetSpacing(theme.SpacingMd)
@@ -100,21 +110,34 @@ func newDownloadItem(parent *qt.QWidget) *downloadItem {
 	row.AddWidget(it.speed.QWidget)
 	row.AddWidget(it.size.QWidget)
 	row.AddWidget(it.eta.QWidget)
+	it.row.SetLayout(row.QLayout)
 
 	it.detailBox = qt.NewQWidget3(it.QWidget, 0)
 	detailBoxLayout := qt.NewQVBoxLayout2()
 	detailBoxLayout.SetContentsMargins(0, 0, 0, 0)
 	detailBoxLayout.SetSpacing(0)
-	it.detail = NewDownloadItemDetail(it.detailBox)
-	detailBoxLayout.AddWidget(it.detail.QWidget)
+
+	// The detail lives inside a frameless, scrollbar-less scroll area: it is
+	// Qt's native clip window. As detailBox grows with the height animation the
+	// viewport reveals the detail top-down at its natural size — the content
+	// can never be squished or stretched, only revealed.
+	it.detailScroll = qt.NewQScrollArea(it.QWidget)
+	it.detailScroll.SetWidgetResizable(true)
+	it.detailScroll.SetFrameShape(qt.QFrame__NoFrame)
+	it.detailScroll.SetVerticalScrollBarPolicy(qt.ScrollBarAlwaysOff)
+	it.detailScroll.SetHorizontalScrollBarPolicy(qt.ScrollBarAlwaysOff)
+	it.detail = NewDownloadItemDetail(it.QWidget)
+	it.detailScroll.SetWidget(it.detail.QWidget)
+	detailBoxLayout.AddWidget(it.detailScroll.QWidget)
 	it.detailBox.SetLayout(detailBoxLayout.QLayout)
 	it.detailBox.SetMaximumHeight(0)
+	it.detailBox.SetMinimumHeight(0)
 	it.detailBox.Hide()
 
 	outer := qt.NewQVBoxLayout2()
 	outer.SetContentsMargins(0, 0, 0, 0)
 	outer.SetSpacing(0)
-	outer.AddLayout(row.QLayout)
+	outer.AddWidget(it.row)
 	outer.AddWidget(it.detailBox)
 	it.SetLayout(outer.QLayout)
 
@@ -238,38 +261,44 @@ func (it *downloadItem) SetExpanded(on bool) {
 	it.detailExpanded = on
 	it.Update()
 	it.stopDetailAnims()
+
+	from := it.Height()
+	rowH := max(it.row.Height(), rowMinHeight)
+	detailH := it.detail.SizeHint().Height()
+
 	if on {
-		it.detail.SetMinimumHeight(0)
-		it.detail.SetMaximumHeight(maxWidgetHeight)
+		to := rowH + detailH
+
+		it.detail.SetFixedHeight(detailH)
+		it.detailScroll.SetMinimumHeight(detailH)
+		it.detailBox.SetMinimumHeight(detailH)
+		it.heightAnim = animateMaxHeight(it.QWidget, from, to, detailHeightDuration, qt.QEasingCurve__OutCubic, func() {
+			it.heightAnim.DeleteLater()
+			it.heightAnim = nil
+		})
+		it.detailBox.SetMaximumHeight(maxWidgetHeight)
 		it.detailBox.Show()
-		target := max(it.detail.SizeHint().Height(), theme.TouchTarget)
-		it.detail.SetMinimumHeight(target)
-		it.detail.SetMaximumHeight(target)
-		it.heightAnim = animateMaxHeight(it.detailBox, 0, target, detailHeightDuration, qt.QEasingCurve__OutCubic, func() {
-			it.detailBox.SetMaximumHeight(maxWidgetHeight)
-			it.detail.SetMinimumHeight(0)
-			it.detail.SetMaximumHeight(maxWidgetHeight)
-		})
-		it.ensureDetailEffect()
-		it.detailEffect.SetOpacity(0)
-		it.opacityAnim = animateOpacity(it.detailEffect, 0, 1, detailFadeDuration, qt.QEasingCurve__OutCubic, func() {
-			it.detachDetailEffect()
-		})
+		it.fadeDetail(0, 1)
 		return
 	}
-	// Pin the content to its full height so the shrinking box clips from the
-	// bottom instead of squeezing.
-	if full := it.detail.Height(); full > 0 {
-		it.detail.SetMinimumHeight(full)
-		it.detail.SetMaximumHeight(full)
-	}
-	from := it.detailBox.Height()
-	it.heightAnim = animateMaxHeight(it.detailBox, from, 0, detailHeightDuration, qt.QEasingCurve__OutCubic, func() {
+
+	it.detailBox.SetMinimumHeight(0)
+	it.detailScroll.SetMinimumHeight(0)
+	it.heightAnim = animateMaxHeight(it.QWidget, from, rowH, detailHeightDuration, qt.QEasingCurve__OutCubic, func() {
+		it.heightAnim.DeleteLater()
+		it.heightAnim = nil
+		it.detailBox.SetMaximumHeight(0)
 		it.detailBox.Hide()
 	})
+	it.fadeDetail(1, 0)
+}
+
+// fadeDetail runs one fade cycle on the detail box. A stopped mid-fade effect
+// stays installed and is reused; a detached one was deleted by Qt and remade.
+func (it *downloadItem) fadeDetail(from, to float64) {
 	it.ensureDetailEffect()
-	it.detailEffect.SetOpacity(1)
-	it.opacityAnim = animateOpacity(it.detailEffect, 1, 0, detailFadeDuration, qt.QEasingCurve__OutCubic, func() {
+	it.detailEffect.SetOpacity(from)
+	it.opacityAnim = animateOpacity(it.detailEffect, from, to, detailFadeDuration, qt.QEasingCurve__OutCubic, func() {
 		it.detachDetailEffect()
 	})
 }

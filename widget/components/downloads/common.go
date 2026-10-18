@@ -13,7 +13,7 @@ import (
 const (
 	addRemoveDuration    = 150
 	detailHeightDuration = 250
-	detailFadeDuration   = 150
+	detailFadeDuration   = 250
 )
 
 // styledLabel builds a transparent QLabel with the given color and the theme
@@ -110,10 +110,6 @@ func newElidedLabel(text string, color *qt.QColor, mode qt.TextElideMode) *elide
 func (l *elidedLabel) SetFullText(text string) {
 	l.full = text
 	l.apply()
-}
-
-func (l *elidedLabel) FullText() string {
-	return l.full
 }
 
 func (l *elidedLabel) apply() {
