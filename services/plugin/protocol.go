@@ -82,5 +82,5 @@ type ResolveResult struct {
 
 type ResolveResponse struct {
 	Response
-	Result ResolveResult `json:"result"`
+	Result *ResolveResult `json:"result"`
 }

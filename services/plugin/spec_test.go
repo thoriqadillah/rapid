@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	liberrors "rapid/lib/errors"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,7 +18,7 @@ func writeManifest(t *testing.T, body string) string {
 }
 
 func TestLoadExample(t *testing.T) {
-	m, err := LoadManifest("example")
+	m, err := LoadManifest("testdata/spec")
 	require.NoError(t, err)
 	require.Equal(t, "sampledemo", m.ID)
 	require.Equal(t, "resolver", ResolverType)
@@ -97,7 +99,7 @@ func TestLoadManifestRejects(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			_, err := LoadManifest(writeManifest(t, c.body))
 			require.Error(t, err)
-			var perr *PluginError
+			var perr *liberrors.PluginError
 			require.ErrorAs(t, err, &perr, "load failures carry the plugin identity")
 		})
 	}

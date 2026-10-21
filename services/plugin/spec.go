@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"rapid/lib/helpers/iter"
 	"regexp"
 	"strings"
+
+	liberrors "rapid/lib/errors"
+	"rapid/lib/helpers/iter"
 )
 
 // ManifestName is the manifest file looked up in each plugin dir.
@@ -34,14 +36,14 @@ type Manifest struct {
 // ignored, id falls back to name, version to "0.0.0", non-list/non-string
 // match and args fail the load. Anything unsafe or unusable (bad JSON,
 // non-resolver type, uncompilable regex, escaping command) is an error
-// wrapped in *PluginError — identity is the manifest path, since id/name
+// wrapped in *errors.PluginError — identity is the manifest path, since id/name
 // may be absent exactly when load fails; the S8 scan logs and skips it.
 func LoadManifest(dir string) (Manifest, error) {
 	manifest := filepath.Join(dir, ManifestName)
 
 	raw, err := os.ReadFile(manifest)
 	if err != nil {
-		return Manifest{}, NewPluginError(manifest, err)
+		return Manifest{}, liberrors.NewPluginError(manifest, err)
 	}
 
 	var data struct {
@@ -56,13 +58,13 @@ func LoadManifest(dir string) (Manifest, error) {
 		} `json:"transport"`
 	}
 	if err := json.Unmarshal(raw, &data); err != nil {
-		return Manifest{}, NewPluginError(manifest, err)
+		return Manifest{}, liberrors.NewPluginError(err.Error())
 	}
 	if data.Type != ResolverType {
-		return Manifest{}, NewPluginError(manifest, fmt.Errorf("type must be %q", ResolverType))
+		return Manifest{}, liberrors.PluginErrorf("type must be %q", ResolverType)
 	}
 	if data.Name == "" {
-		return Manifest{}, NewPluginError(manifest, fmt.Errorf("missing name"))
+		return Manifest{}, liberrors.NewPluginError("missing name")
 	}
 	id := cmp.Or(data.ID, data.Name)
 	version := cmp.Or(data.Version, "0.0.0")
@@ -77,20 +79,20 @@ func LoadManifest(dir string) (Manifest, error) {
 		return regexp.Compile(m)
 	})
 	if err != nil {
-		return Manifest{}, NewPluginError(manifest, err)
+		return Manifest{}, liberrors.NewPluginError(err.Error())
 	}
 
 	command := data.Transport.Command
 	if command == "" {
-		return Manifest{}, NewPluginError(manifest, fmt.Errorf("transport.command is empty"))
+		return Manifest{}, liberrors.NewPluginError("transport.command is empty")
 	}
 
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
-		return Manifest{}, NewPluginError(manifest, err)
+		return Manifest{}, liberrors.NewPluginError(err.Error())
 	}
 	if err := checkCommand(absDir, command); err != nil {
-		return Manifest{}, NewPluginError(manifest, err)
+		return Manifest{}, liberrors.NewPluginError(err.Error())
 	}
 
 	return Manifest{

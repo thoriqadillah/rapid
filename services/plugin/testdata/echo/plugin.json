@@ -1,0 +1,11 @@
+{
+  "id": "echo",
+  "name": "Echo",
+  "version": "1.0.0",
+  "type": "resolver",
+  "match": ["https://example\\.com/"],
+  "transport": {
+    "command": "printf",
+    "args": ["%s\n", "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"items\":[{\"title\":\"Echo\",\"url\":\"https://cdn.example.com/video.mp4\",\"filename\":\"video.mp4\",\"category\":\"video\",\"mimeType\":\"video/mp4\"}]}}"]
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "id": "hang",
+  "name": "Hang",
+  "version": "1.0.0",
+  "type": "resolver",
+  "match": ["https://hang\\.example/"],
+  "transport": {
+    "command": "sleep",
+    "args": ["30"]
+  }
+}
