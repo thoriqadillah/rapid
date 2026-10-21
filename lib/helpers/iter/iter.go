@@ -8,6 +8,18 @@ func Map[I, O any](s []I, f func(I) O) []O {
 	return result
 }
 
+func MapErr[I, O any](s []I, f func(I) (O, error)) ([]O, error) {
+	result := make([]O, 0, len(s))
+	for _, v := range s {
+		o, err := f(v)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, o)
+	}
+	return result, nil
+}
+
 func ForEach[I any](s []I, f func(I)) {
 	for _, v := range s {
 		f(v)

@@ -146,6 +146,36 @@ Code wins per the task file's own rule; this file records _what_ and _why_.
   `emitError(action, gid, err)`, merge as `s.upsertDownload`, ternary
   fallbacks, `iter.Find`, `cloneItems`, `removeItem`.
 
+## S6
+
+- **Resolve params are a list, not a dict (real plugins win).** The task
+  shows `params:{"uri":...}`, but the Python manager sends `[uri, options]`
+  and real plugins read `params[0]` — dict params would break every
+  existing plugin. `ResolveRequest` builds `[uri, options]`.
+- **Plugin `PluginError` carries identity (user):** `{PluginID, Err}` with
+  `Unwrap`, so `lib/errors` matchers and `errors.Is/As` traverse it. That's
+  the one thing the generic lib types lack (who failed). No test (user).
+- **Load-time errors are `*PluginError` (user):** identity is the manifest
+  path (id/name may be absent exactly when load fails); the `plugin %s:`
+  message prefixes are gone since the type carries it, and `checkCommand`
+  lost its manifest param. Rejects test pins the wrap via `ErrorAs`.
+- **Manifest match is strict `[]string` (user):** non-string, empty, or
+  non-list match all fail the load (an empty regex would match everything,
+  which the earlier lenient filter risked). Decoder rejects them, not code.
+  Args joined match in strictness (user): transport decodes inline in one
+  pass (`Args []string`, no `json.RawMessage`/second unmarshal/`any`
+  filtering — `parseTransport` deleted); non-string/non-list args now fail
+  the load like match does. id →
+  name fallback, version → `"0.0.0"`, regexes compiled at load, absolute /
+  `..`-escaping commands rejected.
+- **Protocol is plain structs only (user):** no decode wrappers, no
+  `check` — S7 unmarshals into `PingResponse`/`ResolveResponse` directly
+  and validates inline. `ResolveResult{Items}` wrapper kept: real plugins
+  send `result` as an object, so a flat `[]ResolvedItem` can't decode them
+  (your deviation, kept honest).
+- **Empty match patterns rejected (user):** an empty regex matches
+  everything, so `""` fails the load instead of being skipped.
+
 ## Untouched pre-existing failures (clean tree, out of S1/S2 scope)
 
 - `TestSettingsPushKeepsPreviousSidebarSelection` (sidebar nav)

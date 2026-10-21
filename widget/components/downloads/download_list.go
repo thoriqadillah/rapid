@@ -282,10 +282,8 @@ func (l *DownloadList) animateOut(it *downloadItem) {
 	effect := qt.NewQGraphicsOpacityEffect2(it.QObject)
 	effect.SetOpacity(1)
 	it.SetGraphicsEffect(effect.QGraphicsEffect)
-	animateOpacity(effect, 1, 0, addRemoveDuration, qt.QEasingCurve__InCubic, func() {
-		it.Hide()
-		it.DeleteLater()
-	})
+	it.Hide()
+	it.DeleteLater()
 	// Float the fading row at its old spot while the rest reflows.
 	it.SetGeometry(g.X(), g.Y(), g.Width(), g.Height())
 	it.Raise()

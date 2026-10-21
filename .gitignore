@@ -6,3 +6,4 @@ rapid/deployment/
 /rapid
 .task
 .*/
+!.agents

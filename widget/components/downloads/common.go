@@ -8,8 +8,6 @@ import (
 	qt "github.com/mappu/miqt/qt6"
 )
 
-// Animation durations, mirroring the QML transitions (detailHeight 150ms,
-// detail opacity/slide 250ms, list add/remove 150ms).
 const (
 	addRemoveDuration    = 150
 	detailHeightDuration = 250

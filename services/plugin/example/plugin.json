@@ -1,0 +1,11 @@
+{
+  "id": "sampledemo",
+  "name": "sampledemo",
+  "version": "0.1.0",
+  "type": "resolver",
+  "match": ["https://www.youtube.com/", "https://youtu.be/"],
+  "transport": {
+    "command": "plugin.py",
+    "args": []
+  }
+}

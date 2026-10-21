@@ -38,17 +38,9 @@ func (c *SpeedChart) SetSamples(samples []int64) {
 	c.Update()
 }
 
-func (c *SpeedChart) Samples() []int64 {
-	return append([]int64(nil), c.samples...)
-}
-
 func (c *SpeedChart) SetCategory(category lib.Category) {
 	c.category = category
 	c.Update()
-}
-
-func (c *SpeedChart) Category() lib.Category {
-	return c.category
 }
 
 func (c *SpeedChart) paint() {
