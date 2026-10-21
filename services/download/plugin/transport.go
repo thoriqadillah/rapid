@@ -25,8 +25,7 @@ var resolveTimeout = 8 * time.Second
 const terminateGrace = 2 * time.Second
 
 // runResolve spawns the plugin, sends one rapid.resolve, and reads one answer.
-// One process per request; no ping, no pooling. Any failure is wrapped with the
-// plugin id so callers can tell which plugin claimed the URI.
+// One process per request; no ping, no pooling.
 // ponytail: no rapid.ping health gate — a failed resolve already covers a dead
 // plugin, and the extra process round-trip buys nothing for os/exec.
 func runResolve(ctx context.Context, m Manifest, uri string, options map[string]any) ([]ResolvedItem, error) {

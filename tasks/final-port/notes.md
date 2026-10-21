@@ -176,6 +176,66 @@ Code wins per the task file's own rule; this file records _what_ and _why_.
 - **Empty match patterns rejected (user):** an empty regex matches
   everything, so `""` fails the load instead of being skipped.
 
+## S7
+
+- **`runResolve` also takes options (agent).** Task signature is
+  `runResolve(ctx, manifest, uri)`; plugins receive `[uri, options]` (Python
+  manager), so a fourth argument forwards headers/cookies/referer context.
+  Without it auth-gated URIs resolve with the wrong request context.
+- **No ping probe at all (user/task-optional).** One spawn per resolve;
+  a failed resolve is the health signal. The Python ping existed for QProcess
+  startup lifecycle, which `os/exec` does not need in a separate round trip.
+- **Transport errors carry no plugin identity (user).** The package-local
+  `PluginError` was removed with `errors.go`; transport failures now surface
+  as raw `lib/errors` types (`TransportError`, `JsonRpcError`) or raw
+  `encoding/json` errors. Invalid JSON is a plain unmarshal error, not a
+  synthesized `-32700` `JsonRpcError`; callers cannot tell which plugin from
+  the error alone (the manager/site logs know the manifest).
+- **`PluginResolver` holds only the manifest (agent).** Task wrote
+  `{manifest, items}`; items are a per-call return, not resolver state.
+- **Plugin cwd is the manifest dir (agent).** Python inherited the app's
+  cwd. Anchoring the child at its own dir makes relative plugin resources
+  predictable; the command itself is still resolved per the task rule.
+- **Timeout injection is a package var (agent).** `resolveTimeout` (8 s) is
+  swapped by the timeout test instead of threading a duration through every
+  call, so the test never sleeps 8 real seconds.
+- **Fixtures are command manifests, not scripts (agent).** `testdata/{echo,
+  error,hang}` use `printf`/`sleep` from `PATH` with the canned response in
+  `transport.args`. An external formatter kept pretty-printing the JSON
+  inside `.sh` fixtures onto multiple lines, which breaks the one-line
+  protocol; command args survive reformatting. Same coverage as the task's
+  `testdata/echo_plugin` idea, without files that can be rewritten.
+
+## S8
+
+- **Plugin package moved to `services/download/plugin` (user).** Task put it
+  at `services/plugin`; it now lives under the download service with the
+  import path updated. Layout only — package contents are unchanged.
+- **Manager is constructed in `NewService` (user).** Consistent with the
+  S2 deviation that dropped `ServiceConfig`: `NewService(settings)` builds
+  the manager from `settings.PluginDirs` itself. `Start` logs `Len()` at
+  debug level; `Resolve` consumes it in S9.
+- **No `claimed` bool (user).** `Resolve(ctx, uri, opts)` returns
+  `([]api.ResolvedURL, error)`: an error means a plugin matched and failed
+  (surface it, never fall back); nil items + nil error means no plugin
+  matched. Caveat: a matching plugin that successfully returns zero items is
+  indistinguishable from "no match" and falls through to aria2 — fine while
+  an empty item list means "can't resolve".
+- **Nil manager is unsupported (user).** The nil-receiver guards and the
+  "nil = no plugins" contract were dropped; `Resolve`/`Len` dereference the
+  receiver. S10 always constructs a manager, so the service field is never
+  nil in practice.
+- **Scan covers child dirs only (agent).** Mirrors Python's `*/plugin.json`
+  glob: a `plugin.json` directly inside a `PluginDirs` entry is ignored;
+  only `plugins/<name>/plugin.json` is discovered.
+- **Deterministic plugin order (agent).** `os.ReadDir` sorts entries, so the
+  chain is dir order then directory name. Python relied on glob/dict order,
+  which is not an explicit guarantee.
+- **Tests build temp scan roots (agent).** Valid and broken plugin dirs are
+  created under `t.TempDir()` around copies of the `testdata/{echo,error}`
+  manifests instead of committing a `testdata/scan` tree; the broken
+  manifest is written inline.
+
 ## Untouched pre-existing failures (clean tree, out of S1/S2 scope)
 
 - `TestSettingsPushKeepsPreviousSidebarSelection` (sidebar nav)

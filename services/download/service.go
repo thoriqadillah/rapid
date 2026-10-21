@@ -18,8 +18,8 @@ import (
 	"rapid/lib/worker"
 	"rapid/services/download/api"
 	"rapid/services/download/downloader"
+	"rapid/services/download/plugin"
 	"rapid/services/download/rpc"
-	"rapid/services/plugin"
 	"rapid/services/settings"
 
 	"github.com/mappu/miqt/qt6/mainthread"
@@ -52,8 +52,8 @@ type Service struct {
 
 	settings   settings.Settings
 	downloader downloader.Downloader
-	fallback   downloader.Resolver
-	plugins    *plugin.Manager // nil until S8 constructs it here
+	resolver   downloader.Resolver
+	plugins    *plugin.Manager
 	queue      *worker.Queue
 
 	completed signal.Event[api.Download]
@@ -73,8 +73,8 @@ func NewService(settings settings.Settings) *Service {
 		Search:     reactive.NewSignal(""),
 		settings:   settings,
 		downloader: dl,
-		fallback:   dl, // aria2 doubles as the probe resolver (S9)
-		plugins:    nil,
+		resolver:   dl, // aria2 doubles as the probe resolver (S9)
+		plugins:    plugin.NewManager(settings.PluginDirs),
 		queue:      worker.NewQueue(16),
 
 		lastAction: map[string]actionStamp{},
