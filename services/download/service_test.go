@@ -28,16 +28,18 @@ func newServiceWithItems(items []api.Download) *Service {
 // fakeDownloader is a tiny in-memory Downloader for service tests. Tests
 // never boot a daemon; S4/S5/S9 extend it with scripted action behaviors.
 type fakeDownloader struct {
-	started    bool
-	stopped    bool
-	known      map[string]api.Download // gids GetStatus knows
-	listened   []string
-	unlistened []string
-	calls      []string // "op:gid" in execution order
-	pauseErr   error
-	resumeErr  error
-	removeErr  error
-	purgeErr   error
+	started     bool
+	stopped     bool
+	known       map[string]api.Download // gids GetStatus knows
+	listened    []string
+	unlistened  []string
+	calls       []string // "op:gid" in execution order
+	pauseErr    error
+	resumeErr   error
+	removeErr   error
+	purgeErr    error
+	downloadErr map[string]error
+	downloads   []api.ResolvedURL
 }
 
 var _ downloader.Downloader = (*fakeDownloader)(nil)
@@ -52,8 +54,13 @@ func (f *fakeDownloader) Stop() error {
 	return nil
 }
 
-func (f *fakeDownloader) Download(context.Context, api.ResolvedURL) (api.Download, error) {
-	return api.Download{}, nil
+func (f *fakeDownloader) Download(_ context.Context, uri api.ResolvedURL) (api.Download, error) {
+	f.calls = append(f.calls, "download:"+uri.URL)
+	f.downloads = append(f.downloads, uri)
+	if err := f.downloadErr[uri.URL]; err != nil {
+		return api.Download{}, err
+	}
+	return api.Download{GID: fmt.Sprintf("g%d", len(f.downloads)), Status: "active", Dir: uri.Dir}, nil
 }
 
 func (f *fakeDownloader) Pause(_ context.Context, id string) (api.Download, error) {

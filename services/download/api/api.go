@@ -190,3 +190,13 @@ type ResolvedURL struct {
 	Referer      string            `json:"referer,omitempty"`
 	ResolverName string            `json:"resolverName"`
 }
+
+func (r ResolvedURL) FormatName() string {
+	if r.Title != "" {
+		return r.Title
+	}
+	if r.Filename != "" {
+		return r.Filename
+	}
+	return r.URL
+}

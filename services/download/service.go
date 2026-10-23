@@ -416,5 +416,4 @@ func (s *Service) SpeedSamples(ctx context.Context, gid string) []int64 {
 	})
 }
 
-// TODO(full-wire): Download/Resolve/PickFolder. These will operate through
-// the downloader and update the in-memory slice + store, then notify.
+// TODO(full-wire): PickFolder. S11 wires the views to Resolve/Download.

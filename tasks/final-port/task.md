@@ -823,6 +823,22 @@ Behavior:
   state is `model.CanSubmit` — no hand-rolled truth table in the dialog.
 - URL edit → restart 300 ms single-shot QTimer → `service.Resolve` with the
   advanced values merged into the request → swap rows (clear stale error).
+- **Resolve supersession.** The debounce only delays *starting* a resolve; it
+  does not cancel one already running. Keep a `resolveID uint64` in the
+  dialog, increment it on every resolve fire, and have the callback drop
+  results/errors whose ID is no longer current — a slow older resolve must
+  never paint over the newer one. A superseded `context.Canceled` is not a
+  user-facing error. `OpenFromBrowser` bypasses the debounce and must also
+  invalidate any pending resolve.
+- **Cancellation lives in the dialog, not the downloader.** Keep the current
+  request's `context.CancelFunc`; cancel it before starting a new resolve and
+  on dialog close. Then delete `pendingCancel`/`pendingGen` and the gen guard
+  from `Aria2Downloader.Resolve` — it becomes
+  `rctx, cancel := context.WithCancel(ctx); defer cancel()` around the probe.
+  Keep `resolverSem` (defensive concurrency cap, not supersession) and keep
+  `onResolved`'s `context.WithoutCancel` cleanup, rewording its comment to
+  say a superseded resolve canceled the parent ctx. Land the removal in this
+  step so cancellation never disappears between steps.
 - Download enabled per the checklist; Enter/Return triggers it. Cancel is
   always enabled (S14). Esc while a row editor has focus closes the editor
   only — give the editor a `Qt.WidgetShortcut`-scoped Esc shortcut so it

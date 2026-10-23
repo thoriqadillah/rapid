@@ -236,6 +236,46 @@ Code wins per the task file's own rule; this file records _what_ and _why_.
   manifests instead of committing a `testdata/scan` tree; the broken
   manifest is written inline.
 
+## S9
+
+- **No `Refresh` after add (agent).** The downloader interface lost `Refresh`
+  in S2 (user deviation), and `Aria2Downloader.Download` already returns
+  `GetStatus` after `addUri`, so the row is fresh without an extra enqueued
+  refresh. The S9 task snippet still shows `Refresh(ctx, gid)`.
+- **One queued op per batch, not per item (agent).** `Download` enqueues a
+  single closure that loops the items. This keeps the batch atomic with
+  respect to user actions and lets the per-item failure loop collect into
+  one summary error; per-item ops would need a barrier/counter to summarize.
+- **`ResolveRequest` adds `PageURL` (agent).** Task lists `Referer`; the
+  bridge carries both `referer` and `pageUrl`, and Python fell back
+  `referer or pageUrl`. `PageURL` preserves that for browser requests.
+- **Request category/size are typed (`string`/`int64`) (agent).** The bridge
+  decodes `headers`/`cookies` as `map[string]any` and `size` as `*int64`;
+  S17 converts (via `maps.StringMap` / nil check) instead of making every
+  request field `any` like Python's dict.
+- **Browser-resolved category inference only for audio/video/image (agent).**
+  Matches Python: unknown + mime prefix in that set; `application/*` stays
+  unknown.
+- **Unique-name stays at Download time (task) rather than resolve time
+  (Python).** Preview filenames are not pre-renamed; collisions are applied
+  to the item actually sent to aria2, including browser-resolved items.
+  `TestDownloadUniqueNameAndContinueOnFailure` covers the integration;
+  `uniqueName` table tests already existed.
+- **Resolve is split for testability (agent).** Exported `Resolve` owns the
+  goroutine + `mainthread.Start` marshal; `resolve` is Qt-free and is what
+  tests call (same two-tier pattern as S4/S5). `Download`'s GUI tail
+  (Listen/upsert) is not asserted in service tests for the same reason.
+- **Plugin-chain tests use a real `plugin.Manager` (agent).** Manifests with
+  `printf` transports are written inline in `resolve_test.go`; only the
+  fallback is a `fakeResolver`. The task asked for a fake resolver (used)
+  and a fake Downloader (extended with `downloads`/`downloadErr`), not a
+  fake manager.
+- **Plugin claimed + error is detected by the error itself.** With `claimed`
+  gone, a non-nil manager error short-circuits before the fallback; a
+  matching plugin that returns zero items falls through, per the S8 caveat.
+- **`PickFolder` still TODO.** S9 only covers resolve/download; the comment
+  now names only `PickFolder`, which S15 needs.
+
 ## Untouched pre-existing failures (clean tree, out of S1/S2 scope)
 
 - `TestSettingsPushKeepsPreviousSidebarSelection` (sidebar nav)
