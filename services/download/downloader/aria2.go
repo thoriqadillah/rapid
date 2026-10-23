@@ -265,7 +265,7 @@ func (d *Aria2Downloader) onWsMessage(ctx context.Context, msg []byte) {
 	}
 
 	for _, param := range n.Params {
-		d.Refresh(ctx, param.GID)
+		d.refresh(ctx, param.GID)
 	}
 }
 
@@ -832,10 +832,7 @@ func (d *Aria2Downloader) notify(ctx context.Context, gid string, e listenerEntr
 	d.deliver(gid, status, e)
 }
 
-// TellActive returns the status of every actively-transferring download keyed
-// by gid. aria2 omits paused and terminal downloads, so callers fall back to
-// per-gid tellStatus for the rest.
-func (d *Aria2Downloader) TellActive(ctx context.Context) (map[string]api.Download, error) {
+func (d *Aria2Downloader) tellActive(ctx context.Context) (map[string]api.Download, error) {
 	b, err := json.Marshal([]any{StatusKeys})
 	if err != nil {
 		return nil, err
@@ -859,11 +856,11 @@ func (d *Aria2Downloader) TellActive(ctx context.Context) (map[string]api.Downlo
 
 }
 
-// Refresh polls listeners. With no ids it covers every registered listener:
+// refresh polls listeners. With no ids it covers every registered listener:
 // one tellActive for the actively-transferring ones and a tellStatus each for
 // the rest. Previously the id-less call iterated an empty slice and never
 // polled anything, so paused listeners lagged until the next websocket event.
-func (d *Aria2Downloader) Refresh(ctx context.Context, id ...string) {
+func (d *Aria2Downloader) refresh(ctx context.Context, id ...string) {
 	d.mu.Lock()
 	targets := make(map[string]listenerEntry, len(d.listening))
 	if len(id) == 0 {
@@ -878,7 +875,7 @@ func (d *Aria2Downloader) Refresh(ctx context.Context, id ...string) {
 	d.mu.Unlock()
 
 	if len(id) == 0 {
-		if active, err := d.TellActive(ctx); err == nil {
+		if active, err := d.tellActive(ctx); err == nil {
 			for gid, e := range targets {
 				if status, ok := active[gid]; ok {
 					d.deliver(gid, status, e)

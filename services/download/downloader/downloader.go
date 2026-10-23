@@ -22,7 +22,6 @@ type Downloader interface {
 	GetStatus(ctx context.Context, id string) (api.Download, error)
 	Listen(id string, onNotify NotifyCallback, onError ErrorCallback)
 	Unlisten(id string)
-	Refresh(ctx context.Context, id ...string)
 }
 
 // Resolver turns a URI into downloadable resources

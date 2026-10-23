@@ -187,7 +187,7 @@ func TestIntegrationRefreshPushesStatus(t *testing.T) {
 		func(error) {})
 
 	waitUntil(t, func() bool {
-		dl.Refresh(t.Context())
+		dl.refresh(t.Context())
 		mu.Lock()
 		defer mu.Unlock()
 		return slices.Contains(statuses, "complete")
@@ -256,7 +256,7 @@ func TestRefreshWithoutIDsNotifiesAllListeners(t *testing.T) {
 	d.Listen("g1", cb, func(error) {})
 	d.Listen("g2", cb, func(error) {})
 
-	d.Refresh(t.Context())
+	d.refresh(t.Context())
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -273,7 +273,7 @@ func TestRefreshNilCallbacksDoNotPanic(t *testing.T) {
 	d.Listen("g1", nil, nil)
 	d.Listen("g2", nil, nil)
 
-	require.NotPanics(t, func() { d.Refresh(t.Context()) })
+	require.NotPanics(t, func() { d.refresh(t.Context()) })
 }
 
 // TestDoRequestRejectsEmptyGID is the B03 regression: aria2 replying with an
@@ -517,7 +517,7 @@ func TestIntegrationGlobalStatNotify(t *testing.T) {
 		got = b
 	})
 
-	dl.Refresh(t.Context())
+	dl.refresh(t.Context())
 	mu.Lock()
 	defer mu.Unlock()
 	require.NotEmpty(t, got)
