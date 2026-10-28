@@ -117,15 +117,13 @@ func (f *fakeDownloader) GetStatus(_ context.Context, id string) (api.Download, 
 	return api.Download{}, fmt.Errorf("unknown gid %q", id)
 }
 
-func (f *fakeDownloader) Listen(id string, _ downloader.NotifyCallback, _ downloader.ErrorCallback) {
+func (f *fakeDownloader) Listen(id string, _ downloader.NotifyCallback) {
 	f.listened = append(f.listened, id)
 }
 
 func (f *fakeDownloader) Unlisten(id string) {
 	f.unlistened = append(f.unlistened, id)
 }
-
-func (f *fakeDownloader) Refresh(context.Context, ...string) {}
 
 func TestServiceFilterAndCounts(t *testing.T) {
 	s := newServiceWithItems([]api.Download{

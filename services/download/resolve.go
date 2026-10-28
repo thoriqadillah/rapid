@@ -185,7 +185,7 @@ func (s *Service) Download(items []api.ResolvedURL) {
 
 			d.Resolved = &item
 			d.Category = item.Category
-			s.downloader.Listen(d.GID, s.onListenerNotify, func(err error) { s.onListenerError(d.GID, err) })
+			s.downloader.Listen(d.GID, s.listener(d.GID))
 
 			mainthread.Start(func() {
 				s.upsertDownload(d)

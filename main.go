@@ -125,10 +125,9 @@ func run() error {
 	navigation.RegisterAll(app.RouteMap{
 		app.RouteDownload: func(parent *qt.QWidget) *qt.QWidget {
 			return views.NewDownloadView(parent, views.DownloadViewDeps{
-				Navigation:     navigation,
-				Notifier:       notifier,
-				Service:        downloadService,
-				PollIntervalMs: s.PollIntervalMs,
+				Navigation: navigation,
+				Notifier:   notifier,
+				Service:    downloadService,
 			})
 		},
 		app.RouteSettings: func(parent *qt.QWidget) *qt.QWidget {

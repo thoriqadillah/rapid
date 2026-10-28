@@ -2,7 +2,6 @@ package views
 
 import (
 	"context"
-	"fmt"
 
 	download "rapid/services/download"
 	"rapid/services/download/api"
@@ -14,13 +13,10 @@ import (
 	qt "github.com/mappu/miqt/qt6"
 )
 
-// DownloadViewDeps is the constructor injection that replaces the QML context
-// properties (DownloadService/DownloadFilter/Clipboard/Navigation).
 type DownloadViewDeps struct {
-	Navigation     *app.Navigation
-	Notifier       *notification.Service
-	Service        *download.Service // nil -> empty DB-backed service
-	PollIntervalMs int
+	Navigation *app.Navigation
+	Notifier   *notification.Service
+	Service    *download.Service
 }
 
 func NewDownloadView(parent *qt.QWidget, deps DownloadViewDeps) *qt.QWidget {
@@ -47,16 +43,15 @@ func NewDownloadView(parent *qt.QWidget, deps DownloadViewDeps) *qt.QWidget {
 	list.OnExpand(func(gid string) {
 		list.SetSpeedHistory(gid, service.SpeedSamples(ctx, gid))
 	})
-	// Phase 1/2: action buttons are intentionally not wired to the downloader.
-	list.OnPause(func(gid string) { fmt.Printf("download: pause %s (not wired)\n", gid) })
-	list.OnResume(func(gid string) { fmt.Printf("download: resume %s (not wired)\n", gid) })
-	list.OnStop(func(gid string) { fmt.Printf("download: stop %s (not wired)\n", gid) })
+	list.OnPause(func(gid string) { service.Pause(ctx, gid) })
+	list.OnResume(func(gid string) { service.Resume(ctx, gid) })
+	list.OnStop(func(gid string) { service.Stop(ctx, gid) })
 	list.OnRemove(func(gid string, deleteFromDisk bool) {
-		fmt.Printf("download: remove %s fromDisk=%v (not wired)\n", gid, deleteFromDisk)
+		service.Delete(ctx, gid, deleteFromDisk)
 	})
 	list.OnDeleteRequested(func(d api.Download) {
 		dialog := downloads.NewDeleteConfirmationDialog(parent, d.Name(), func(deleteFromDisk bool) {
-			fmt.Printf("download: delete %s fromDisk=%v (not wired)\n", d.GID, deleteFromDisk)
+			service.Delete(ctx, d.GID, deleteFromDisk)
 		})
 		dialog.Open()
 	})

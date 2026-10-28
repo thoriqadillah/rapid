@@ -149,7 +149,7 @@ func (s *Service) Start(ctx context.Context) error {
 			}
 			continue
 		}
-		s.downloader.Listen(d.GID, s.onListenerNotify, func(err error) { s.onListenerError(d.GID, err) })
+		s.downloader.Listen(d.GID, s.listener(d.GID))
 	}
 	s.items.Set(items)
 	return nil
@@ -188,7 +188,7 @@ func (s *Service) Resume(ctx context.Context, gid string) {
 			mainthread.Start(func() { s.emitError("resume", gid, err) })
 			return
 		}
-		s.downloader.Listen(gid, s.onListenerNotify, func(err error) { s.onListenerError(gid, err) })
+		s.downloader.Listen(gid, s.listener(gid))
 		mainthread.Start(func() { s.upsertDownload(d) })
 	})
 }
@@ -304,12 +304,6 @@ func (s *Service) matches(d api.Download, category, search string) bool {
 	return false
 }
 
-func (s *Service) onListenerNotify(d api.Download) {
-	mainthread.Start(func() {
-		s.upsertDownload(d)
-	})
-}
-
 // upsertDownload folds a downloader notification into DB + memory + user
 // events. GUI thread only: DB writes stay here, state has no lock.
 func (s *Service) upsertDownload(d api.Download) {
@@ -380,6 +374,24 @@ func (s *Service) onListenerError(gid string, err error) {
 	mainthread.Start(func() {
 		s.listenerError(gid, err)
 	})
+}
+
+func (s *Service) onListenerNotify(d api.Download) {
+	mainthread.Start(func() {
+		s.upsertDownload(d)
+	})
+}
+
+// listener returns the merged downloader callback for gid: notifications
+// merge into state, errors go through the deduped listener-error path.
+func (s *Service) listener(gid string) downloader.NotifyCallback {
+	return func(d api.Download, err error) {
+		if err != nil {
+			s.onListenerError(gid, err)
+			return
+		}
+		s.onListenerNotify(d)
+	}
 }
 
 // listenerError dedupes listener error storms: the first (gid, text)

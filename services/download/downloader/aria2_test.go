@@ -177,14 +177,13 @@ func TestIntegrationRefreshPushesStatus(t *testing.T) {
 	var statuses []string
 
 	dl.Listen(d.GID,
-		func(s api.Download) {
+		func(s api.Download, _ error) {
 			mu.Lock()
 			defer mu.Unlock()
 			if s.Status != "" {
 				statuses = append(statuses, s.Status)
 			}
-		},
-		func(error) {})
+		})
 
 	waitUntil(t, func() bool {
 		dl.refresh(t.Context())
@@ -248,13 +247,13 @@ func TestRefreshWithoutIDsNotifiesAllListeners(t *testing.T) {
 
 	var mu sync.Mutex
 	got := map[string]int{}
-	cb := func(s api.Download) {
+	cb := func(s api.Download, _ error) {
 		mu.Lock()
 		got[s.GID]++
 		mu.Unlock()
 	}
-	d.Listen("g1", cb, func(error) {})
-	d.Listen("g2", cb, func(error) {})
+	d.Listen("g1", cb)
+	d.Listen("g2", cb)
 
 	d.refresh(t.Context())
 
@@ -265,13 +264,45 @@ func TestRefreshWithoutIDsNotifiesAllListeners(t *testing.T) {
 	require.Contains(t, f.methods(), "aria2.tellActive")
 }
 
+// TestPollLoopRefreshesListeners: the downloader owns polling — the loop must
+// deliver listener updates on its own ticker, with no caller-driven refresh.
+func TestPollLoopRefreshesListeners(t *testing.T) {
+	f := &fakeRPC{}
+	d := NewAria2Downloader(settings.Settings{PollIntervalMs: 20}, f, false, nil)
+
+	var mu sync.Mutex
+	got := 0
+	d.Listen("g1", func(api.Download, error) {
+		mu.Lock()
+		got++
+		mu.Unlock()
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		d.pollLoop(ctx)
+	}()
+	defer func() {
+		cancel()
+		<-done
+	}()
+
+	waitUntil(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return got >= 2
+	}, 2*time.Second)
+}
+
 // TestRefreshNilCallbacksDoNotPanic: Listen accepts nil callbacks, so polling
 // must not invoke them unconditionally (B01).
 func TestRefreshNilCallbacksDoNotPanic(t *testing.T) {
 	f := &fakeRPC{}
 	d := NewAria2Downloader(settings.Settings{}, f, false, nil)
-	d.Listen("g1", nil, nil)
-	d.Listen("g2", nil, nil)
+	d.Listen("g1", nil)
+	d.Listen("g2", nil)
 
 	require.NotPanics(t, func() { d.refresh(t.Context()) })
 }
@@ -492,12 +523,11 @@ func TestIntegrationWebsocketPushesStatus(t *testing.T) {
 	var mu sync.Mutex
 	var statuses []string
 	dl.Listen(d.GID,
-		func(s api.Download) {
+		func(s api.Download, _ error) {
 			mu.Lock()
 			defer mu.Unlock()
 			statuses = append(statuses, s.Status)
-		},
-		func(error) {})
+		})
 
 	// NOTE: no Refresh calls — completion must arrive via websocket push.
 	waitUntil(t, func() bool {

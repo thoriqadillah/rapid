@@ -5,10 +5,7 @@ import (
 	"rapid/services/download/api"
 )
 
-// NotifyCallback fires with fresh status; ErrorCallback with a message;
-// GlobalNotifyCallback with the aria2 global stat object.
-type NotifyCallback func(api.Download)
-type ErrorCallback func(error)
+type NotifyCallback func(api.Download, error)
 type GlobalNotifyCallback func([]byte)
 
 type Downloader interface {
@@ -20,7 +17,7 @@ type Downloader interface {
 	Remove(ctx context.Context, id string) (api.Download, error)
 	Purge(ctx context.Context, id string) error
 	GetStatus(ctx context.Context, id string) (api.Download, error)
-	Listen(id string, onNotify NotifyCallback, onError ErrorCallback)
+	Listen(id string, onNotify NotifyCallback)
 	Unlisten(id string)
 }
 

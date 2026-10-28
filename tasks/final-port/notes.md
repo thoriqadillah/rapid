@@ -276,7 +276,40 @@ Code wins per the task file's own rule; this file records _what_ and _why_.
 - **`PickFolder` still TODO.** S9 only covers resolve/download; the comment
   now names only `PickFolder`, which S15 needs.
 
+## S11
+
+- **Polling is downloader-owned (user), not view-timer → `service.Poll`.**
+  Task S11 put a QTimer in the view calling a new `service.Poll(ctx)` that
+  enqueued a downloader refresh. Instead, `Aria2Downloader.Start` launches a
+  `pollLoop` goroutine (ticker at `PollIntervalMs`, 1 s floor when unset)
+  calling `refresh(ctx)` alongside the websocket loop; `Stop` joins it via
+  `pollDone`. No view timer, no `service.Poll`, no queue hop — the poll is a
+  background heartbeat, not a user action, and the service's stale-echo
+  stamps already guard in-flight poll results on the notify path. The
+  downloader always had `refresh` and the type doc anticipated "the poll
+  loop's ctx cancellation is the lifecycle control"; this fills it in.
+  `DownloadViewDeps.PollIntervalMs` deleted.
+- **List add/remove transitions already existed** (`animateIn`/`animateOut`,
+  150 ms height + opacity in `download_list.go`); nothing to add.
+- **Banner wiring already existed** (`OnDownload` opens the dialog); kept.
+
+## S11 follow-up — Listen contract (user)
+
+- **`Listen(id, onNotify)` — one merged callback.** `NotifyCallback` is now
+  `func(api.Download, error)`; `ErrorCallback` is gone from the interface.
+  aria2 delivers transport/lookup failures as `(api.Download{}, err)` and
+  keeps the listener (unchanged semantics); the service adapts via a
+  `listener(gid)` closure that routes `err != nil` to the deduped
+  `onListenerError` path — the per-gid closure the S5 dedupe needed now
+  covers both paths, so the three ad-hoc two-callback call sites collapsed
+  into one helper. Nil-callback tolerance kept (`TestRefreshNilCallbacksDoNotPanic`).
+- **Fake downloader's dead `Refresh` method deleted** — the interface lost
+  `Refresh` in S2; the stub outlived it.
+
 ## Untouched pre-existing failures (clean tree, out of S1/S2 scope)
 
 - `TestSettingsPushKeepsPreviousSidebarSelection` (sidebar nav)
 - `TestRTextFieldInputContract` (textfield binding)
+- `TestMergeSkipsStaleEcho`, `TestStartMarksForgottenGidsError`,
+  `TestListenerErrorDedupes` (service; fail at `e086cf7` too — stale-echo
+  merge, forgotten-gid message text, dedupe re-arm count)

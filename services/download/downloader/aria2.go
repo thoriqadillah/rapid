@@ -68,11 +68,6 @@ var contextKeys = map[string]bool{
 	"source":   true,
 }
 
-type listenerEntry struct {
-	onNotify NotifyCallback
-	onError  ErrorCallback
-}
-
 // Aria2Downloader is a Downloader+Resolver backed by a local aria2c daemon.
 // All callbacks carry typed structs; Refresh on a stopped downloader still
 // works (the poll loop's ctx cancellation is the lifecycle control).
@@ -89,10 +84,11 @@ type Aria2Downloader struct {
 	adopted       bool
 	lastSpawn     time.Time
 	spawnMu       sync.Mutex
-	listening     map[string]listenerEntry
+	listening     map[string]NotifyCallback
 	wsConn        *websocket.Conn
 	wsCancel      context.CancelFunc
 	wsDone        chan struct{}
+	pollDone      chan struct{}
 	pendingCancel context.CancelFunc
 	pendingGen    int
 }
@@ -104,7 +100,7 @@ func NewAria2Downloader(s settings.Settings, client rpc.Rpc, manageDaemon bool, 
 		manageDaemon: manageDaemon,
 		globalNotify: onGlobalNotify,
 		resolverSem:  make(chan struct{}, 2),
-		listening:    map[string]listenerEntry{},
+		listening:    map[string]NotifyCallback{},
 	}
 }
 
@@ -288,17 +284,40 @@ func (d *Aria2Downloader) Start(ctx context.Context) error {
 
 	wsCtx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
+	pollDone := make(chan struct{})
 	d.mu.Lock()
 	d.wsCancel = cancel
 	d.wsDone = done
+	d.pollDone = pollDone
 	d.mu.Unlock()
 
 	go func() {
 		defer close(done)
 		d.wsRun(wsCtx)
 	}()
+	go func() {
+		defer close(pollDone)
+		d.pollLoop(wsCtx)
+	}()
 
 	return nil
+}
+
+func (d *Aria2Downloader) pollLoop(ctx context.Context) {
+	interval := time.Duration(d.settings.PollIntervalMs) * time.Millisecond
+	if interval <= 0 {
+		interval = time.Second // unset setting; keep the loop alive but slow
+	}
+	tick := time.NewTicker(interval)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			d.refresh(ctx)
+		}
+	}
 }
 
 // Stop cancels the ws loop and joins it, then terminates the daemon only when
@@ -306,13 +325,15 @@ func (d *Aria2Downloader) Start(ctx context.Context) error {
 func (d *Aria2Downloader) Stop() error {
 	d.mu.Lock()
 	d.running = false
-	d.listening = map[string]listenerEntry{}
+	d.listening = map[string]NotifyCallback{}
 	cancel := d.wsCancel
 	conn := d.wsConn
 	done := d.wsDone
+	pollDone := d.pollDone
 	d.wsCancel = nil
 	d.wsConn = nil
 	d.wsDone = nil
+	d.pollDone = nil
 	dm := d.dm
 	d.dm = nil
 	d.adopted = false
@@ -326,6 +347,9 @@ func (d *Aria2Downloader) Stop() error {
 	}
 	if done != nil {
 		<-done
+	}
+	if pollDone != nil {
+		<-pollDone
 	}
 	// The daemon is ours to stop; Stop already released d.dm under the mutex.
 	dm.stop(2 * time.Second)
@@ -776,14 +800,12 @@ func (d *Aria2Downloader) removeAny(ctx context.Context, id string, methods ...s
 	return stderrors.Join(errs...)
 }
 
-// Listen registers callbacks (mutex-guarded, no I/O).
-func (d *Aria2Downloader) Listen(id string, onNotify NotifyCallback, onError ErrorCallback) {
+// Listen registers callbacks (mutex-guarded, no I/O). A nil callback is
+// tolerated; polling skips it.
+func (d *Aria2Downloader) Listen(id string, onNotify NotifyCallback) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.listening[id] = listenerEntry{
-		onNotify: onNotify,
-		onError:  onError,
-	}
+	d.listening[id] = onNotify
 }
 
 // Unlisten drops callbacks for id.
@@ -806,30 +828,30 @@ func (d *Aria2Downloader) claim(gid string) bool {
 	return true
 }
 
-func (d *Aria2Downloader) deliver(gid string, status api.Download, e listenerEntry) {
+func (d *Aria2Downloader) deliver(gid string, status api.Download, onNotify NotifyCallback) {
 	if status.IsTerminal() && !d.claim(gid) {
 		return
 	}
-	if e.onNotify != nil {
-		e.onNotify(status)
+	if onNotify != nil {
+		onNotify(status, nil)
 	}
 }
 
-// notify fetches fresh status and delivers it. A transport failure is reported
-// through onError and keeps the listener: only aria2 saying the gid is gone
-// drops it.
-func (d *Aria2Downloader) notify(ctx context.Context, gid string, e listenerEntry) {
+// notify fetches fresh status and delivers it. A transport failure is
+// delivered as the callback's error and keeps the listener: only aria2 saying
+// the gid is gone drops it.
+func (d *Aria2Downloader) notify(ctx context.Context, gid string, onNotify NotifyCallback) {
 	status, err := d.GetStatus(ctx, gid)
 	if err != nil {
-		if e.onError != nil {
-			e.onError(err)
+		if onNotify != nil {
+			onNotify(api.Download{}, err)
 		}
 		if errors.IsAria2NotFound(err) {
 			d.Unlisten(gid)
 		}
 		return
 	}
-	d.deliver(gid, status, e)
+	d.deliver(gid, status, onNotify)
 }
 
 func (d *Aria2Downloader) tellActive(ctx context.Context) (map[string]api.Download, error) {
@@ -862,13 +884,13 @@ func (d *Aria2Downloader) tellActive(ctx context.Context) (map[string]api.Downlo
 // polled anything, so paused listeners lagged until the next websocket event.
 func (d *Aria2Downloader) refresh(ctx context.Context, id ...string) {
 	d.mu.Lock()
-	targets := make(map[string]listenerEntry, len(d.listening))
+	targets := make(map[string]NotifyCallback, len(d.listening))
 	if len(id) == 0 {
 		maps.Copy(targets, d.listening)
 	} else {
 		for _, gid := range id {
-			if e, ok := d.listening[gid]; ok {
-				targets[gid] = e
+			if cb, ok := d.listening[gid]; ok {
+				targets[gid] = cb
 			}
 		}
 	}
@@ -876,16 +898,16 @@ func (d *Aria2Downloader) refresh(ctx context.Context, id ...string) {
 
 	if len(id) == 0 {
 		if active, err := d.tellActive(ctx); err == nil {
-			for gid, e := range targets {
+			for gid, cb := range targets {
 				if status, ok := active[gid]; ok {
-					d.deliver(gid, status, e)
+					d.deliver(gid, status, cb)
 					delete(targets, gid)
 				}
 			}
 		}
 	}
-	for gid, e := range targets {
-		d.notify(ctx, gid, e)
+	for gid, cb := range targets {
+		d.notify(ctx, gid, cb)
 	}
 
 	if len(id) > 0 {
