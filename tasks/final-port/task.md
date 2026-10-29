@@ -20,7 +20,6 @@ and each is small enough for one session. For each step:
 1. Read the listed source + target files (the "Read first" list).
 2. Implement only that step.
 3. Run the step's **Verify** block.
-4. Commit before moving on. Do not implement ahead of the current step.
 
 If a signature in this file disagrees with the code, **the code wins** — this
 file was written against the tree at the time; re-read the file in question.

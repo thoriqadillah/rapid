@@ -2,6 +2,7 @@ package notification
 
 import (
 	"fmt"
+	"rapid/lib/helpers/bools"
 
 	qt "github.com/mappu/miqt/qt6"
 )
@@ -31,19 +32,10 @@ func newTray(options TrayOptions) *trayController {
 	if !options.Enable && options.TrayIcon == nil {
 		return nil
 	}
-	icon := options.Icon
-	if icon == nil {
-		icon = qt.NewQIcon4("")
-	}
-	tray := options.TrayIcon
-	if tray == nil {
-		tray = qt.NewQSystemTrayIcon2(icon)
-	}
-	menu := options.Menu
-	ownsMenu := menu == nil
-	if menu == nil {
-		menu = qt.NewQMenu2()
-	}
+	icon := bools.Ternary(options.Icon != nil, options.Icon, qt.NewQIcon4(""))
+	tray := bools.Ternary(options.TrayIcon != nil, options.TrayIcon, qt.NewQSystemTrayIcon2(icon))
+	menu := bools.Ternary(options.Menu != nil, options.Menu, qt.NewQMenu2())
+	ownsMenu := options.Menu == nil
 	controller := &trayController{
 		icon:     icon,
 		tray:     tray,
@@ -88,7 +80,7 @@ func (t *trayController) rebuild(items []MenuItem) {
 }
 
 func (t *trayController) showMessage(title, message string, icon *qt.QIcon) {
-	if t == nil || t.tray == nil || t.closed {
+	if t.closed {
 		return
 	}
 	if icon == nil {
@@ -98,7 +90,7 @@ func (t *trayController) showMessage(title, message string, icon *qt.QIcon) {
 }
 
 func (t *trayController) setBadge(count int) {
-	if t == nil || t.tray == nil || t.closed {
+	if t.closed {
 		return
 	}
 	if count <= 0 {
@@ -135,10 +127,7 @@ func (t *trayController) setBadge(count int) {
 	rect.Delete()
 
 	badge := fmtBadge(count)
-	badgeSize := size.Width() / 2
-	if badgeSize < 10 {
-		badgeSize = 10
-	}
+	badgeSize := max(size.Width()/2, 10)
 	width := badgeSize
 	if len(badge) > 1 {
 		width += 6
@@ -170,20 +159,15 @@ func (t *trayController) setBadge(count int) {
 }
 
 func fmtBadge(count int) string {
-	if count >= 100 {
-		return "99+"
-	}
-	return fmt.Sprintf("%d", count)
+	return bools.Ternary(count >= 100, "99+", fmt.Sprintf("%d", count))
 }
 
 func (t *trayController) close() {
-	if t == nil || t.closed {
+	if t.closed {
 		return
 	}
 	t.closed = true
-	if t.tray != nil {
-		t.tray.Hide()
-	}
+	t.tray.Hide()
 	if t.menu != nil {
 		t.menu.Close()
 		if t.ownsMenu {

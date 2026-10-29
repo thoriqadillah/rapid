@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"rapid/db"
+	"rapid/lib/reactive"
 	"rapid/services/download"
 	"rapid/services/download/api"
 	"rapid/services/notification"
@@ -33,6 +34,11 @@ func main() {
 }
 
 func run() error {
+	// SIGINT/SIGTERM quit cleanly on the GUI thread. SIGHUP is deliberately not
+	// trapped: a terminal hangup should not be forced into the quit path.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	qt.NewQApplication(os.Args)
 	qt.QCoreApplication_SetApplicationName("rapid")
 
@@ -87,6 +93,23 @@ func run() error {
 		showWindow()
 	})
 
+	downloadService := download.NewService(s)
+	downloadService.OnError(func(err error) {
+		notifier.Error("Download error", err.Error(), true)
+	})
+	downloadService.OnCompleted(func(d api.Download) {
+		notifier.Success("Download completed", d.Name(), true)
+	})
+
+	reactive.Effect(func() {
+		notifier.SetBadge(downloadService.ActiveCount.Get())
+	})
+
+	if err := downloadService.Start(ctx); err != nil {
+		return fmt.Errorf("start downloads: %w", err)
+	}
+	defer downloadService.Close()
+
 	notifier.SetTrayMenu([]notification.MenuItem{
 		{
 			Label:    "Open",
@@ -109,18 +132,6 @@ func run() error {
 	stackView := qt.NewQStackedWidget2()
 	win.SetCentralWidget(stackView.QWidget)
 
-	downloadService := download.NewService(s)
-	downloadService.OnError(func(err error) {
-		notifier.Error("Download error", err.Error(), true)
-	})
-	downloadService.OnCompleted(func(d api.Download) {
-		notifier.Success("Download completed", d.Name(), true)
-	})
-	if err := downloadService.Start(context.Background()); err != nil {
-		return fmt.Errorf("start downloads: %w", err)
-	}
-	defer downloadService.Close()
-
 	navigation := app.NewNavigation(stackView)
 	navigation.RegisterAll(app.RouteMap{
 		app.RouteDownload: func(parent *qt.QWidget) *qt.QWidget {
@@ -137,11 +148,6 @@ func run() error {
 	navigation.Replace(app.RouteDownload)
 
 	win.Show()
-
-	// SIGINT/SIGTERM quit cleanly on the GUI thread. SIGHUP is deliberately not
-	// trapped: a terminal hangup should not be forced into the quit path.
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	go func() {
 		<-ctx.Done()

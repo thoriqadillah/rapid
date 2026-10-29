@@ -50,6 +50,10 @@ func NewService(options Options) *Service {
 	return s
 }
 
+func (s *Service) SetBadge(count int) {
+	s.tray.setBadge(count)
+}
+
 // SetTrayMenu rebuilds the tray context menu from the given map.
 func (s *Service) SetTrayMenu(items []MenuItem) {
 	if s == nil || s.tray == nil {
