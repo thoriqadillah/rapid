@@ -13,22 +13,15 @@ import (
 	qt "github.com/mappu/miqt/qt6"
 )
 
-type DownloadViewDeps struct {
-	Navigation *app.Navigation
-	Notifier   *notification.Service
-	Service    *download.Service
-}
-
-func NewDownloadView(parent *qt.QWidget, deps DownloadViewDeps) *qt.QWidget {
-	service := deps.Service
+func NewDownloadView(parent *qt.QWidget, navigation *app.Navigation, notifier *notification.Service, service *download.Service) *qt.QWidget {
 	ctx := context.Background()
 
-	layout := downloads.NewLayout(deps.Navigation)
+	layout := downloads.NewLayout(navigation)
 	layout.BindCounts(service.Counts)
 	layout.BindSearch(service.Search)
 	layout.BindDestination(service.Category)
 	layout.OnAddClicked(func() {
-		openDownloadDialog(parent, deps)
+		openDownloadDialog(parent, service)
 	})
 
 	banner := downloads.NewClipboardBanner(nil)
@@ -72,13 +65,16 @@ func NewDownloadView(parent *qt.QWidget, deps DownloadViewDeps) *qt.QWidget {
 	content.SetLayout(contentLayout.QLayout)
 	layout.AddContentWidget(content)
 
-	banner.OnDownload(func(string) { openDownloadDialog(parent, deps) })
+	banner.OnDownload(func(string) {
+		openDownloadDialog(parent, service)
+	})
+
 	banner.OnDismiss(func() { banner.SetURL("") })
 
 	return layout.QWidget
 }
 
-func openDownloadDialog(parent *qt.QWidget, deps DownloadViewDeps) {
-	dialog := downloads.NewDownloadDialog(parent, downloads.DownloadDialogOptions{Navigation: deps.Navigation})
+func openDownloadDialog(parent *qt.QWidget, _ *download.Service) {
+	dialog := downloads.NewDownloadDialog(parent)
 	dialog.Open()
 }

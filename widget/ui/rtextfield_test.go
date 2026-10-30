@@ -43,9 +43,6 @@ func TestRTextFieldIconsPreserveErrorAndSupportProperties(t *testing.T) {
 	field.SetIconSize(theme.IconLg)
 	require.True(t, field.prefixPix.Width() == theme.IconLg && field.suffixPix.Width() == theme.IconLg,
 		"icon size was not applied to both sides")
-	customColor := qt.NewQColor6("#abcdef")
-	field.SetIconColor(customColor)
-	require.Equal(t, customColor.Name(), field.IconColor().Name(), "custom icon color was not retained")
 	field.SetPrefixIcon("")
 	field.SetSuffixIcon("")
 	require.True(t, field.prefixPix == nil && field.suffixPix == nil, "empty icon sources should clear icons")

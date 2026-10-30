@@ -354,6 +354,7 @@ func (c *WritableComputed[T]) Dispose() {
 // Model is either end of a binding: anything readable and writable. Both
 // Signal and WritableComputed satisfy it.
 type Model[T any] interface {
+	Peek() T
 	Get() T
 	Set(T)
 }

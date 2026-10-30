@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 
+	"rapid/lib/reactive"
 	"rapid/widget/theme"
 
 	qt "github.com/mappu/miqt/qt6"
@@ -18,17 +19,15 @@ const (
 
 type RSwitch struct {
 	*qt.QCheckBox
-	progress      float64 // 0..1, knob slide position
-	anim          *qt.QVariantAnimation
-	activeColor   *qt.QColor
-	inactiveColor *qt.QColor
+	progress float64 // 0..1, knob slide position
+	anim     *qt.QVariantAnimation
+	value    reactive.Model[bool]
 }
 
 func NewRSwitch(checked bool) *RSwitch {
 	s := &RSwitch{
-		QCheckBox:     qt.NewQCheckBox2(),
-		activeColor:   theme.ColorPrimary,
-		inactiveColor: theme.ColorBorder,
+		QCheckBox: qt.NewQCheckBox2(),
+		value:     reactive.NewSignal(false),
 	}
 	s.SetFixedSize2(switchWidth, switchHeight)
 	s.SetStyleSheet(fmt.Sprintf(`
@@ -58,49 +57,25 @@ func NewRSwitch(checked bool) *RSwitch {
 		s.Update()
 	})
 
-	s.OnToggled(func(on bool) {
-		to := 0.0
-		if on {
-			to = 1
-		}
-		// SetStartValue/SetEndValue copy their QVariant, so free both at once.
-		start := qt.NewQVariant9(s.progress)
-		end := qt.NewQVariant9(to)
-		s.anim.SetStartValue(start)
-		s.anim.SetEndValue(end)
-		start.Delete()
-		end.Delete()
-		s.anim.Start()
-	})
-
+	s.OnToggled(s.toggle)
 	s.OnPaintEvent(func(super func(*qt.QPaintEvent), e *qt.QPaintEvent) {
 		s.paint()
 	})
 	return s
 }
 
-func (s *RSwitch) SetActiveColor(color *qt.QColor) {
-	if color == nil {
-		color = theme.ColorPrimary
-	}
-	s.activeColor = color
-	s.Update()
-}
+func (s *RSwitch) Bind(model reactive.Model[bool]) {
+	modelValue, cleanup := reactive.Bind(model)
+	s.value = modelValue
+	s.OnToggled(s.value.Set)
+	unsub := reactive.Effect(func() {
+		s.SetChecked(s.value.Get())
+	})
 
-func (s *RSwitch) SetInactiveColor(color *qt.QColor) {
-	if color == nil {
-		color = theme.ColorBorder
-	}
-	s.inactiveColor = color
-	s.Update()
-}
-
-func (s *RSwitch) ActiveColor() *qt.QColor {
-	return s.activeColor
-}
-
-func (s *RSwitch) InactiveColor() *qt.QColor {
-	return s.inactiveColor
+	s.OnDestroyed(func() {
+		cleanup()
+		unsub()
+	})
 }
 
 func (s *RSwitch) paint() {
@@ -108,10 +83,7 @@ func (s *RSwitch) paint() {
 	defer p.Delete()
 	p.SetRenderHint(qt.QPainter__Antialiasing)
 
-	// blend() returns a fresh QColor (miqt does not finalize constructors), and
-	// the animation repaints on every timer tick, so each temporary is freed
-	// explicitly. DarkerWithInt is GC-managed by miqt, so it is not freed here.
-	background := blend(theme.ColorSurface, s.activeColor, s.progress)
+	background := blend(theme.ColorSurface, theme.ColorPrimary, s.progress)
 	if !s.IsEnabled() {
 		disabled := blend(theme.ColorTextMuted, background, 0.5)
 		background.Delete()
@@ -132,6 +104,21 @@ func (s *RSwitch) paint() {
 	p.SetBrush(knobBrush)
 	p.DrawRoundedRect2(knobX, knobPad, knobSize, knobSize, knobSize/2, knobSize/2)
 	knobBrush.Delete()
+}
+
+func (s *RSwitch) toggle(on bool) {
+	to := 0.0
+	if on {
+		to = 1
+	}
+	// SetStartValue/SetEndValue copy their QVariant, so free both at once.
+	start := qt.NewQVariant9(s.progress)
+	end := qt.NewQVariant9(to)
+	s.anim.SetStartValue(start)
+	s.anim.SetEndValue(end)
+	start.Delete()
+	end.Delete()
+	s.anim.Start()
 }
 
 // blend lerps two colors by t (0..1).

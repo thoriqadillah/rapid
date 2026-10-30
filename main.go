@@ -135,11 +135,12 @@ func run() error {
 	navigation := app.NewNavigation(stackView)
 	navigation.RegisterAll(app.RouteMap{
 		app.RouteDownload: func(parent *qt.QWidget) *qt.QWidget {
-			return views.NewDownloadView(parent, views.DownloadViewDeps{
-				Navigation: navigation,
-				Notifier:   notifier,
-				Service:    downloadService,
-			})
+			return views.NewDownloadView(
+				parent,
+				navigation,
+				notifier,
+				downloadService,
+			)
 		},
 		app.RouteSettings: func(parent *qt.QWidget) *qt.QWidget {
 			return views.NewSettingsView(parent, navigation)

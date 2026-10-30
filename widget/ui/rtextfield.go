@@ -19,11 +19,11 @@ type RTextField struct {
 	suffixPix     *qt.QPixmap
 	prefixSource  string
 	suffixSource  string
-	errorText     string
 	iconSize      int
 	iconColor     *qt.QColor
 	selectByMouse bool
 	value         reactive.Model[string]
+	error         reactive.Model[string]
 }
 
 func NewRTextField() *RTextField {
@@ -37,6 +37,7 @@ func NewRTextField() *RTextField {
 		iconColor:     theme.ColorTextMuted,
 		selectByMouse: true,
 		value:         reactive.NewSignal(""),
+		error:         reactive.NewSignal(""),
 	}
 
 	w.label.SetStyleSheet(fmt.Sprintf("color: %s; font-size: %dpx; margin: 0; padding: 0; background: transparent;", theme.CssColor(theme.ColorText), theme.TextSize))
@@ -85,7 +86,7 @@ func NewRTextField() *RTextField {
 
 func (w *RTextField) applyStyle() {
 	border := theme.ColorBorder
-	if w.errorText != "" {
+	if w.error.Peek() != "" {
 		border = theme.ColorDanger
 	}
 	left, right := theme.SpacingMd, theme.SpacingMd
@@ -98,7 +99,7 @@ func (w *RTextField) applyStyle() {
 	// Keep the danger border while focused; QSS otherwise lets QLineEdit:focus
 	// overwrite the validation state.
 	focusBorder := theme.ColorPrimary
-	if w.errorText != "" {
+	if w.error.Peek() != "" {
 		focusBorder = theme.ColorDanger
 	}
 	w.field.SetStyleSheet(fmt.Sprintf(`
@@ -134,8 +135,22 @@ func (w *RTextField) SetText(text string) {
 	w.field.SetText(text)
 }
 
-func (w *RTextField) Placeholder() string {
-	return w.field.PlaceholderText()
+func (w *RTextField) Text() string {
+	return w.field.Text()
+}
+
+func (w *RTextField) Bind(model reactive.Model[string]) {
+	modelValue, cleanup := reactive.Bind(model)
+	w.value = modelValue
+	unsub := reactive.Effect(func() {
+		w.field.SetText(w.value.Get())
+	})
+
+	unbind := func() {
+		unsub()
+		cleanup()
+	}
+	w.field.OnDestroyed(unbind)
 }
 
 func (w *RTextField) SetLabel(text string) {
@@ -144,14 +159,26 @@ func (w *RTextField) SetLabel(text string) {
 }
 
 func (w *RTextField) SetError(text string) {
-	w.errorText = text
+	w.error.Set(text)
 	w.errorLabel.SetText(text)
 	w.errorLabel.SetVisible(text != "")
 	w.applyStyle()
 }
 
+func (w *RTextField) BindError(text reactive.Model[string]) {
+	errorModel, cleanup := reactive.Bind(text)
+	w.error = errorModel
+	unsub := reactive.Effect(func() {
+		w.SetError(text.Get())
+	})
+	w.field.OnDestroyed(func() {
+		unsub()
+		cleanup()
+	})
+}
+
 func (w *RTextField) Error() string {
-	return w.errorText
+	return w.error.Peek()
 }
 
 func (w *RTextField) SetPassword(on bool) {
@@ -217,10 +244,6 @@ func (w *RTextField) SetIconColor(color *qt.QColor) {
 	w.reloadIcons()
 }
 
-func (w *RTextField) IconColor() *qt.QColor {
-	return w.iconColor
-}
-
 func (w *RTextField) OnTextChanged(fn func(string)) {
 	w.field.OnTextChanged(fn)
 }
@@ -236,20 +259,6 @@ func (w *RTextField) SelectAll() {
 
 func (w *RTextField) SetFocus() {
 	w.field.SetFocus()
-}
-
-func (w *RTextField) Bind(model reactive.Model[string]) {
-	modelValue, cleanup := reactive.Bind(model)
-	w.value = modelValue
-	unsub := reactive.Effect(func() {
-		w.field.SetText(w.value.Get())
-	})
-
-	unbind := func() {
-		unsub()
-		cleanup()
-	}
-	w.field.OnDestroyed(unbind)
 }
 
 func (w *RTextField) FieldWidget() *qt.QWidget {
